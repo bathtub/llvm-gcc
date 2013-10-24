@@ -48,10 +48,9 @@
 
 #define REGISTER_PREFIX 	""
 
-/* The assembler's names for the registers.  Note that the ?xx registers are 
-   there so that VFPv3/NEON registers D16-D31 have the same spacing as D0-D15
-   (each of which is overlaid on two S registers), although there are no
-   actual single-precision registers which correspond to D16-D31.  */
+/* The assembler's names for the registers.  Note that the ?xx registers are * there so that VFPv3/NEON registers D16-D31 have the same spacing as D0-D15
+ * (each of which is overlaid on two S registers), although there are no
+ * actual single-precision registers which correspond to D16-D31.  */
 #ifndef REGISTER_NAMES
 #define REGISTER_NAMES				   \
 {				                   \
@@ -213,9 +212,15 @@
    march=armv4t:armv4t;				\
    march=armv7:armv7;                           \
    march=armv7-a:armv7;                         \
+   march=armv7-f:armv7f;                        \
+   march=armv7-k:armv7k;                        \
+   march=armv7-s:armv7s;                        \
    march=armv7-r:armv7;                         \
    march=armv7-m:armv7;                         \
    march=armv7a:armv7;                          \
+   march=armv7f:armv7f;                         \
+   march=armv7k:armv7k;                         \
+   march=armv7s:armv7s;                         \
    march=armv7r:armv7;                          \
    march=armv7m:armv7;                          \
    mcpu=arm10tdmi:armv5;			\
@@ -239,6 +244,7 @@
    mcpu=cortex-m3:armv7;			\
    mcpu=cortex-a9:armv7;			\
    mcpu=cortex-a9-mp:armv7;			\
+   mcpu=swift:armv7;				\
    :armv7}"
 
 #define DARWIN_MINVERSION_SPEC "3.0"
@@ -261,7 +267,17 @@
 #define STARTFILE_SPEC DARWIN_STARTFILE_SPEC
 /* APPLE LOCAL end use crt3.o for x86 and ppc only 9385990 */
 
-#define DARWIN_IPHONEOS_LIBGCC_SPEC "-lgcc_s.1 -lgcc"
+/* APPLE LOCAL begin prefer -lSystem 9091362 */
+#define DARWIN_IPHONEOS_LIBGCC_SPEC \
+  "%:version-compare(< 5.0 miphoneos-version-min= -lgcc_s.1) -lgcc"
+
+#undef LINK_GCC_C_SEQUENCE_SPEC
+#define LINK_GCC_C_SEQUENCE_SPEC					\
+  "%{miphoneos-version-min=*:						\
+     %{!static:%:version-compare(>= 5.0 miphoneos-version-min= -lSystem)} %G %L} \
+   %{!miphoneos-version-min=*:						\
+     %{!static:%:version-compare(>= 10.6 mmacosx-version-min= -lSystem)} %G %L}"
+/* APPLE LOCAL end prefer -lSystem 9091362 */
 
 #undef SUBTARGET_EXTRA_SPECS
 #define SUBTARGET_EXTRA_SPECS			\

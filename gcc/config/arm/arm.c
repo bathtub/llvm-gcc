@@ -854,6 +854,8 @@ static const struct processors all_architectures[] =
   {"armv6t2", arm1156t2s, "6T2", FL_CO_PROC |             FL_FOR_ARCH6T2, NULL},
   {"armv7",   cortexa8,	  "7",	 FL_CO_PROC |		  FL_FOR_ARCH7, NULL},
   {"armv7a",  cortexa8,	  "7A",	 FL_CO_PROC |		  FL_FOR_ARCH7A, NULL},
+  {"armv7f",  cortexa9mp, "7F",	 FL_CO_PROC |		  FL_FOR_ARCH7A, NULL},
+  {"armv7s",  swift,      "7S",	 FL_CO_PROC |		  FL_FOR_ARCH7R, NULL},
   /* LLVM LOCAL begin processor support */
   {"armv7m",  cortexm3,	  "7M",	 FL_CO_PROC |		  FL_FOR_ARCH7M, NULL},
   {"armv7m3", cortexm3,	  "7M",	 FL_CO_PROC |		  FL_FOR_ARCH7M, NULL},
@@ -866,6 +868,8 @@ static const struct processors all_architectures[] =
 /* APPLE LOCAL end v7 support. Merge from Codesourcery */
   {"armv7-a", cortexa8,	  "7A",	 FL_CO_PROC |		  FL_FOR_ARCH7A, NULL},
   {"armv7-r", cortexr4,	  "7R",	 FL_CO_PROC |		  FL_FOR_ARCH7R, NULL},
+  {"armv7-f", cortexa9mp, "7F",	 FL_CO_PROC |		  FL_FOR_ARCH7A, NULL},
+  {"armv7-s", swift,      "7S",	 FL_CO_PROC |		  FL_FOR_ARCH7R, NULL},
   /* LLVM LOCAL begin processor support */
   {"armv7-m", cortexm3,	  "7M",	 FL_CO_PROC |		  FL_FOR_ARCH7M, NULL},
   {"armv7-m3", cortexm3,  "7M",	 FL_CO_PROC |		  FL_FOR_ARCH7M, NULL},

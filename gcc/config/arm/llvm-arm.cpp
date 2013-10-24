@@ -58,7 +58,7 @@ static bool UnexpectedError(const char *msg, tree exp, Value *&Result) {
   error(msg, &EXPR_LOCATION(exp));
 
   // Set the Result to an undefined value.
-  Type *ResTy = ConvertType(TREE_TYPE(exp));
+  const Type *ResTy = ConvertType(TREE_TYPE(exp));
   if (ResTy->isSingleValueType())
     Result = UndefValue::get(ResTy);
 
@@ -133,12 +133,12 @@ static Value *BuildConstantSplatVector(unsigned NumElements, ConstantInt *Val) {
 
 /// BuildDup - Build a splat operation to duplicate a value into every
 /// element of a vector.
-static Value *BuildDup(Type *ResultType, Value *Val,
+static Value *BuildDup(const Type *ResultType, Value *Val,
                        LLVMBuilder &Builder) {
   // GCC may promote the scalar argument; cast it back.
-  VectorType *VTy = dyn_cast<VectorType>(ResultType);
+  const VectorType *VTy = dyn_cast<const VectorType>(ResultType);
   assert(VTy && "expected a vector type");
-  Type *ElTy = VTy->getElementType();
+  const Type *ElTy = VTy->getElementType();
   if (Val->getType() != ElTy) {
     assert(!ElTy->isFloatingPointTy() &&
            "only integer types expected to be promoted");
@@ -246,13 +246,13 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
                                       unsigned FnCode,
                                       const MemRef *DestLoc,
                                       Value *&Result,
-                                      Type *ResultType,
+                                      const Type *ResultType,
                                       std::vector<Value*> &Ops) {
   neon_datatype datatype = neon_datatype_unspecified;
   bool isRounded = false;
   Intrinsic::ID intID = Intrinsic::not_intrinsic;
   Function *intFn;
-  Type* intOpTypes[2];
+  const Type* intOpTypes[2];
 
   if (FnCode < ARM_BUILTIN_NEON_BASE)
     return false;
@@ -823,7 +823,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -835,7 +835,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -848,7 +848,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -869,7 +869,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     }
     if (datatype == neon_datatype_polynomial) {
       intID = Intrinsic::arm_neon_vmulp;
-      intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+      intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
       Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     } else if (datatype == neon_datatype_float)
       Result = Builder.CreateFMul(Ops[0], Ops[1]);
@@ -936,7 +936,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[1], Ops[2]);
     Result = Builder.CreateAdd(Ops[0], Result);
     break;
@@ -960,7 +960,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[1], Ops[2]);
     Result = Builder.CreateSub(Ops[0], Result);
     break;
@@ -984,7 +984,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1005,7 +1005,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall3(intFn, Ops[0], Ops[1], Ops[2]);
     break;
 
@@ -1026,7 +1026,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall3(intFn, Ops[0], Ops[1], Ops[2]);
     break;
 
@@ -1051,7 +1051,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1072,7 +1072,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1113,7 +1113,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1129,7 +1129,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1150,7 +1150,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1161,7 +1161,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_signed)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vqshiftsu;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1180,7 +1180,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1195,7 +1195,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1210,7 +1210,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1237,7 +1237,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       else
         return BadImmediateError(exp, Result);
 
-      intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+      intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
       Result = Builder.CreateCall2(intFn, Ops[1], Ops[2]);
     }
     Result = Builder.CreateAdd(Ops[0], Result);
@@ -1284,7 +1284,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1296,7 +1296,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1309,7 +1309,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1401,7 +1401,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1413,10 +1413,10 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    VectorType *VTy = dyn_cast<VectorType>(ResultType);
+    const VectorType *VTy = dyn_cast<const VectorType>(ResultType);
     assert(VTy && "expected a vector type for vabdl result");
-    llvm::Type *DTy = VectorType::getTruncatedElementVectorType(VTy);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, DTy);
+    const llvm::Type *DTy = VectorType::getTruncatedElementVectorType(VTy);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &DTy, 1);
     Ops[0] = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     Result = Builder.CreateZExt(Ops[0], ResultType);
     break;
@@ -1430,7 +1430,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Ops[1] = Builder.CreateCall2(intFn, Ops[1], Ops[2]);
     Result = Builder.CreateAdd(Ops[0], Ops[1]);
     break;
@@ -1443,10 +1443,10 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    VectorType *VTy = dyn_cast<VectorType>(ResultType);
+    const VectorType *VTy = dyn_cast<const VectorType>(ResultType);
     assert(VTy && "expected a vector type for vabal result");
-    llvm::Type *DTy = VectorType::getTruncatedElementVectorType(VTy);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, DTy);
+    const llvm::Type *DTy = VectorType::getTruncatedElementVectorType(VTy);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &DTy, 1);
     Ops[1] = Builder.CreateCall2(intFn, Ops[1], Ops[2]);
     Ops[1] = Builder.CreateZExt(Ops[1], ResultType);
     Result = Builder.CreateAdd(Ops[0], Ops[1]);
@@ -1462,7 +1462,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1475,7 +1475,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1487,7 +1487,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1501,7 +1501,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
 
     intOpTypes[0] = ResultType;
     intOpTypes[1] = Ops[0]->getType();
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 2);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1515,7 +1515,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
 
     intOpTypes[0] = ResultType;
     intOpTypes[1] = Ops[1]->getType();
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 2);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1528,7 +1528,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1541,7 +1541,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     else
       return BadImmediateError(exp, Result);
 
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1549,7 +1549,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_float)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vrecps;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1557,7 +1557,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_float)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vrsqrts;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
 
@@ -1566,7 +1566,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
                                CheckRightShiftCount, true))
       return UnexpectedError("%Hinvalid shift count", exp, Result);
     intID = Intrinsic::arm_neon_vshiftins;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall3(intFn, Ops[0], Ops[1], Ops[2]);
     break;
 
@@ -1575,7 +1575,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
                                CheckLeftShiftCount, false))
       return UnexpectedError("%Hinvalid shift count", exp, Result);
     intID = Intrinsic::arm_neon_vshiftins;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall3(intFn, Ops[0], Ops[1], Ops[2]);
     break;
 
@@ -1585,7 +1585,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       intID = Intrinsic::arm_neon_vabs;
     else
       return BadImmediateError(exp, Result);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1593,7 +1593,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_signed)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vqabs;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1611,7 +1611,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_signed)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vqneg;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1619,7 +1619,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype != neon_datatype_signed)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vcls;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1628,7 +1628,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
         datatype != neon_datatype_unsigned)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vclz;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1636,7 +1636,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     if (datatype == neon_datatype_float)
       return BadImmediateError(exp, Result);
     intID = Intrinsic::arm_neon_vcnt;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1646,7 +1646,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       intID = Intrinsic::arm_neon_vrecpe;
     else
       return BadImmediateError(exp, Result);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1656,7 +1656,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       intID = Intrinsic::arm_neon_vrsqrte;
     else
       return BadImmediateError(exp, Result);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1681,7 +1681,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     // GCC may promote the scalar argument; cast it back.
     const VectorType *VTy = dyn_cast<const VectorType>(Ops[1]->getType());
     assert(VTy && "expected a vector type for vset_lane vector operand");
-    Type *ElTy = VTy->getElementType();
+    const Type *ElTy = VTy->getElementType();
     if (Ops[0]->getType() != ElTy) {
       assert(!ElTy->isFloatingPointTy() &&
              "only integer types expected to be promoted");
@@ -1721,7 +1721,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
 
   case NEON_BUILTIN_vget_high:
   case NEON_BUILTIN_vget_low: {
-    Type *v2f64Ty = VectorType::get(Type::getDoubleTy(Context), 2);
+    const Type *v2f64Ty = VectorType::get(Type::getDoubleTy(Context), 2);
     unsigned Idx = (neon_code == NEON_BUILTIN_vget_low ? 0 : 1);
     Result = Builder.CreateBitCast(Ops[0], v2f64Ty);
     Result = Builder.CreateExtractElement(Result, getInt32Const(Idx));
@@ -1744,7 +1744,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       intID = Intrinsic::arm_neon_vqmovnu;
     else
       return BadImmediateError(exp, Result);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1753,7 +1753,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       intID = Intrinsic::arm_neon_vqmovnsu;
     else
       return BadImmediateError(exp, Result);
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Result = Builder.CreateCall(intFn, Ops[0]);
     break;
 
@@ -1800,7 +1800,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     }
     const VectorType *VTy = dyn_cast<const VectorType>(ResultType);
     assert(VTy && "expected a vector type");
-    Type *ElTy = VTy->getElementType();
+    const Type *ElTy = VTy->getElementType();
     unsigned ChunkElts = ChunkBits / ElTy->getPrimitiveSizeInBits();
 
     // Translate to a vector shuffle.
@@ -1859,7 +1859,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     }
     intOpTypes[0] = ResultType;
     intOpTypes[1] = Ops[0]->getType();
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 2);
     Result = Builder.CreateCall2(intFn, Ops[0], Ops[1]);
     break;
   }
@@ -1907,7 +1907,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       }
     }
     Args.push_back(Ops[1]);
-    Result = Builder.CreateCall(intFn, Args);
+    Result = Builder.CreateCall(intFn, Args.begin(), Args.end());
     break;
   }
 
@@ -1947,7 +1947,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       }
     }
     Args.push_back(Ops[2]);
-    Result = Builder.CreateCall(intFn, Args);
+    Result = Builder.CreateCall(intFn, Args.begin(), Args.end());
     break;
   }
 
@@ -2020,7 +2020,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
 
   case NEON_BUILTIN_vld1: {
     intID = Intrinsic::arm_neon_vld1;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, ResultType);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &ResultType, 1);
     Type *VPTy = PointerType::getUnqual(Type::getInt8Ty(Context));
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Result = Builder.CreateCall2(intFn, BitCastToType(Ops[0], VPTy),
@@ -2033,14 +2033,14 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case NEON_BUILTIN_vld4: {
     const StructType *STy = dyn_cast<const StructType>(ResultType);
     assert(STy && "expected a struct type");
-    Type *VTy = STy->getElementType(0);
+    const Type *VTy = STy->getElementType(0);
     switch (neon_code) {
     case NEON_BUILTIN_vld2: intID = Intrinsic::arm_neon_vld2; break;
     case NEON_BUILTIN_vld3: intID = Intrinsic::arm_neon_vld3; break;
     case NEON_BUILTIN_vld4: intID = Intrinsic::arm_neon_vld4; break;
     default: assert(false);
     }
-    intFn = Intrinsic::getDeclaration(TheModule, intID, VTy);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &VTy, 1);
     Type *VPTy = PointerType::getUnqual(Type::getInt8Ty(Context));
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Result = Builder.CreateCall2(intFn, BitCastToType(Ops[0], VPTy),
@@ -2062,9 +2062,9 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case NEON_BUILTIN_vld2_lane:
   case NEON_BUILTIN_vld3_lane:
   case NEON_BUILTIN_vld4_lane: {
-    StructType *STy = dyn_cast<StructType>(ResultType);
+    const StructType *STy = dyn_cast<const StructType>(ResultType);
     assert(STy && "expected a struct type");
-    VectorType *VTy = dyn_cast<VectorType>(STy->getElementType(0));
+    const VectorType *VTy = dyn_cast<const VectorType>(STy->getElementType(0));
     assert(VTy && "expected a vector type");
     if (!isValidLane(Ops[2], VTy->getNumElements()))
       return UnexpectedError("%Hinvalid lane number", exp, Result);
@@ -2075,7 +2075,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     default: assert(false);
     }
     intOpTypes[0] = VTy;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 1);
     unsigned NumVecs = 0;
     switch (neon_code) {
     case NEON_BUILTIN_vld2_lane: NumVecs = 2; break;
@@ -2092,7 +2092,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     Args.push_back(Ops[2]); // lane number
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Args.push_back(getInt32Const(Align));
-    Result = Builder.CreateCall(intFn, Args);
+    Result = Builder.CreateCall(intFn, Args.begin(), Args.end());
     Builder.CreateStore(Result, DestLoc->Ptr);
     Result = 0;
     break;
@@ -2105,9 +2105,9 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case NEON_BUILTIN_vld2_dup:
   case NEON_BUILTIN_vld3_dup:
   case NEON_BUILTIN_vld4_dup: {
-    StructType *STy = dyn_cast<StructType>(ResultType);
+    const StructType *STy = dyn_cast<const StructType>(ResultType);
     assert(STy && "expected a struct type");
-    VectorType *VTy = dyn_cast<VectorType>(STy->getElementType(0));
+    const VectorType *VTy = dyn_cast<const VectorType>(STy->getElementType(0));
     assert(VTy && "expected a vector type");
     intOpTypes[0] = VTy;
 
@@ -2119,7 +2119,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
       case NEON_BUILTIN_vld4_dup: intID = Intrinsic::arm_neon_vld4; break;
       default: assert(false);
       }
-      intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+      intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 1);
       Type *VPTy = PointerType::getUnqual(Type::getInt8Ty(Context));
       unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
       Result = Builder.CreateCall2(intFn, BitCastToType(Ops[0], VPTy),
@@ -2136,7 +2136,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     case NEON_BUILTIN_vld4_dup: intID = Intrinsic::arm_neon_vld4lane; break;
     default: assert(false);
     }
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 1);
     unsigned NumVecs = 0;
     switch (neon_code) {
     case NEON_BUILTIN_vld2_dup: NumVecs = 2; break;
@@ -2153,7 +2153,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     Args.push_back(getInt32Const(0));
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Args.push_back(getInt32Const(Align));
-    Result = Builder.CreateCall(intFn, Args);
+    Result = Builder.CreateCall(intFn, Args.begin(), Args.end());
 
     // Now splat the values in lane 0 to the rest of the elements.
     for (unsigned n = 0; n != NumVecs; ++n) {
@@ -2168,9 +2168,9 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   }
 
   case NEON_BUILTIN_vst1: {
-    Type *VTy = Ops[1]->getType();
+    const Type *VTy = Ops[1]->getType();
     intID = Intrinsic::arm_neon_vst1;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, VTy);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &VTy, 1);
     Type *VPTy = PointerType::getUnqual(Type::getInt8Ty(Context));
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Builder.CreateCall3(intFn, BitCastToType(Ops[0], VPTy), Ops[1],
@@ -2184,14 +2184,14 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case NEON_BUILTIN_vst4: {
     const StructType *STy = dyn_cast<const StructType>(Ops[1]->getType());
     assert(STy && "expected a struct type");
-    Type *VTy = STy->getElementType(0);
+    const Type *VTy = STy->getElementType(0);
     switch (neon_code) {
     case NEON_BUILTIN_vst2: intID = Intrinsic::arm_neon_vst2; break;
     case NEON_BUILTIN_vst3: intID = Intrinsic::arm_neon_vst3; break;
     case NEON_BUILTIN_vst4: intID = Intrinsic::arm_neon_vst4; break;
     default: assert(false);
     }
-    intFn = Intrinsic::getDeclaration(TheModule, intID, VTy);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, &VTy, 1);
     unsigned NumVecs = 0;
     switch (neon_code) {
     case NEON_BUILTIN_vst2: NumVecs = 2; break;
@@ -2207,7 +2207,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     }
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Args.push_back(getInt32Const(Align));
-    Builder.CreateCall(intFn, Args);
+    Builder.CreateCall(intFn, Args.begin(), Args.end());
     Result = 0;
     break;
   }
@@ -2224,9 +2224,9 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case NEON_BUILTIN_vst2_lane:
   case NEON_BUILTIN_vst3_lane:
   case NEON_BUILTIN_vst4_lane: {
-    StructType *STy = dyn_cast<StructType>(Ops[1]->getType());
+    const StructType *STy = dyn_cast<const StructType>(Ops[1]->getType());
     assert(STy && "expected a struct type");
-    VectorType *VTy = dyn_cast<VectorType>(STy->getElementType(0));
+    const VectorType *VTy = dyn_cast<const VectorType>(STy->getElementType(0));
     assert(VTy && "expected a vector type");
     if (!isValidLane(Ops[2], VTy->getNumElements()))
       return UnexpectedError("%Hinvalid lane number", exp, Result);
@@ -2237,7 +2237,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     default: assert(false);
     }
     intOpTypes[0] = VTy;
-    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes);
+    intFn = Intrinsic::getDeclaration(TheModule, intID, intOpTypes, 1);
     unsigned NumVecs = 0;
     switch (neon_code) {
     case NEON_BUILTIN_vst2_lane: NumVecs = 2; break;
@@ -2254,7 +2254,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     Args.push_back(Ops[2]); // lane number
     unsigned Align = getPointerAlignment(TREE_VALUE(TREE_OPERAND(exp, 1)));
     Args.push_back(getInt32Const(Align));
-    Builder.CreateCall(intFn, Args);
+    Builder.CreateCall(intFn, Args.begin(), Args.end());
     Result = 0;
     break;
   }
@@ -2521,11 +2521,11 @@ vfp_arg_homogeneous_aggregate_p(enum machine_mode mode, tree type,
 // Walk over an LLVM Type that we know is a homogeneous aggregate and
 // push the proper LLVM Types that represent the register types to pass
 // that struct member in.
-static void push_elts(Type *Ty, std::vector<Type*> &Elts)
+static void push_elts(const Type *Ty, std::vector<const Type*> &Elts)
 {
   for (Type::subtype_iterator I = Ty->subtype_begin(), E = Ty->subtype_end();
        I != E; ++I) {
-    Type *STy = *I;
+    const Type *STy = I->get();
     if (const VectorType *VTy = dyn_cast<VectorType>(STy)) {
       switch (VTy->getBitWidth())
       {
@@ -2538,8 +2538,8 @@ static void push_elts(Type *Ty, std::vector<Type*> &Elts)
         default:
           assert (0 && "invalid vector type");
       }
-    } else if (ArrayType *ATy = dyn_cast<ArrayType>(STy)) {
-      Type *ETy = ATy->getElementType();
+    } else if (const ArrayType *ATy = dyn_cast<ArrayType>(STy)) {
+      const Type *ETy = ATy->getElementType();
 
       for (uint64_t i = ATy->getNumElements(); i > 0; --i)
         Elts.push_back(ETy);
@@ -2550,10 +2550,10 @@ static void push_elts(Type *Ty, std::vector<Type*> &Elts)
   }
 }
 
-static unsigned count_num_words(std::vector<Type*> &ScalarElts) {
+static unsigned count_num_words(std::vector<const Type*> &ScalarElts) {
   unsigned NumWords = 0;
   for (unsigned i = 0, e = ScalarElts.size(); i != e; ++i) {
-    Type *Ty = ScalarElts[i];
+    const Type *Ty = ScalarElts[i];
     if (Ty->isPointerTy()) {
       NumWords++;
     } else if (Ty->isIntegerTy()) {
@@ -2574,7 +2574,7 @@ static unsigned count_num_words(std::vector<Type*> &ScalarElts) {
 // the IL a bit more explicit about how arguments are handled.
 extern bool
 llvm_arm_try_pass_aggregate_custom(tree type,
-                                   std::vector<Type*>& ScalarElts,
+                                   std::vector<const Type*>& ScalarElts,
 				   CallingConv::ID& CC,
 				   struct DefaultABIClient* C) {
   if (CC != CallingConv::ARM_AAPCS && CC != CallingConv::C)
@@ -2585,7 +2585,7 @@ llvm_arm_try_pass_aggregate_custom(tree type,
 
   if (TARGET_HARD_FLOAT_ABI)
     return false;
-  Type *Ty = ConvertType(type);
+  const Type *Ty = ConvertType(type);
   if (Ty->isPointerTy())
     return false;
 
@@ -2596,14 +2596,14 @@ llvm_arm_try_pass_aggregate_custom(tree type,
 
   // First, build a type that will be bitcast to the original one and
   // from where elements will be extracted.
-  std::vector<Type*> Elts;
-  Type* Int32Ty = Type::getInt32Ty(getGlobalContext());
+  std::vector<const Type*> Elts;
+  const Type* Int32Ty = Type::getInt32Ty(getGlobalContext());
   const unsigned NumRegularArgs = Size / 4;
   for (unsigned i = 0; i < NumRegularArgs; ++i) {
     Elts.push_back(Int32Ty);
   }
   const unsigned RestSize = Size % 4;
-  llvm::Type *RestType = NULL;
+  const llvm::Type *RestType = NULL;
   if (RestSize> 2) {
     RestType = Type::getInt32Ty(getGlobalContext());
   } else if (RestSize > 1) {
@@ -2613,7 +2613,7 @@ llvm_arm_try_pass_aggregate_custom(tree type,
   }
   if (RestType)
     Elts.push_back(RestType);
-  StructType *STy = StructType::get(getGlobalContext(), Elts, false);
+  const StructType *STy = StructType::get(getGlobalContext(), Elts, false);
 
   if (AddPad) {
     ScalarElts.push_back(Int32Ty);
@@ -2641,9 +2641,9 @@ llvm_arm_try_pass_aggregate_custom(tree type,
 // for parameter passing. This only applies to AAPCS-VFP "homogeneous
 // aggregates" as specified in 4.3.5 of the AAPCS spec.
 bool
-llvm_arm_should_pass_aggregate_in_mixed_regs(tree TreeType, Type *Ty,
+llvm_arm_should_pass_aggregate_in_mixed_regs(tree TreeType, const Type *Ty,
                                              CallingConv::ID &CC,
-                                             std::vector<Type*> &Elts) {
+                                             std::vector<const Type*> &Elts) {
   if (!llvm_arm_should_pass_or_return_aggregate_in_regs(TreeType, CC))
     return false;
 
@@ -2686,10 +2686,10 @@ static bool alloc_next_qpr(bool *SPRs) {
 // count_num_registers_uses - Simulate argument passing reg allocation in SPRs.
 // Caller is expected to zero out SPRs.  Returns true if all of ScalarElts fit
 // in registers.
-static bool count_num_registers_uses(std::vector<Type*> &ScalarElts,
+static bool count_num_registers_uses(std::vector<const Type*> &ScalarElts,
                                      bool *SPRs) {
   for (unsigned i = 0, e = ScalarElts.size(); i != e; ++i) {
-    Type *Ty = ScalarElts[i];
+    const Type *Ty = ScalarElts[i];
     if (const VectorType *VTy = dyn_cast<VectorType>(Ty)) {
       switch (VTy->getBitWidth())
       {
@@ -2734,8 +2734,8 @@ static bool count_num_registers_uses(std::vector<Type*> &ScalarElts,
 // part of the aggregate, return true. That means the aggregate should instead
 // be passed in memory.
 bool
-llvm_arm_aggregate_partially_passed_in_regs(std::vector<Type*> &Elts,
-                                            std::vector<Type*> &ScalarElts,
+llvm_arm_aggregate_partially_passed_in_regs(std::vector<const Type*> &Elts,
+                                            std::vector<const Type*> &ScalarElts,
                                             CallingConv::ID &CC) {
   // Homogeneous aggregates are an AAPCS-VFP feature.
   if ((CC != CallingConv::ARM_AAPCS_VFP) ||
@@ -2756,15 +2756,15 @@ llvm_arm_aggregate_partially_passed_in_regs(std::vector<Type*> &Elts,
 
 // Return LLVM Type if TYPE can be returned as an aggregate,
 // otherwise return NULL.
-Type *llvm_arm_aggr_type_for_struct_return(tree TreeType,
-                                           CallingConv::ID &CC) {
+const Type *llvm_arm_aggr_type_for_struct_return(tree TreeType,
+                                                 CallingConv::ID &CC) {
   if (!llvm_arm_should_pass_or_return_aggregate_in_regs(TreeType, CC))
     return NULL;
 
   // Walk Ty and push LLVM types corresponding to register types onto
   // Elts.
-  std::vector<Type*> Elts;
-  Type *Ty = ConvertType(TreeType);
+  std::vector<const Type*> Elts;
+  const Type *Ty = ConvertType(TreeType);
   push_elts(Ty, Elts);
 
   return StructType::get(Context, Elts, false);
@@ -2790,7 +2790,7 @@ static void llvm_arm_extract_mrv_array_element(Value *Src, Value *Dest,
   Idxs[0] = ConstantInt::get(llvm::Type::getInt32Ty(Context), 0);
   Idxs[1] = ConstantInt::get(llvm::Type::getInt32Ty(Context), DestFieldNo);
   Idxs[2] = ConstantInt::get(llvm::Type::getInt32Ty(Context), DestElemNo);
-  Value *GEP = Builder.CreateGEP(Dest, Idxs, "mrv_gep");
+  Value *GEP = Builder.CreateGEP(Dest, Idxs, Idxs+3, "mrv_gep");
   if (STy->getElementType(SrcFieldNo)->isVectorTy()) {
     Value *ElemIndex = ConstantInt::get(Type::getInt32Ty(Context), SrcElemNo);
     Value *EVIElem = Builder.CreateExtractElement(EVI, ElemIndex, "mrv");
@@ -2817,7 +2817,7 @@ void llvm_arm_extract_multiple_return_value(Value *Src, Value *Dest,
 
   while (SNO < NumElements) {
 
-    Type *DestElemType = DestTy->getElementType(DNO);
+    const Type *DestElemType = DestTy->getElementType(DNO);
 
     // Directly access first class values.
     if (DestElemType->isSingleValueType()) {

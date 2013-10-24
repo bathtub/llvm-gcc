@@ -36,7 +36,6 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "llvm/Intrinsics.h"
 #include "llvm/ADT/IndexedMap.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/IRBuilder.h"
@@ -103,6 +102,8 @@ void readLLVMTypesStringTable();
 void writeLLVMTypesStringTable();
 void readLLVMValues();
 void writeLLVMValues();
+void readLLVMTypeUsers();
+void writeLLVMTypeUsers();
 void eraseLocalLLVMValues();
 void clearTargetBuiltinCache();
 const char* extractRegisterName(union tree_node*);
@@ -117,47 +118,49 @@ bool isPaddingElement(union tree_node*, unsigned N);
 /// TypeConverter - Implement the converter from GCC types to LLVM types.
 ///
 class TypeConverter {
-  enum ConversionStatus {
-    CS_Normal,   // Not in any specific context
-    CS_Struct,   // Recursively converting inside a struct
-    CS_StructPtr // Recursively converting under a pointer in a struct.
-  } RecursionStatus;
+  /// ConvertingStruct - If we are converting a RECORD or UNION to an LLVM type
+  /// we set this flag to true.
+  bool ConvertingStruct;
   
-  /// When in a CS_StructPtr context, we defer layout of a struct until we clear
-  /// the outermost struct.
-  SmallVector<union tree_node*, 8> StructsDeferred;
+  /// PointersToReresolve - When ConvertingStruct is true, we handling of
+  /// POINTER_TYPE, REFERENCE_TYPE, and BLOCK_POINTER_TYPE is changed to return
+  /// opaque*'s instead of recursively calling ConvertType.  When this happens,
+  /// we add the POINTER_TYPE to this list.
+  ///
+  std::vector<tree_node*> PointersToReresolve;
+
 public:
-  TypeConverter() : RecursionStatus(CS_Normal) {}
+  TypeConverter() : ConvertingStruct(false) {}
   
-  Type *ConvertType(tree_node *type);
+  const Type *ConvertType(tree_node *type);
 
   /// GCCTypeOverlapsWithLLVMTypePadding - Return true if the specified GCC type
   /// has any data that overlaps with structure padding in the specified LLVM
   /// type.
-  static bool GCCTypeOverlapsWithLLVMTypePadding(tree_node *t, Type *Ty);
+  static bool GCCTypeOverlapsWithLLVMTypePadding(tree_node *t, const Type *Ty);
   
   
   /// ConvertFunctionType - Convert the specified FUNCTION_TYPE or METHOD_TYPE
   /// tree to an LLVM type.  This does the same thing that ConvertType does, but
   /// it also returns the function's LLVM calling convention and attributes.
-  FunctionType *ConvertFunctionType(tree_node *type,
-                                    tree_node *decl,
-                                    tree_node *static_chain,
-                                    CallingConv::ID &CallingConv,
-                                    AttrListPtr &PAL);
+  const FunctionType *ConvertFunctionType(tree_node *type,
+                                          tree_node *decl,
+                                          tree_node *static_chain,
+                                          CallingConv::ID &CallingConv,
+                                          AttrListPtr &PAL);
   
   /// ConvertArgListToFnType - Given a DECL_ARGUMENTS list on an GCC tree,
   /// return the LLVM type corresponding to the function.  This is useful for
   /// turning "T foo(...)" functions into "T foo(void)" functions.
-  FunctionType *ConvertArgListToFnType(tree_node *type,
-                                       tree_node *arglist,
-                                       tree_node *static_chain,
-                                       CallingConv::ID &CallingConv,
-                                       AttrListPtr &PAL);
+  const FunctionType *ConvertArgListToFnType(tree_node *type,
+                                             tree_node *arglist,
+                                             tree_node *static_chain,
+                                             CallingConv::ID &CallingConv,
+                                             AttrListPtr &PAL);
   
 private:
-  Type *ConvertRECORD(tree_node *type, tree_node *orig_type);
-  Type *ConvertUNION(tree_node *type, tree_node *orig_type);
+  const Type *ConvertRECORD(tree_node *type, tree_node *orig_type);
+  const Type *ConvertUNION(tree_node *type, tree_node *orig_type);
   bool DecodeStructFields(tree_node *Field, StructTypeConversionInfo &Info);
   void DecodeStructBitField(tree_node *Field, StructTypeConversionInfo &Info);
   void SelectUnionMember(tree_node *type, StructTypeConversionInfo &Info);
@@ -167,7 +170,7 @@ extern TypeConverter *TheTypeConverter;
 
 /// ConvertType - Convert the specified tree type to an LLVM type.
 ///
-inline Type *ConvertType(tree_node *type) {
+inline const Type *ConvertType(tree_node *type) {
   return TheTypeConverter->ConvertType(type);
 }
 
@@ -317,12 +320,21 @@ class TreeToLLVM {
   /// PostPads - The post landing pad for a given EH region.
   IndexedMap<BasicBlock *> PostPads;
 
+  /// CatchAll - Language specific catch-all object.
+  GlobalVariable *CatchAll;
+
   /// ExceptionValue - Is the local to receive the current exception.
   Value *ExceptionValue;
 
   /// ExceptionSelectorValue - Is the local to receive the current exception
   /// selector.
   Value *ExceptionSelectorValue;
+
+  /// FuncEHException - Function used to receive the exception.
+  Function *FuncEHException;
+
+  /// FuncEHSelector - Function used to receive the exception selector.
+  Function *FuncEHSelector;
 
   /// FuncEHGetTypeID - Function used to return type id for give typeinfo.
   Function *FuncEHGetTypeID;
@@ -350,41 +362,41 @@ public:
   
   /// CastToType - Cast the specified value to the specified type if it is
   /// not already that type.
-  Value *CastToType(unsigned opcode, Value *V, Type *Ty);
+  Value *CastToType(unsigned opcode, Value *V, const Type *Ty);
   Value *CastToType(unsigned opcode, Value *V, tree_node *type) {
     return CastToType(opcode, V, ConvertType(type));
   }
 
   /// CastToAnyType - Cast the specified value to the specified type regardless
   /// of the types involved. This is an inferred cast.
-  Value *CastToAnyType (Value *V, bool VSigned, Type* Ty, bool TySigned);
+  Value *CastToAnyType (Value *V, bool VSigned, const Type* Ty, bool TySigned);
 
   /// CastToUIntType - Cast the specified value to the specified type assuming
   /// that V's type and Ty are integral types. This arbitrates between BitCast,
   /// Trunc and ZExt.
-  Value *CastToUIntType(Value *V, Type* Ty);
+  Value *CastToUIntType(Value *V, const Type* Ty);
 
   /// CastToSIntType - Cast the specified value to the specified type assuming
   /// that V's type and Ty are integral types. This arbitrates between BitCast,
   /// Trunc and SExt.
-  Value *CastToSIntType(Value *V, Type* Ty);
+  Value *CastToSIntType(Value *V, const Type* Ty);
 
   /// CastToFPType - Cast the specified value to the specified type assuming
   /// that V's type and Ty are floating point types. This arbitrates between
   /// BitCast, FPTrunc and FPExt.
-  Value *CastToFPType(Value *V, Type* Ty);
+  Value *CastToFPType(Value *V, const Type* Ty);
 
   /// NOOPCastToType - Insert a BitCast from V to Ty if needed. This is just a
   /// convenience function for CastToType(Instruction::BitCast, V, Ty);
-  Value *BitCastToType(Value *V, Type *Ty);
+  Value *BitCastToType(Value *V, const Type *Ty);
 
   /// CreateTemporary - Create a new alloca instruction of the specified type,
   /// inserting it into the entry block and returning it.  The resulting
   /// instruction's type is a pointer to the specified type.
-  AllocaInst *CreateTemporary(Type *Ty, unsigned align=0);
+  AllocaInst *CreateTemporary(const Type *Ty, unsigned align=0);
 
   /// CreateTempLoc - Like CreateTemporary, but returns a MemRef.
-  MemRef CreateTempLoc(Type *Ty);
+  MemRef CreateTempLoc(const Type *Ty);
 
   /// EmitAggregateCopy - Copy the elements from SrcLoc to DestLoc, using the
   /// GCC type specified by GCCType to know which elements to copy.
@@ -467,7 +479,7 @@ private:
 
   /// isNoopCast - Return true if a cast from V to Ty does not change any bits.
   ///
-  static bool isNoopCast(Value *V, Type *Ty);
+  static bool isNoopCast(Value *V, const Type *Ty);
 
   void HandleMultiplyDefinedGimpleTemporary(tree_node *var);
   
@@ -508,7 +520,7 @@ private:
   Value *EmitTRUTH_NOT_EXPR(tree_node *exp);
   Value *EmitEXACT_DIV_EXPR(tree_node *exp, const MemRef *DestLoc);
   Value *EmitCompare(tree_node *exp, unsigned UIPred, unsigned SIPred, 
-                     unsigned FPPred, Type *DestTy = 0);
+                     unsigned FPPred, const Type *DestTy = 0);
   Value *EmitBinOp(tree_node *exp, const MemRef *DestLoc, unsigned Opc);
   Value *EmitPtrBinOp(tree_node *exp, unsigned Opc);
   Value *EmitTruthOp(tree_node *exp, unsigned Opc);
@@ -534,14 +546,13 @@ private:
   Value *EmitMoveOfRegVariableToRightReg(Instruction *I, tree_node *decl);
 
   // Helpers for Builtin Function Expansion.
+  void EmitMemoryBarrier(bool ll, bool ls, bool sl, bool ss, bool device);
   Value *BuildVector(const std::vector<Value*> &Elts);
   Value *BuildVector(Value *Elt, ...);
   Value *BuildVectorShuffle(Value *InVec1, Value *InVec2, ...);
-  Value *BuildBinaryAtomic(tree_node *exp, llvm::AtomicRMWInst::BinOp Kind);
-  Value *BuildBinaryAtomicPost(tree_node *exp, llvm::AtomicRMWInst::BinOp Kind,
-                               Instruction::BinaryOps Op);
-  Value *BuildCmpAndSwapAtomic(tree_node *exp, tree_node *type, 
-                               bool isBool);
+  Value *BuildBinaryAtomicBuiltin(tree_node *exp, Intrinsic::ID id);
+  Value *BuildCmpAndSwapAtomicBuiltin(tree_node *exp, tree_node *type, 
+                                      bool isBool);
 
   // Builtin Function Expansion.
   bool EmitBuiltinCall(tree_node *exp, tree_node *fndecl, 
@@ -607,7 +618,7 @@ private:
                             unsigned FnCode,
                             const MemRef *DestLoc,
                             Value *&Result,
-                            Type *ResultType,
+                            const Type *ResultType,
                             std::vector<Value*> &Ops);
 
 public:

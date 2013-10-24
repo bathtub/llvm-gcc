@@ -343,11 +343,11 @@ __enable_execute_stack (void *addr)					\
 #ifdef ENABLE_LLVM
 
 /* Yes, we're supporting PIC codegen for OpenBSD targets! */
-#define LLVM_SET_RELOC_MODEL(RelocModel)             \
+#define LLVM_SET_TARGET_OPTIONS(argvec)              \
   if (flag_pic)                                      \
-    RelocModel = Reloc::PIC_;                        \
+    argvec.push_back ("--relocation-model=pic");     \
   else                                               \
-    RelocModel = Reloc::Static;
+    argvec.push_back ("--relocation-model=static");
 
 #endif
 

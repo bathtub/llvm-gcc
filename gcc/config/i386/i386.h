@@ -3879,11 +3879,11 @@ enum ix86_builtins
 
 /* Turn -march=xx into a CPU type.
  */
-#define LLVM_SET_SUBTARGET_FEATURES(C, F)                     \
+#define LLVM_SET_SUBTARGET_FEATURES(F) \
   { if (TARGET_MACHO && ! strcmp (ix86_arch_string, "apple")) \
-      C = (TARGET_64BIT ? "core2" : "yonah");                 \
+      F.setCPU(TARGET_64BIT ? "core2" : "yonah");             \
     else                                                      \
-      C = (ix86_arch_string);                                 \
+      F.setCPU(ix86_arch_string);                             \
     if (TARGET_64BIT)   F.AddFeature("64bit");                \
     if (TARGET_MMX)     F.AddFeature("mmx");                  \
     else if (target_flags_explicit & MASK_MMX) F.AddFeature("mmx", false); \
@@ -3938,42 +3938,36 @@ enum ix86_builtins
 #define LLVM_CANONICAL_ADDRESS_CONSTRAINTS "im"
 
 /* Propagate code model setting to backend */
-#define LLVM_SET_CODE_MODEL(CMModel)                    \
-  switch (ix86_cmodel) {                                \
-  default:                                              \
-    sorry ("code model %<%s%> not supported yet",       \
-           ix86_cmodel_string);                         \
-    break;                                              \
-  case CM_SMALL:                                        \
-  case CM_SMALL_PIC:                                    \
-    CMModel = llvm::CodeModel::Small;                   \
-    break;                                              \
-  case CM_KERNEL:                                       \
-    CMModel = llvm::CodeModel::Kernel;                  \
-    break;                                              \
-  case CM_MEDIUM:                                       \
-  case CM_MEDIUM_PIC:                                   \
-    CMModel = llvm::CodeModel::Medium;                  \
-    break;                                              \
-  case CM_32:                                           \
-    CMModel = llvm::CodeModel::Default;                 \
-    break;                                              \
-  }
-  
 #define LLVM_SET_MACHINE_OPTIONS(argvec)                \
   do {                                                  \
-    if (ix86_force_align_arg_pointer)                   \
-      argvec.push_back("-force-align-stack");           \
-  } while (0)
-
-#define LLVM_SET_TARGET_MACHINE_OPTIONS(options)        \
-  do {                                                  \
+    switch (ix86_cmodel) {                              \
+    default:                                            \
+      sorry ("code model %<%s%> not supported yet",     \
+             ix86_cmodel_string);                       \
+      break;                                            \
+    case CM_SMALL:                                      \
+    case CM_SMALL_PIC:                                  \
+      argvec.push_back("--code-model=small");           \
+      break;                                            \
+    case CM_KERNEL:                                     \
+      argvec.push_back("--code-model=kernel");          \
+      break;                                            \
+    case CM_MEDIUM:                                     \
+    case CM_MEDIUM_PIC:                                 \
+      argvec.push_back("--code-model=medium");          \
+      break;                                            \
+    case CM_32:                                         \
+      argvec.push_back("--code-model=default");         \
+      break;                                            \
+    }                                                   \
     /* A value of 3 in flag_omit_frame_pointer implies  \
        omitting leaf frame pointers only.  */           \
     if (flag_omit_frame_pointer == 3)                   \
-      options.NoFramePointerElimNonLeaf = true;         \
+      argvec.push_back("--disable-non-leaf-fp-elim");   \
+                                                        \
+    if (ix86_force_align_arg_pointer)                   \
+      argvec.push_back("-force-align-stack");           \
   } while (0)
-
 #endif /* ENABLE_LLVM */
 /* LLVM LOCAL end */
 

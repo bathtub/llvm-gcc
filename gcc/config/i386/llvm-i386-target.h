@@ -45,10 +45,10 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 
 /* For parameters to an asm, check the constraint and use X86_mmx if an MMX
    register is called for.  "y" means an MMX register. */
-#define LLVM_ADJUST_MMX_INLINE_PARAMETER_TYPE(Constraint, LLVMTy)      \
-  ((TARGET_MMX &&                                                      \
-    (StringRef(Constraint) == "y" || StringRef(Constraint) == "&y")) ? \
-   Type::getX86_MMXTy(Context) : LLVMTy)
+#define LLVM_ADJUST_MMX_INLINE_PARAMETER_TYPE(Constraint, LLVMTy) \
+  ((TARGET_MMX &&                                                 \
+    StringRef(Constraint).equals(StringRef(std::string("y")))) ?  \
+    Type::getX86_MMXTy(Context) : LLVMTy)
 
 /* LLVM specific stuff for supporting calling convention output */
 #define TARGET_ADJUST_LLVM_CC(CC, type)                         \
@@ -153,15 +153,15 @@ extern bool llvm_x86_should_pass_aggregate_in_integer_regs(tree,
 #define LLVM_SHOULD_PASS_AGGREGATE_IN_INTEGER_REGS(X, Y, Z)             \
   llvm_x86_should_pass_aggregate_in_integer_regs((X), (Y), (Z))
 
-extern Type *llvm_x86_scalar_type_for_struct_return(tree type, 
-                                                    unsigned *Offset);
+extern const Type *llvm_x86_scalar_type_for_struct_return(tree type, 
+                                                          unsigned *Offset);
 
 /* LLVM_SCALAR_TYPE_FOR_STRUCT_RETURN - Return LLVM Type if X can be 
    returned as a scalar, otherwise return NULL. */
 #define LLVM_SCALAR_TYPE_FOR_STRUCT_RETURN(X, Y) \
   llvm_x86_scalar_type_for_struct_return((X), (Y))
 
-extern Type *llvm_x86_aggr_type_for_struct_return(tree type);
+extern const Type *llvm_x86_aggr_type_for_struct_return(tree type);
 
 /* LLVM_AGGR_TYPE_FOR_STRUCT_RETURN - Return LLVM Type if X can be 
    returned as an aggregate, otherwise return NULL. */
@@ -216,7 +216,7 @@ llvm_x86_should_not_return_complex_in_memory(tree type);
   llvm_x86_should_not_return_complex_in_memory((X))
 
 extern bool
-llvm_x86_should_pass_aggregate_as_fca(tree type, Type *);
+llvm_x86_should_pass_aggregate_as_fca(tree type, const Type *);
 
 /* LLVM_SHOULD_PASS_AGGREGATE_AS_FCA - Return true if an aggregate of the
    specified type should be passed as a first-class aggregate. */
@@ -225,18 +225,18 @@ llvm_x86_should_pass_aggregate_as_fca(tree type, Type *);
   llvm_x86_should_pass_aggregate_as_fca(X, TY)
 #endif
 
-extern bool llvm_x86_should_pass_aggregate_in_memory(tree, Type *);
+extern bool llvm_x86_should_pass_aggregate_in_memory(tree, const Type *);
 
 #define LLVM_SHOULD_PASS_AGGREGATE_USING_BYVAL_ATTR(X, TY)      \
   llvm_x86_should_pass_aggregate_in_memory(X, TY)
 
 
 extern bool
-llvm_x86_64_should_pass_aggregate_in_mixed_regs(tree, Type *Ty,
-                                                std::vector<Type*>&);
+llvm_x86_64_should_pass_aggregate_in_mixed_regs(tree, const Type *Ty,
+                                                std::vector<const Type*>&);
 extern bool
-llvm_x86_32_should_pass_aggregate_in_mixed_regs(tree, Type *Ty,
-                                                std::vector<Type*>&);
+llvm_x86_32_should_pass_aggregate_in_mixed_regs(tree, const Type *Ty,
+                                                std::vector<const Type*>&);
 
 #define LLVM_SHOULD_PASS_AGGREGATE_IN_MIXED_REGS(T, TY, CC, E)       \
   (TARGET_64BIT ?                                                    \
@@ -244,8 +244,8 @@ llvm_x86_32_should_pass_aggregate_in_mixed_regs(tree, Type *Ty,
    llvm_x86_32_should_pass_aggregate_in_mixed_regs((T), (TY), (E)))
 
 extern
-bool llvm_x86_64_aggregate_partially_passed_in_regs(std::vector<Type*>&,
-                                                    std::vector<Type*>&);
+bool llvm_x86_64_aggregate_partially_passed_in_regs(std::vector<const Type*>&,
+                                                    std::vector<const Type*>&);
 
 #define LLVM_AGGREGATE_PARTIALLY_PASSED_IN_REGS(E, SE, CC)       \
   (TARGET_64BIT ?                                                     \

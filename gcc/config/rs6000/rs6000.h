@@ -3459,19 +3459,18 @@ enum rs6000_builtins
 
 /* Turn -march=xx into a CPU type.
  */
-#define LLVM_SET_SUBTARGET_FEATURES(C, F)    \
+#define LLVM_SET_SUBTARGET_FEATURES(F) \
   { \
-    C = (rs6000_cpu_target);                 \
+    F.setCPU(rs6000_cpu_target); \
     F.AddFeature("altivec", TARGET_ALTIVEC); \
-    F.AddFeature("gpul", TARGET_MFCRF);      \
+    F.AddFeature("gpul", TARGET_MFCRF); \
     F.AddFeature("fsqrt", TARGET_PPC_GPOPT); \
     F.AddFeature("64bit", TARGET_POWERPC64); \
   }
 
-#define LLVM_SET_MACHINE_OPTIONS(argvec)
-
-#define LLVM_SET_TARGET_MACHINE_OPTIONS(options)       \
-  options.GenerateSoftFloatCalls = TARGET_SOFT_FLOAT;
+#define LLVM_SET_MACHINE_OPTIONS(argvec)               \
+  if (TARGET_SOFT_FLOAT)                               \
+    argvec.push_back("-soft-float");
 
 /* When -m64 is specified, set the architecture to powerpc64-os-blah even if the
  * compiler was configured for powerpc-os-blah.
@@ -3491,14 +3490,14 @@ enum rs6000_builtins
 #ifdef LLVM_ABI_H
 
 extern bool llvm_rs6000_try_pass_aggregate_custom(tree,
-						  std::vector<Type*>&,
+						  std::vector<const Type*>&,
 						  const CallingConv::ID &,
 						  struct DefaultABIClient*);
 
 #define LLVM_TRY_PASS_AGGREGATE_CUSTOM(T, E, CC, C)	\
   llvm_rs6000_try_pass_aggregate_custom((T), (E), (CC), (C))
 
-extern bool llvm_rs6000_should_pass_aggregate_byval(tree, Type *);
+extern bool llvm_rs6000_should_pass_aggregate_byval(tree, const Type *);
 
 #define LLVM_SHOULD_PASS_AGGREGATE_USING_BYVAL_ATTR(X, TY)      \
   llvm_rs6000_should_pass_aggregate_byval((X), (TY))
@@ -3509,8 +3508,8 @@ extern bool llvm_rs6000_should_pass_vector_in_integer_regs(tree);
 #define LLVM_SHOULD_PASS_VECTOR_IN_INTEGER_REGS(X)            \
   llvm_rs6000_should_pass_vector_in_integer_regs((X))
 
-extern bool llvm_rs6000_should_pass_aggregate_in_mixed_regs(tree, Type*, 
-                                              std::vector<Type*>&);
+extern bool llvm_rs6000_should_pass_aggregate_in_mixed_regs(tree, const Type*, 
+                                              std::vector<const Type*>&);
 
 /* FIXME this is needed for 64-bit  */
 #define LLVM_SHOULD_PASS_AGGREGATE_IN_MIXED_REGS(T, TY, CC, E) \

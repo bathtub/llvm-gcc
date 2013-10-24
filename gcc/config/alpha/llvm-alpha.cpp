@@ -102,7 +102,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
                                       unsigned FnCode,
                                       const MemRef *DestLoc,
                                       Value *&Result,
-                                      Type *ResultType,
+                                      const Type *ResultType,
                                       std::vector<Value*> &Ops) {
   switch (FnCode) {
   case ALPHA_BUILTIN_UMULH: {
@@ -184,7 +184,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   return false;
 }
 
-bool llvm_alpha_should_return_scalar_as_shadow(Type* Ty) {
+bool llvm_alpha_should_return_scalar_as_shadow(const Type* Ty) {
   if (Ty && Ty->isIntegerTy(128))
     return true;
   return false;

@@ -53,10 +53,10 @@ static LLVMContext &Context = getGlobalContext();
 // name of the resultant intrinsic.
 static void MergeIntPtrOperand(TreeToLLVM *TTL,
                                unsigned OpNum, Intrinsic::ID IID,
-                               Type *ResultType,
+                               const Type *ResultType,
                                std::vector<Value*> &Ops,
                                LLVMBuilder &Builder, Value *&Result) {
-  Type *VoidPtrTy = PointerType::getUnqual(Type::getInt8Ty(Context));
+  const Type *VoidPtrTy = PointerType::getUnqual(Type::getInt8Ty(Context));
   
   Function *IntFn = Intrinsic::getDeclaration(TheModule, IID);
   
@@ -69,7 +69,7 @@ static void MergeIntPtrOperand(TreeToLLVM *TTL,
     
   Ops.erase(Ops.begin() + OpNum);
   Ops[OpNum] = Ptr;
-  Value *V = Builder.CreateCall(IntFn, Ops);
+  Value *V = Builder.CreateCall(IntFn, &Ops[0], &Ops[0]+Ops.size());
   
   if (V->getType() != Type::getVoidTy(Context)) {
     V->setName("tmp");
@@ -79,7 +79,7 @@ static void MergeIntPtrOperand(TreeToLLVM *TTL,
 
 // GetAltivecTypeNumFromType - Given an LLVM type, return a unique ID for
 // the type in the range 0-3.
-static int GetAltivecTypeNumFromType(Type *Ty) {
+static int GetAltivecTypeNumFromType(const Type *Ty) {
   return (Ty->isIntegerTy(32) ? 0 : \
           (Ty->isIntegerTy(16) ? 1 : \
            (Ty->isIntegerTy(8) ? 2 : \
@@ -94,7 +94,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
                                       unsigned FnCode,
                                       const MemRef *DestLoc,
                                       Value *&Result,
-                                      Type *ResultType,
+                                      const Type *ResultType,
                                       std::vector<Value*> &Ops) {
   switch (FnCode) {
   default: break;
@@ -324,7 +324,7 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     unsigned N = GetAltivecTypeNumFromType(PTy->getElementType());
     Function *smax = Intrinsic::getDeclaration(TheModule, smax_iid[N]);
     Value *ActualOps[] = { Ops[0], Result };
-    Result = Builder.CreateCall(smax, ActualOps, "tmp");
+    Result = Builder.CreateCall(smax, ActualOps, ActualOps+2, "tmp");
     return true;
   }
   case ALTIVEC_BUILTIN_ABSS_V4SI:
@@ -349,10 +349,10 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
     Function *subss = Intrinsic::getDeclaration(TheModule, subss_iid[N]);
 
     Value *ActualOps[] = {Constant::getNullValue(ResultType), Ops[0] };
-    Result = Builder.CreateCall(subss, ActualOps, "tmp");
+    Result = Builder.CreateCall(subss, ActualOps, ActualOps+2, "tmp");
     ActualOps[0] = Ops[0];
     ActualOps[1] = Result;
-    Result = Builder.CreateCall(smax, ActualOps, "tmp");
+    Result = Builder.CreateCall(smax, ActualOps, ActualOps+2, "tmp");
     return true;
   }
   case ALTIVEC_BUILTIN_VPERM_4SI:
@@ -360,13 +360,13 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case ALTIVEC_BUILTIN_VPERM_8HI:
   case ALTIVEC_BUILTIN_VPERM_16QI: {
     // Operation is identical on all types; we have a single intrinsic.
-    Type *VecTy = VectorType::get(Type::getInt32Ty(Context), 4);
+    const Type *VecTy = VectorType::get(Type::getInt32Ty(Context), 4);
     Value *Op0 = CastToType(Instruction::BitCast, Ops[0], VecTy);
     Value *Op1 = CastToType(Instruction::BitCast, Ops[1], VecTy);
     Value *ActualOps[] = { Op0, Op1, Ops[2]};
     Result = Builder.CreateCall(Intrinsic::getDeclaration(TheModule, 
                                           Intrinsic::ppc_altivec_vperm), 
-                                ActualOps, "tmp");
+                                ActualOps, ActualOps+3, "tmp");
     Result = CastToType(Instruction::BitCast, Result, Ops[0]->getType());
     return true;
   }
@@ -375,14 +375,14 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   case ALTIVEC_BUILTIN_VSEL_8HI:
   case ALTIVEC_BUILTIN_VSEL_16QI: {
     // Operation is identical on all types; we have a single intrinsic.
-    Type *VecTy = VectorType::get(Type::getInt32Ty(Context), 4);
+    const Type *VecTy = VectorType::get(Type::getInt32Ty(Context), 4);
     Value *Op0 = CastToType(Instruction::BitCast, Ops[0], VecTy);
     Value *Op1 = CastToType(Instruction::BitCast, Ops[1], VecTy);
     Value *Op2 = CastToType(Instruction::BitCast, Ops[2], VecTy);
     Value *ActualOps[] = { Op0, Op1, Op2 };
     Result = Builder.CreateCall(Intrinsic::getDeclaration(TheModule, 
                                           Intrinsic::ppc_altivec_vsel), 
-                                ActualOps, "tmp");
+                                ActualOps, ActualOps+3, "tmp");
     Result = CastToType(Instruction::BitCast, Result, Ops[0]->getType());
     return true;
   }
@@ -391,12 +391,12 @@ bool TreeToLLVM::TargetIntrinsicLower(tree exp,
   return false;
 }
 
-static unsigned count_num_registers_uses(std::vector<Type*> &ScalarElts) {
+static unsigned count_num_registers_uses(std::vector<const Type*> &ScalarElts) {
   unsigned NumGPRs = 0;
   for (unsigned i = 0, e = ScalarElts.size(); i != e; ++i) {
     if (NumGPRs >= 8)
       break;
-    Type *Ty = ScalarElts[i];
+    const Type *Ty = ScalarElts[i];
     if (const VectorType *VTy = dyn_cast<VectorType>(Ty)) {
       abort();
     } else if (Ty->isPointerTy()) {
@@ -423,7 +423,7 @@ static unsigned count_num_registers_uses(std::vector<Type*> &ScalarElts) {
 /// arguments are always passed in general purpose registers, never in
 /// Floating-point registers or vector registers.
 bool llvm_rs6000_try_pass_aggregate_custom(tree type,
-					   std::vector<Type*> &ScalarElts,
+					   std::vector<const Type*> &ScalarElts,
 					   const CallingConv::ID &CC,
 					   struct DefaultABIClient* C) {
   if (!isSVR4ABI())
@@ -432,8 +432,8 @@ bool llvm_rs6000_try_pass_aggregate_custom(tree type,
   // Eight GPR's are availabe for parameter passing.
   const unsigned NumArgRegs = 8;
   unsigned NumGPR = count_num_registers_uses(ScalarElts);
-  Type *Ty = ConvertType(type);
-  Type* Int32Ty = Type::getInt32Ty(getGlobalContext());
+  const Type *Ty = ConvertType(type);
+  const Type* Int32Ty = Type::getInt32Ty(getGlobalContext());
   if (Ty->isSingleValueType()) {
     if (Ty->isIntegerTy()) {
       unsigned TypeSize = Ty->getPrimitiveSizeInBits();
@@ -469,7 +469,7 @@ bool llvm_rs6000_try_pass_aggregate_custom(tree type,
   if (TREE_CODE(type) == COMPLEX_TYPE) {
     unsigned SrcSize = int_size_in_bytes(type);
     unsigned NumRegs = (SrcSize + 3) / 4;
-    std::vector<Type*> Elts;
+    std::vector<const Type*> Elts;
 
     // This looks very strange, but matches the old code.
     if (SrcSize == 8) {
@@ -491,7 +491,7 @@ bool llvm_rs6000_try_pass_aggregate_custom(tree type,
     for (unsigned int i = 0; i < NumRegs; ++i) {
       Elts.push_back(Int32Ty);
     }
-    StructType *STy = StructType::get(getGlobalContext(), Elts, false);
+    const StructType *STy = StructType::get(getGlobalContext(), Elts, false);
     for (unsigned int i = 0; i < NumRegs; ++i) {
       C->EnterField(i, STy);
       C->HandleScalarArgument(Int32Ty, 0);
@@ -505,7 +505,7 @@ bool llvm_rs6000_try_pass_aggregate_custom(tree type,
 
 /* Target hook for llvm-abi.h. It returns true if an aggregate of the
    specified type should be passed using the byval mechanism. */
-bool llvm_rs6000_should_pass_aggregate_byval(tree TreeType, Type *Ty) {
+bool llvm_rs6000_should_pass_aggregate_byval(tree TreeType, const Type *Ty) {
   /* FIXME byval not implemented for ppc64. */
   if (TARGET_64BIT)
     return false;
@@ -534,7 +534,7 @@ bool llvm_rs6000_should_pass_aggregate_byval(tree TreeType, Type *Ty) {
 
   // ppc32 passes aggregates by copying, either in int registers or on the 
   // stack.
-  StructType *STy = dyn_cast<StructType>(Ty);
+  const StructType *STy = dyn_cast<StructType>(Ty);
   if (!STy) return true;
 
   // A struct containing only a float, double or vector field, possibly with
@@ -554,8 +554,8 @@ bool llvm_rs6000_should_pass_aggregate_byval(tree TreeType, Type *Ty) {
    It also returns a vector of types that correspond to the registers used
    for parameter passing. */
 bool 
-llvm_rs6000_should_pass_aggregate_in_mixed_regs(tree TreeType, Type* Ty,
-                                              std::vector<Type*>&Elts) {
+llvm_rs6000_should_pass_aggregate_in_mixed_regs(tree TreeType, const Type* Ty,
+                                              std::vector<const Type*>&Elts) {
   // FIXME there are plenty of ppc64 cases that need this.
   if (TARGET_64BIT)
     return false;
@@ -608,7 +608,7 @@ llvm_rs6000_should_pass_aggregate_in_mixed_regs(tree TreeType, Type* Ty,
   if (SrcSize <= 0 || SrcSize > 16)
     return false;
 
-  StructType *STy = dyn_cast<StructType>(Ty);
+  const StructType *STy = dyn_cast<StructType>(Ty);
   if (!STy) return false;
 
   // A struct containing only a float, double or Altivec field, possibly with

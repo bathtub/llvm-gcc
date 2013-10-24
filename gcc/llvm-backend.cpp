@@ -35,12 +35,12 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "llvm/Assembly/PrintModulePass.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/CodeGen/RegAllocRegistry.h"
-#include "llvm/MC/MCCodeGenInfo.h"
-#include "llvm/MC/SubtargetFeature.h"
+#include "llvm/Target/SubtargetFeature.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetRegistry.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO.h"
@@ -48,11 +48,9 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/system_error.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/Support/StandardPasses.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Program.h"
-#include "llvm/Support/TargetRegistry.h"
 
 #include <cassert>
 extern "C" {
@@ -73,14 +71,7 @@ extern "C" {
 #include "langhooks.h"
 #include "cgraph.h"
 #include "params.h"
-
-// These are defined in c-common.c. The weak symbols are for linking non-c
-// compilers.
-#ifndef __MINGW32__
-int flag_no_builtin __attribute__ ((__weak__)) = 0;
-int builtin_function_disabled_p(const char *name) __attribute__ ((__weak__));
-int builtin_function_disabled_p(const char *name) { return 0; }
-#endif
+#include "c-common.h"
 }
 
 // Non-zero if -Oz is set.
@@ -322,8 +313,7 @@ void writeLLVMValues() {
   }
 
   // Create string table.
-  Constant *LLVMValuesTable =
-    ConstantStruct::getAnon(Context, ValuesForPCH, false);
+  Constant *LLVMValuesTable = ConstantStruct::get(Context, ValuesForPCH, false);
 
   // Create variable to hold this string table.
   GlobalVariable *GV = new GlobalVariable(*TheModule, LLVMValuesTable->getType(),
@@ -382,7 +372,6 @@ namespace llvm {
 #define Declare(T, M) Declare2(T, M)
   Declare(LLVM_TARGET_NAME, TargetInfo);
   Declare(LLVM_TARGET_NAME, Target);
-  Declare(LLVM_TARGET_NAME, TargetMC);
   Declare(LLVM_TARGET_NAME, AsmPrinter);
 #undef Declare
 #undef Declare2
@@ -407,22 +396,10 @@ void llvm_initialize_backend(void) {
 #define DoInit(T, M) DoInit2(T, M)
   DoInit(LLVM_TARGET_NAME, TargetInfo);
   DoInit(LLVM_TARGET_NAME, Target);
-  DoInit(LLVM_TARGET_NAME, TargetMC);
   DoInit(LLVM_TARGET_NAME, AsmPrinter);
 #undef DoInit
 #undef DoInit2
   
-  Reloc::Model RelocModel = Reloc::Default;
-  CodeModel::Model CMModel = CodeModel::Default;
-  CodeGenOpt::Level OptLevel = CodeGenOpt::Default;  // -O2, -Os, and -Oz
-  if (optimize == 0)
-    OptLevel = CodeGenOpt::None;
-  else if (optimize == 1)
-    OptLevel = CodeGenOpt::Less;
-  else if (optimize == 3)
-    // -O3 and above.
-    OptLevel = CodeGenOpt::Aggressive;
-
   // Initialize LLVM options.
   std::vector<const char*> Args;
   Args.push_back(progname); // program name
@@ -441,21 +418,27 @@ void llvm_initialize_backend(void) {
 #ifdef LLVM_SET_IMPLICIT_FLOAT
   LLVM_SET_IMPLICIT_FLOAT(flag_no_implicit_float)
 #endif
-#ifdef LLVM_SET_RELOC_MODEL
-  LLVM_SET_RELOC_MODEL(RelocModel);
-#endif
-#ifdef LLVM_SET_CODE_MODEL
-  LLVM_SET_CODE_MODEL(CMModel);
-#endif
   
   if (time_report)
     Args.push_back("--time-passes");
+  if (fast_math_flags_set_p())
+    Args.push_back("--enable-unsafe-fp-math");
+  if (!flag_honor_infinites)
+    Args.push_back("--enable-no-infs-fp-math");
+  if (!flag_honor_nans)
+    Args.push_back("--enable-no-nans-fp-math");
+  if (!flag_omit_frame_pointer)
+    Args.push_back("--disable-fp-elim");
+  if (!flag_zero_initialized_in_bss)
+    Args.push_back("--nozero-initialized-in-bss");
   if (flag_verbose_asm)
     Args.push_back("--asm-verbose");
   if (flag_debug_pass_structure)
     Args.push_back("--debug-pass=Structure");
   if (flag_debug_pass_arguments)
     Args.push_back("--debug-pass=Arguments");
+  if (flag_unwind_tables)
+    Args.push_back("--unwind-tables");
   if (!flag_schedule_insns)
     Args.push_back("--pre-RA-sched=source");
   if (flag_function_sections)
@@ -548,12 +531,10 @@ void llvm_initialize_backend(void) {
   // Figure out the subtarget feature string we pass to the target.
   std::string FeatureStr;
   SubtargetFeatures Features;
-
   // The target can set LLVM_SET_SUBTARGET_FEATURES to configure the LLVM
   // backend.
-  std::string CPU;
 #ifdef LLVM_SET_SUBTARGET_FEATURES
-  LLVM_SET_SUBTARGET_FEATURES(CPU, Features);
+  LLVM_SET_SUBTARGET_FEATURES(Features);
 #endif
   
   // Handle -mattr options passed into llvm
@@ -561,19 +542,8 @@ void llvm_initialize_backend(void) {
     Features.AddFeature(MAttrs[i]);
   FeatureStr = Features.getString();
 
-  TargetOptions Options;
-#ifdef LLVM_SET_TARGET_MACHINE_OPTIONS
-  LLVM_SET_TARGET_MACHINE_OPTIONS(Options);
-#endif
-  Options.UnsafeFPMath = fast_math_flags_set_p();
-  Options.NoInfsFPMath = !flag_honor_infinites;
-  Options.NoNaNsFPMath = !flag_honor_nans;
-  Options.NoFramePointerElim = !flag_omit_frame_pointer;
-  Options.NoZerosInBSS = !flag_zero_initialized_in_bss;
-  TheTarget = TME->createTargetMachine(TargetTriple, CPU, FeatureStr, Options,
-                                       RelocModel, CMModel, OptLevel);
+  TheTarget = TME->createTargetMachine(TargetTriple, FeatureStr);
   TheTarget->setMCUseLoc(false);
-  TheTarget->setMCUseCFI(false);
   assert(TheTarget->getTargetData()->isBigEndian() == BYTES_BIG_ENDIAN);
 
   TheFolder = new TargetFolder(TheTarget->getTargetData());
@@ -658,6 +628,7 @@ void llvm_pch_read(const unsigned char *Buffer, unsigned Size) {
 
 // Initialize remainign llvm specific data structures after pch is loaded.
 void llvm_post_pch_read() {
+  readLLVMTypeUsers();
 }
 
 /// llvm_pch_write_init - Initialize PCH writing. 
@@ -699,7 +670,6 @@ static void destroyOptimizationPasses() {
   CodeGenPasses     = 0;
 }
 
-
 static void createPerFunctionOptimizationPasses() {
   if (PerFunctionPasses) 
     return;
@@ -713,7 +683,6 @@ static void createPerFunctionOptimizationPasses() {
   // Disable (partially) loop idiom pass with -fno-builtin*.
   TargetLibraryInfo *TLI =
     new TargetLibraryInfo(Triple(TheModule->getTargetTriple()));
-#ifndef __MINGW32__
   if (flag_no_builtin)
     TLI->disableAllFunctions();
   else {
@@ -722,9 +691,6 @@ static void createPerFunctionOptimizationPasses() {
     if (builtin_function_disabled_p("memcpy"))
       TLI->setUnavailable(LibFunc::memcpy);
   }
-#else
-    TLI->disableAllFunctions();
-#endif
   PerFunctionPasses->add(TLI);
 
   // In -O0 if checking is disabled, we don't even have per-function passes.
@@ -775,7 +741,7 @@ static void createPerFunctionOptimizationPasses() {
     // Note, this also adds codegenerator level optimization passes.
     if (TheTarget->addPassesToEmitFile(*PM, *AsmOutRawStream,
                                        TargetMachine::CGFT_AssemblyFile,
-                                       DisableVerify)) {
+                                       OptLevel, DisableVerify)) {
       errs() << "Error interfacing to target machine!\n";
       exit(1);
     }
@@ -801,7 +767,6 @@ static void createPerModuleOptimizationPasses() {
   // Disable (partially) loop idiom pass with -fno-builtin*.
   TargetLibraryInfo *TLI =
     new TargetLibraryInfo(Triple(TheModule->getTargetTriple()));
-#ifndef __MINGW32__
   if (flag_no_builtin)
     TLI->disableAllFunctions();
   else {
@@ -810,9 +775,6 @@ static void createPerModuleOptimizationPasses() {
     if (builtin_function_disabled_p("memcpy"))
       TLI->setUnavailable(LibFunc::memcpy);
   }
-#else
-    TLI->disableAllFunctions();
-#endif
   PerModulePasses->add(TLI);
 
   bool HasPerModulePasses = false;
@@ -826,7 +788,7 @@ static void createPerModuleOptimizationPasses() {
       // functions that are  marked as always_inline.
       for (Module::iterator I = TheModule->begin(), E = TheModule->end();
            I != E; ++I)
-        if (I->getFnAttributes().hasAlwaysInlineAttr()) {
+        if (I->hasFnAttr(Attribute::AlwaysInline)) {
           NeedAlwaysInliner = true;
           break;
         }
@@ -836,14 +798,11 @@ static void createPerModuleOptimizationPasses() {
     }
 
     HasPerModulePasses = true;
-    PassManagerBuilder Builder;
-    Builder.OptLevel = optimize;
-    Builder.SizeLevel = optimize_size;
-    Builder.Inliner = InliningPass;
-    Builder.DisableSimplifyLibCalls = flag_no_simplify_libcalls;
-    Builder.DisableUnrollLoops = !flag_unroll_loops;
-    Builder.DisableUnitAtATime = !flag_unit_at_a_time;
-    Builder.populateModulePassManager(*PerModulePasses);
+    createStandardModulePasses(PerModulePasses, optimize,
+                               optimize_size,
+                               flag_unit_at_a_time, flag_unroll_loops,
+                               !flag_no_simplify_libcalls, flag_exceptions,
+                               InliningPass);
   }
 
   if (emit_llvm_bc) {
@@ -888,7 +847,7 @@ static void createPerModuleOptimizationPasses() {
       // Note, this also adds codegenerator level optimization passes.
       if (TheTarget->addPassesToEmitFile(*PM, *AsmOutRawStream,
                                          TargetMachine::CGFT_AssemblyFile,
-                                         DisableVerify)) {
+                                         OptLevel, DisableVerify)) {
         errs() << "Error interfacing to target machine!\n";
         exit(1);
       }
@@ -935,8 +894,9 @@ static void CreateStructorsList(std::vector<std::pair<Constant*, int> > &Tors,
   
   LLVMContext &Context = getGlobalContext();
   
-  Type *FPTy =
-    FunctionType::get(Type::getVoidTy(Context), std::vector<Type*>(), false);
+  const Type *FPTy =
+    FunctionType::get(Type::getVoidTy(Context),
+                      std::vector<const Type*>(), false);
   FPTy = FPTy->getPointerTo();
   
   for (unsigned i = 0, e = Tors.size(); i != e; ++i) {
@@ -945,7 +905,7 @@ static void CreateStructorsList(std::vector<std::pair<Constant*, int> > &Tors,
     // __attribute__(constructor) can be on a function with any type.  Make sure
     // the pointer is void()*.
     StructInit[1] = TheFolder->CreateBitCast(Tors[i].first, FPTy);
-    InitList.push_back(ConstantStruct::getAnon(StructInit));
+    InitList.push_back(ConstantStruct::get(Context, StructInit, false));
   }
   Constant *Array = ConstantArray::get(
     ArrayType::get(InitList[0]->getType(), InitList.size()), InitList);
@@ -1007,6 +967,7 @@ void llvm_asm_file_end(void) {
   if (flag_pch_file) {
     writeLLVMTypesStringTable();
     writeLLVMValues();
+    writeLLVMTypeUsers();
   }
 
   // Add an llvm.global_ctors global if needed.
@@ -1018,7 +979,7 @@ void llvm_asm_file_end(void) {
 
   if (!AttributeUsedGlobals.empty()) {
     std::vector<Constant *> AUGs;
-    Type *SBP= Type::getInt8PtrTy(Context);
+    const Type *SBP= Type::getInt8PtrTy(Context);
     for (SmallSetVector<Constant *,32>::iterator
            AI = AttributeUsedGlobals.begin(),
            AE = AttributeUsedGlobals.end(); AI != AE; ++AI) {
@@ -1038,7 +999,7 @@ void llvm_asm_file_end(void) {
 
   if (!AttributeCompilerUsedGlobals.empty()) {
     std::vector<Constant *> ACUGs;
-    Type *SBP= Type::getInt8PtrTy(Context);
+    const Type *SBP= Type::getInt8PtrTy(Context);
     for (SmallSetVector<Constant *,32>::iterator
            AI = AttributeCompilerUsedGlobals.begin(),
            AE = AttributeCompilerUsedGlobals.end(); AI != AE; ++AI) {
@@ -1331,7 +1292,7 @@ void AddAnnotateAttrsToGlobal(GlobalValue *GV, tree decl) {
   Constant *lineNo = ConstantInt::get(Type::getInt32Ty(Context),
                                       DECL_SOURCE_LINE(decl));
   Constant *file = ConvertMetadataStringToGV(DECL_SOURCE_FILE(decl));
-  Type *SBP= Type::getInt8PtrTy(Context);
+  const Type *SBP= Type::getInt8PtrTy(Context);
   file = TheFolder->CreateBitCast(file, SBP);
  
   // There may be multiple annotate attributes. Pass return of lookup_attr 
@@ -1360,7 +1321,7 @@ void AddAnnotateAttrsToGlobal(GlobalValue *GV, tree decl) {
       };
  
       AttributeAnnotateGlobals.push_back(
-        ConstantStruct::getAnon(Context, Element));
+        ConstantStruct::get(Context, Element, 4, false));
     }
       
     // Get next annotate attribute.
@@ -1389,26 +1350,8 @@ void reset_initializer_llvm(tree decl) {
   Constant *Init = TreeConstantToLLVM::Convert(DECL_INITIAL(decl));
 
   // Set the initializer.
-  if (GV->getType()->getElementType() != Init->getType()) {
-    GV->removeFromParent();
-    GlobalVariable *NGV = new GlobalVariable(*TheModule, Init->getType(), 
-                                             GV->isConstant(),
-                                             GV->getLinkage(), 0,
-                                             GV->getName());
-    NGV->setVisibility(GV->getVisibility());
-    NGV->setSection(GV->getSection());
-    NGV->setAlignment(GV->getAlignment());
-    NGV->setLinkage(GV->getLinkage());
-    GV->replaceAllUsesWith(TheFolder->CreateBitCast(NGV, GV->getType()));
-    changeLLVMConstant(GV, NGV);
-    delete GV;
-    SET_DECL_LLVM(decl, NGV);
-    GV = NGV;
-  }
   GV->setInitializer(Init);
-  if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-      GV->hasPrivateLinkage())
-    GV->setUnnamedAddr(true);
+  GV->setUnnamedAddr(true);
 }
   
 /// reset_type_and_initializer_llvm - Change the type and initializer for 
@@ -1429,9 +1372,7 @@ void reset_type_and_initializer_llvm(tree decl) {
 
   // Temporary to avoid infinite recursion (see comments emit_global_to_llvm)
   GV->setInitializer(UndefValue::get(GV->getType()->getElementType()));
-  if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-      GV->hasPrivateLinkage())
-    GV->setUnnamedAddr(true);
+  GV->setUnnamedAddr(true);
 
   // Convert the initializer over.
   Constant *Init = TreeConstantToLLVM::Convert(DECL_INITIAL(decl));
@@ -1446,6 +1387,7 @@ void reset_type_and_initializer_llvm(tree decl) {
                                              GV->isConstant(),
                                              GV->getLinkage(), 0,
                                              GV->getName());
+    NGV->setUnnamedAddr(true);
     NGV->setVisibility(GV->getVisibility());
     NGV->setSection(GV->getSection());
     NGV->setAlignment(GV->getAlignment());
@@ -1454,14 +1396,12 @@ void reset_type_and_initializer_llvm(tree decl) {
     changeLLVMConstant(GV, NGV);
     delete GV;
     SET_DECL_LLVM(decl, NGV);
-    if (NGV->hasHiddenVisibility() || NGV->hasInternalLinkage() ||
-        NGV->hasPrivateLinkage())
-      NGV->setUnnamedAddr(true);
     GV = NGV;
   }
 
   // Set the initializer.
   GV->setInitializer(Init);
+  GV->setUnnamedAddr(true);
 }
   
 /// emit_global_to_llvm - Emit the specified VAR_DECL or aggregate CONST_DECL to
@@ -1513,9 +1453,7 @@ void emit_global_to_llvm(tree decl) {
     // this can happen for things like void *G = &G;
     //
     GV->setInitializer(UndefValue::get(GV->getType()->getElementType()));
-    if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-        GV->hasPrivateLinkage())
-      GV->setUnnamedAddr(true);
+    GV->setUnnamedAddr(true);
     Init = TreeConstantToLLVM::Convert(DECL_INITIAL(decl));
   }
 
@@ -1529,6 +1467,7 @@ void emit_global_to_llvm(tree decl) {
                                              GV->isConstant(),
                                              GlobalValue::ExternalLinkage, 0,
                                              GV->getName());
+    NGV->setUnnamedAddr(true);
     GV->replaceAllUsesWith(TheFolder->CreateBitCast(NGV, GV->getType()));
     changeLLVMConstant(GV, NGV);
     delete GV;
@@ -1538,9 +1477,7 @@ void emit_global_to_llvm(tree decl) {
  
   // Set the initializer.
   GV->setInitializer(Init);
-  if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-      GV->hasPrivateLinkage())
-    GV->setUnnamedAddr(true);
+  GV->setUnnamedAddr(true);
 
   // Set thread local (TLS)
   if (TREE_CODE(decl) == VAR_DECL && DECL_THREAD_LOCAL_P(decl))
@@ -1594,9 +1531,6 @@ void emit_global_to_llvm(tree decl) {
 #endif /* TARGET_ADJUST_LLVM_LINKAGE */
 
   handleVisibility(decl, GV);
-  if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-      GV->hasPrivateLinkage())
-    GV->setUnnamedAddr(true);
 
   // Set the section for the global.
   if (TREE_CODE(decl) == VAR_DECL) {
@@ -1657,9 +1591,13 @@ void emit_global_to_llvm(tree decl) {
   }
 
   if (TheDebugInfo) {
+    std::string Name = GV->getNameStr();
+    const char LPrefix[] = "\01L_OBJC_";
+    const char lPrefix[] = "\01l_OBJC_";
+
     if (flag_objc_abi == -1 || flag_objc_abi == 0 ||
-        (!GV->getName().startswith("\01L_OBJC_") &&
-         !GV->getName().startswith("\01l_OBJC_")))
+        (strncmp(Name.c_str(), LPrefix, sizeof(LPrefix) - 1) != 0 &&
+         strncmp(Name.c_str(), lPrefix, sizeof(lPrefix) - 1) != 0))
       TheDebugInfo->EmitGlobalVariable(GV, decl);
   }
 
@@ -1673,7 +1611,7 @@ void emit_global_to_llvm(tree decl) {
 /// false.
 bool ValidateRegisterVariable(tree decl) {
   int RegNumber = decode_reg_name(extractRegisterName(decl));
-  Type *Ty = ConvertType(TREE_TYPE(decl));
+  const Type *Ty = ConvertType(TREE_TYPE(decl));
 
   if (errorcount || sorrycount)
     return true;  // Do not process broken code.
@@ -1788,7 +1726,7 @@ void make_decl_llvm(tree decl) {
     if (FnEntry == 0) {
       CallingConv::ID CC;
       AttrListPtr PAL;
-      FunctionType *Ty = 
+      const FunctionType *Ty = 
         TheTypeConverter->ConvertFunctionType(TREE_TYPE(decl), decl, NULL,
                                               CC, PAL);
       FnEntry = Function::Create(Ty, Function::ExternalLinkage, Name, TheModule);
@@ -1830,7 +1768,7 @@ void make_decl_llvm(tree decl) {
   } else {
     assert((TREE_CODE(decl) == VAR_DECL ||
             TREE_CODE(decl) == CONST_DECL) && "Not a function or var decl?");
-    Type *Ty = ConvertType(TREE_TYPE(decl));
+    const Type *Ty = ConvertType(TREE_TYPE(decl));
     GlobalVariable *GV ;
 
     // If we have "extern void foo", make the global have type {} instead of
@@ -1841,6 +1779,7 @@ void make_decl_llvm(tree decl) {
     if (Name[0] == 0) {   // Global has no name.
       GV = new GlobalVariable(*TheModule, Ty, false, 
                               GlobalValue::ExternalLinkage, 0, "");
+      GV->setUnnamedAddr(true);
 
       // Check for external weak linkage.
       if (DECL_EXTERNAL(decl) && DECL_WEAK(decl))
@@ -1851,9 +1790,6 @@ void make_decl_llvm(tree decl) {
 #endif /* TARGET_ADJUST_LLVM_LINKAGE */
 
       handleVisibility(decl, GV);
-      if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-          GV->hasPrivateLinkage())
-        GV->setUnnamedAddr(true);
     } else {
       // If the global has a name, prevent multiple vars with the same name from
       // being created.
@@ -1863,6 +1799,7 @@ void make_decl_llvm(tree decl) {
         GV = new GlobalVariable(*TheModule, Ty, false,
                                 GlobalValue::ExternalLinkage, 0, Name);
 
+        GV->setUnnamedAddr(true);
         // Check for external weak linkage.
         if (DECL_EXTERNAL(decl) && DECL_WEAK(decl))
           GV->setLinkage(GlobalValue::ExternalWeakLinkage);
@@ -1872,10 +1809,6 @@ void make_decl_llvm(tree decl) {
 #endif /* TARGET_ADJUST_LLVM_LINKAGE */
 
 	handleVisibility(decl, GV);
-
-        if (GV->hasHiddenVisibility() || GV->hasInternalLinkage() ||
-            GV->hasPrivateLinkage())
-          GV->setUnnamedAddr(true);
 
         // If GV got renamed, then there is already an object with this name in
         // the symbol table.  If this happens, the old one must be a forward
@@ -2021,7 +1954,7 @@ void print_llvm_type(FILE *file, void *LLVM) {
   // adaptor which would be simpler and more efficient.  In the meantime, just
   // adapt the adaptor.
   raw_os_ostream RO(FS);
-  RO << *(Type*)LLVM;
+  WriteTypeSymbolic(RO, (const Type*)LLVM, TheModule);
 }
 
 /// extractRegisterName - Get a register name given its decl. In 4.2 unlike 4.0

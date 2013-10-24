@@ -53,11 +53,7 @@ PREFIX = /usr
 
 # LLVM LOCAL begin
 # LLVM gets installed into /Developer/usr/local, not /usr.
-ifndef DEVELOPER_DIR
 PREFIX = /Developer/usr/llvm-gcc-4.2
-else
-PREFIX = ${DEVELOPER_DIR}/usr/llvm-gcc-4.2
-endif
 
 # Default to not reinstall libLTO.dylib.
 INSTALL_LIBLTO := no
@@ -68,11 +64,7 @@ ENABLE_ASSERTIONS := no
 endif
 
 ifndef LLVMCORE_PATH
-ifndef DEVELOPER_DIR
 LLVMCORE_PATH = /Developer/usr/local
-else
-LLVMCORE_PATH = ${DEVELOPER_DIR}/usr/local
-endif
 endif
 
 # Default is optimized build.
@@ -165,15 +157,15 @@ clean:
 	@echo
 	@if [ -d $(OBJROOT) -a "$(OBJROOT)" != / ]; then \
 	  echo '*** DELETING ' $(OBJROOT); \
-	  rm -rf $(OBJROOT); \
+	  rm -rf $(OBJROOT)/*; \
 	fi
 	@if [ -d $(SYMROOT) -a "$(SYMROOT)" != / ]; then \
 	  echo '*** DELETING ' $(SYMROOT); \
-	  rm -rf $(SYMROOT); \
+	  rm -rf $(SYMROOT)/*; \
 	fi
 	@if [ -d $(DSTROOT) -a "$(DSTROOT)" != / ]; then \
 	  echo '*** DELETING ' $(DSTROOT); \
-	  rm -rf $(DSTROOT); \
+	  rm -rf $(DSTROOT)/*; \
 	fi
 
 #######################################################################

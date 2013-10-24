@@ -84,7 +84,9 @@ Boston, MA 02110-1301, USA.  */
 #endif
 
 #if defined(__ARM_ARCH_7__) || defined(__ARM_ARCH_7A__) \
-	|| defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__)
+	|| defined(__ARM_ARCH_7R__) || defined(__ARM_ARCH_7M__) \
+	|| defined(__ARM_ARCH_7F__) || defined(__ARM_ARCH_7K__) \
+	|| defined(__ARM_ARCH_7S__)
 # define __ARM_ARCH__ 7
 #endif
 

@@ -22,12 +22,15 @@ HOSTS=`echo $ORIG_HOSTS | $TRANSLATE_ARCH `
 # compilers will generate code for.  If the current machine isn't in
 # the list, a compiler for it will get built anyway, but won't be
 # installed.
+SUPPORTED_ARM_ARCHS="armv5 armv6 armv7 armv7f armv7k armv7s"
 for t in $2; do
   if echo $t | grep arm; then
-    # Do not include a generic "arm" target in the list of ARM variants.
-    if [ "$t" != arm ]; then
-      ARM_ARCHS="$ARM_ARCHS $t"
-    fi
+    # Check for supported ARM architectures, excluding the generic "arm" target
+    for s in $SUPPORTED_ARM_ARCHS; do
+      if [ "$s" = "$t" ]; then
+        ARM_ARCHS="$ARM_ARCHS $t"
+      fi
+    done
   else
     ORIG_TARGETS="$ORIG_TARGETS $t"
   fi
@@ -226,6 +229,7 @@ CONFIGFLAGS="$CHECKING_FLAGS \
   --program-prefix=llvm- \
   --program-transform-name=/^[cg][^.-]*$/s/$/-$MAJ_VERS/ \
   --with-slibdir=/usr/lib \
+  --disable-tls \
   --build=$BUILD-apple-darwin$DARWIN_VERS"
 
 if [ "$ENABLE_LLVM" == true ]; then
@@ -278,11 +282,11 @@ fi
 # LLVM LOCAL end
 
 # If the user has set CC or CXX, respect their wishes.  If not,
-# compile with clang/clang++ if available; if LLVM is not
+# compile with LLVM-GCC/LLVM-G++ if available; if LLVM is not
 # available, fall back to usual GCC/G++ default.
-XTMPCC=`xcrun -find clang`
+XTMPCC=`xcrun -find llvm-gcc`
 if [ x$CC  = x -a x$XTMPCC != x ] ; then export CC=$XTMPCC  forcedCC=1  ; fi
-XTMPCC=`xcrun -find clang++`
+XTMPCC=`xcrun -find llvm-g++`
 if [ x$CXX = x -a x$XTMPCC != x ] ; then export CXX=$XTMPCC forcedCXX=1 ; fi
 unset XTMPCC
 
@@ -549,6 +553,7 @@ for t in $TARGETS ; do
   # LLVM LOCAL begin fix broken link
   ln -s ../../../../../bin/as .$DL/as
   ln -s ../../../../../bin/ld .$DL/ld
+  ln -s ../../../../../bin/dsymutil .$DL/dsymutil
   # LLVM LOCAL end fix broken link
 done
 
@@ -634,7 +639,7 @@ done
 # LLVM LOCAL begin
 MAN1_DIR=$DEST_DIR$DEST_ROOT/../share/man/man1
 mkdir -p ${MAN1_DIR}
-for i in gcc.1 g++.1 cpp.1 gcov.1 ; do
+for i in gcc.1 g++.1 ; do
     cp $DIR/obj-$BUILD-$BUILD/gcc/doc/$i ${MAN1_DIR}/$i
 done
 cp $ORIG_SRC_DIR/gcc/doc/llvm-gcc.1 ${MAN1_DIR}/llvm-gcc.1
@@ -709,16 +714,25 @@ find obj-* -name \*.\[chy\] -print | cpio -pdml $SYM_DIR/src || exit 1
 # Remove debugging information from DEST_DIR.
 
 if [ "x$LLVM_DEBUG" != "x1" ]; then
+    # Find the right version of strip to use.
+    sdkoption="-sdk /"
+    if echo $TARGETS | grep arm; then
+      if [ -n "$ARM_SDK" ]; then
+        sdkoption="-sdk $ARM_SDK"
+      fi
+    fi
+    STRIP=`xcrun $sdkoption -find strip`
+
     # LLVM LOCAL begin - don't strip dSYM objects
     find $DEST_DIR -perm -0111 \! -path '*DWARF*' \! -name \*.dylib \
         \! -name fixinc.sh \! -name mkheaders \! -name libstdc++.dylib \
         -type f -print \
-        | xargs strip || exit 1
+        | xargs $STRIP || exit 1
     # LLVM LOCAL begin - Strip with -Sx instead of -SX
     find $DEST_DIR \! -path '*DWARF*' \( -name \*.a -or -name \*.dylib \) \
         \! -name libgcc_s.10.*.dylib \! -name libstdc++.dylib -type f \
 	-print \
-       	| xargs strip -SX || exit 1
+       	| xargs $STRIP -SX || exit 1
     # LLVM LOCAL end - Strip with -Sx instead of -SX
     find $DEST_DIR \! -path '*DWARF*' -name \*.a -type f -print \
         | xargs ranlib || exit 1
@@ -760,10 +774,6 @@ done
 if [ "x$LLVM_BUILT_ROOTS" != "x" ]; then
     DISABLE_USR_LINKS=1
 fi
-# Set DISABLE_USR_LINKS if DEST_ROOT is not in /Developer.
-if [ "x$DEST_ROOT" != "x/Developer/usr/llvm-gcc-4.2" ]; then
-    DISABLE_USR_LINKS=1
-fi
 # Roots built by B&I, need to include sym links in /usr/bin and /usr/lib
 # because B&I sets XCODE_DEVELOPER_USR_PATH=/.  Otherwise, we don't want those
 # sym links.
@@ -801,8 +811,7 @@ if [ "$INSTALL_LIBLTO" == yes ]; then
 fi
 
 # Remove lto.h from the install directory; clang will supply.
-# Also remove ppc_intrinsics.h.  Note that this breaks PPC support.
-find $DEST_DIR \( -name lto.h -o -name ppc_intrinsics.h \) -delete -print || exit 1
+find $DEST_DIR -name lto.h -print | xargs rm || exit 1
 
 # LLVM LOCAL end
 

@@ -3172,6 +3172,12 @@ case ${target} in
 				armv7-*-* | armv7a-*-* | armv7l-*-* | armv7-a-*-*)
 					target_cpu_default2=TARGET_CPU_cortexa8
 					;;
+				armv7f-*-* | armv7-f-*-*)
+					target_cpu_default2=TARGET_CPU_cortexa9mp
+					;;
+				armv7s-*-* | armv7-s-*-*)
+					target_cpu_default2=TARGET_CPU_swift
+					;;
 				armv7r-*-* | armv7-r-*-*)
 					target_cpu_default2=TARGET_CPU_cortexr4
 					;;

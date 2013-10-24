@@ -38,7 +38,7 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
               (TREE_VALUE(tree_last(TYPE_ARG_TYPES(type))) == \
                void_type_node)))                              \
         CC = CallingConv::ARM_AAPCS_VFP;                      \
-      else if (!DEFAULT_TARGET_AAPCS_BASED)                   \
+      if (!DEFAULT_TARGET_AAPCS_BASED)                        \
         CC = CallingConv::ARM_AAPCS;                          \
     } else if (DEFAULT_TARGET_AAPCS_BASED) {                  \
         CC = CallingConv::ARM_APCS;                           \
@@ -48,16 +48,16 @@ Software Foundation, 59 Temple Place - Suite 330, Boston, MA
 #ifdef LLVM_ABI_H
 
 extern bool
-llvm_arm_should_pass_aggregate_in_mixed_regs(tree, Type *Ty,
+llvm_arm_should_pass_aggregate_in_mixed_regs(tree, const Type *Ty,
                                              CallingConv::ID&,
-                                             std::vector<Type*>&);
+                                             std::vector<const Type*>&);
 
 #define LLVM_SHOULD_PASS_AGGREGATE_IN_MIXED_REGS(T, TY, CC, E)    \
    llvm_arm_should_pass_aggregate_in_mixed_regs((T), (TY), (CC), (E))
 
 struct DefaultABIClient;
 extern bool
-llvm_arm_try_pass_aggregate_custom(tree, std::vector<Type*>&,
+llvm_arm_try_pass_aggregate_custom(tree, std::vector<const Type*>&,
 				   CallingConv::ID&,
 				   struct DefaultABIClient*);
 
@@ -65,15 +65,15 @@ llvm_arm_try_pass_aggregate_custom(tree, std::vector<Type*>&,
   llvm_arm_try_pass_aggregate_custom((T), (E), (CC), (C))
 
 extern
-bool llvm_arm_aggregate_partially_passed_in_regs(std::vector<Type*>&,
-                                                 std::vector<Type*>&,
+bool llvm_arm_aggregate_partially_passed_in_regs(std::vector<const Type*>&,
+                                                 std::vector<const Type*>&,
                                                  CallingConv::ID&);
 
 #define LLVM_AGGREGATE_PARTIALLY_PASSED_IN_REGS(E, SE, CC)   \
    llvm_arm_aggregate_partially_passed_in_regs((E), (SE), (CC))
 
-extern Type *llvm_arm_aggr_type_for_struct_return(tree type,
-                                                  CallingConv::ID &CC);
+extern const Type *llvm_arm_aggr_type_for_struct_return(tree type,
+                                                        CallingConv::ID &CC);
 
 /* LLVM_AGGR_TYPE_FOR_STRUCT_RETURN - Return LLVM Type if X can be 
   returned as an aggregate, otherwise return NULL. */

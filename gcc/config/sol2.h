@@ -248,11 +248,10 @@ extern GTY(()) tree solaris_pending_finis;
 #ifdef ENABLE_LLVM
 
 /* Supporting PIC codegen for solaris targets */
-#define LLVM_SET_RELOC_MODEL(RelocModel)             \
+#define LLVM_SET_TARGET_OPTIONS(argvec)              \
   if (flag_pic)                                      \
-    RelocModel = Reloc::PIC_;                        \
+    argvec.push_back ("--relocation-model=pic");     \
   else                                               \
-    RelocModel = Reloc::Static;
-
+    argvec.push_back ("--relocation-model=static");
 #endif
 /* LLVM LOCAL end */
