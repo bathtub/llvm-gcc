@@ -36,10 +36,6 @@
 %{!fbuiltin-strcpy:-fno-builtin-strcpy} \
 %<fbuiltin-strcat \
 %<fbuiltin-strcpy \
-"/* LLVM LOCAL ignore -g in LTO mode */"\
-"/* On Darwin, debug info is stored in separate .dSYM files. */"\
-"/* This requires special support in LTO mode. */" \
-%{O4|flto: %<g* } \
 %<pg"
 
 #undef LIB_SPEC
@@ -251,7 +247,11 @@
 #define DARWIN_LD_MINVERSION_SPEC "-iphoneos_version_min %(darwin_minversion)"
 
 /* Use iPhone OS version numbers by default.  */
+#ifdef DEFAULT_TARGET_OS
+#define DARWIN_DEFAULT_VERSION_TYPE  DEFAULT_TARGET_OS
+#else
 #define DARWIN_DEFAULT_VERSION_TYPE  DARWIN_VERSION_IPHONEOS
+#endif
 
 #define DARWIN_IPHONEOS_LIBGCC_SPEC "-lgcc_s.1 -lgcc"
 

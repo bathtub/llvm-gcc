@@ -1306,8 +1306,8 @@ main (int argc, const char **argv)
 
   /* If argv[0] is a symbolic link, use the directory of the pointed-to file
      to find compiler components. */
-
-  if ((linklen = readlink (argv[0], path_buffer, PATH_MAX)) != -1)
+  /* LLVM LOCAL: loop to follow multiple levels of links */
+  while ((linklen = readlink (argv[0], path_buffer, PATH_MAX)) != -1)
     {
       /* readlink succeeds if argv[0] is a symlink.  path_buffer now contains
 	 the file referenced. */
@@ -1596,9 +1596,10 @@ main (int argc, const char **argv)
       if (num_infiles > 1 && !compile_only_request)
 	ima_is_used = 1;
 
-      /* Linker wants to know this in case of multiple -arch.  */
-      if (!compile_only_request && !dash_dynamiclib_seen)
-	new_argv[new_argc++] = "-Wl,-arch_multiple";
+      /* The compiler and linker both want to know if we have multiple archs.
+         The compiler for debug info emission and the linker for augmenting
+         error and warning messages.  */
+	    new_argv[new_argc++] = "-arch_multiple";
 
 
       /* If only one input file is specified OR IMA is used then expected output

@@ -1,3 +1,32 @@
+2010-09-27  Bob Wilson  <bob.wilson@apple.com>
+
+	Radar 8392704
+	* doc/cppopts.texi: Fix description of -isysroot for Apple's GCC.
+	* doc/invoke.texi (Directory Options): Update --sysroot description to
+	refer Apple users to -isysroot.
+
+2010-08-13  Bob Wilson  <bob.wilson@apple.com>
+
+	Radar 8307333
+	* config/i386/darwin.h (DARWIN_IPHONEOS_LIBGCC_SPEC): Do not link
+	against libgcc_s.10.5.dylib.
+	* config/rs6000/darwin.h (DARWIN_IPHONEOS_LIBGCC_SPEC): Likewise.
+
+2010-06-28 Jim Grosbach <grosbach@apple.com>
+
+	Radar 7449793
+	* config/arm/darwin.h (DEFAULT_TARGET_OS): New.
+	(DARWIN_DEFAULT_VERSION_TYPE): OSX or iOS, depending on setting of
+	DEFAULT_TARGET_OS.
+
+2010-03-16  Fariborz Jahanian <fjahanian@apple.com>
+
+        Radar 7760213
+        * c-common.h (HasByrefArray): New decl.
+        * c-common.c (HasByrefArray): New definition.
+        * c-typeck.c (build_external_ref): Diagnose access of
+          __block array.
+ 
 2010-01-07  Jim Grosbach <grosbach@apple.com>
 
         Radar 7519550

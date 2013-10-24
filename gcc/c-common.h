@@ -1157,7 +1157,9 @@ enum {
      /* APPLE LOCAL radar 5822844 */
      BLOCK_IS_GLOBAL = 	       (1 << 28),
      /* APPLE LOCAL radar 7735196 */
-     BLOCK_USE_STRET =    (1 << 29)
+     BLOCK_USE_STRET =    (1 << 29),
+     /* APPLE LOCAL radar 8143947 */
+     BLOCK_HAS_SIGNATURE  =    (1 << 30)
 };
 
 struct block_sema_info {
@@ -1241,6 +1243,9 @@ extern tree build_block_helper_name (int);
 
 /* APPLE LOCAL radar 6353006  */
 extern tree c_build_generic_block_struct_type (void);
+
+/* APPLE LOCAL radar 7760213 */
+extern int HasByrefArray(tree);
 
 /* In c-omp.c  */
 extern tree c_finish_omp_master (tree);

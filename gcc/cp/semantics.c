@@ -2511,9 +2511,14 @@ static tree get_final_block_variable (tree name, tree var) {
         || (TREE_CODE (decl) == VAR_DECL && COPYABLE_BYREF_LOCAL_VAR (decl)))
     {
       /* byref globals are directly accessed. */
-      if (!gdecl)
+      /* APPLE LOCAL begin radar 7760213 */
+      if (!gdecl) {
+        if (HasByrefArray(TREE_TYPE (decl)))
+          error ("cannot access __block variable of array type inside block");
       /* build a decl for the byref variable. */
         decl = build_block_byref_decl (name, decl, decl);
+      }
+      /* APPLE LOCAL end radar 7760213 */
       else
         add_block_global_byref_list (decl);
     }
@@ -3233,7 +3238,10 @@ expand_body (tree fn)
      `-fexternal-templates'; we instantiate the function, even though
      we're not planning on emitting it, in case we get a chance to
      inline it.  */
-  if (DECL_EXTERNAL (fn))
+  /* LLVM LOCAL begin  always_inline functions need to be emitted */
+  if (DECL_EXTERNAL (fn) &&
+      !lookup_attribute ("always_inline", DECL_ATTRIBUTES (fn)))
+  /* LLVM LOCAL end */
     return;
 
   /* ??? When is this needed?  */

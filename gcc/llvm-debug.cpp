@@ -275,7 +275,7 @@ void DebugInfo::push_regions(tree desired, tree grand) {
 // regions to arrive at 'desired'.  This was inspired (cribbed from)
 // by GCC's cfglayout.c:change_scope().
 void DebugInfo::change_regions(tree desired, tree grand) {
-  tree current_lexical_block = getCurrentLexicalBlock();
+  tree current_lexical_block = getCurrentLexicalBlock(), t;
   // FIXME: change_regions is currently never called with desired ==
   // grand, but it should be fixed so nothing weird happens if they're
   // equal.
@@ -289,26 +289,25 @@ void DebugInfo::change_regions(tree desired, tree grand) {
   setCurrentLexicalBlock(desired);
 }
 
-/// EmitFunctionStart - Constructs the debug code for entering a function -
-/// "llvm.dbg.func.start."
-void DebugInfo::EmitFunctionStart(tree FnDecl, Function *Fn,
-                                  BasicBlock *CurBB) {
-  setCurrentLexicalBlock(FnDecl);
-
+/// CreateSubprogramFromFnDecl - Constructs the debug code for
+/// entering a function - "llvm.dbg.func.start."
+DISubprogram DebugInfo::CreateSubprogramFromFnDecl(tree FnDecl) {
+  DISubprogram SPDecl;
+  bool SPDeclIsSet = false;
+  // True if we're currently generating LLVM for this function.
+  bool definition = llvm_set_decl_p(FnDecl);
   DIType FNType = getOrCreateType(TREE_TYPE(FnDecl));
 
   std::map<tree_node *, WeakVH >::iterator I = SPCache.find(FnDecl);
   if (I != SPCache.end()) {
-    DISubprogram SPDecl(cast<MDNode>(I->second));
-    DISubprogram SP = 
-      DebugFactory.CreateSubprogramDefinition(SPDecl);
-    SPDecl.getNode()->replaceAllUsesWith(SP.getNode());
-
-    // Push function on region stack.
-    RegionStack.push_back(WeakVH(SP.getNode()));
-    RegionMap[FnDecl] = WeakVH(SP.getNode());
-    return;
-  } 
+    SPDecl = DISubprogram(cast<MDNode>(I->second));
+    SPDeclIsSet = true;
+    // If we've already created the defining instance, OR this
+    // invocation won't create the defining instance, return what we
+    // already have.
+    if (SPDecl.isDefinition() || !definition)
+      return SPDecl;
+  }
 
   bool ArtificialFnWithAbstractOrigin = false;
   // If this artificial function has abstract origin then put this function
@@ -322,26 +321,34 @@ void DebugInfo::EmitFunctionStart(tree FnDecl, Function *Fn,
     getOrCreateFile(main_input_filename) :
     findRegion (DECL_CONTEXT(FnDecl));
 
+  // Declare block_invoke functions at file scope for GDB.
+  if (BLOCK_SYNTHESIZED_FUNC(FnDecl))
+    SPContext = findRegion(NULL_TREE);
+
   // Creating context may have triggered creation of this SP descriptor. So
   // check the cache again.
-  I = SPCache.find(FnDecl);
-  if (I != SPCache.end()) {
-    DISubprogram SPDecl(cast<MDNode>(I->second));
-    DISubprogram SP = 
-      DebugFactory.CreateSubprogramDefinition(SPDecl);
-    SPDecl.getNode()->replaceAllUsesWith(SP.getNode());
+  if (!SPDeclIsSet) {
+    I = SPCache.find(FnDecl);
+    if (I != SPCache.end()) {
+      SPDecl = DISubprogram(cast<MDNode>(I->second));
+      DISubprogram SP = 
+        DebugFactory.CreateSubprogramDefinition(SPDecl);
+      SPDecl.getNode()->replaceAllUsesWith(SP.getNode());
 
-    // Push function on region stack.
-    RegionStack.push_back(WeakVH(SP.getNode()));
-    RegionMap[FnDecl] = WeakVH(SP.getNode());
-    return;
-  } 
-
+      // Push function on region stack.
+      RegionStack.push_back(WeakVH(SP.getNode()));
+      RegionMap[FnDecl] = WeakVH(SP.getNode());
+      return SP;
+    }
+  }
   // Gather location information.
   expanded_location Loc = GetNodeLocation(FnDecl, false);
-  StringRef LinkageName = getLinkageName(FnDecl);
+  // If the name isn't public, omit the linkage name.  Adding a
+  // linkage name to a class method can confuse GDB.
+  StringRef LinkageName = TREE_PUBLIC(FnDecl) ?
+    getLinkageName(FnDecl) : StringRef();
 
-  unsigned lineno = CurLineNo;
+  unsigned lineno = LOCATION_LINE(Loc);
   if (isCopyOrDestroyHelper(FnDecl))
     lineno = 0;
 
@@ -356,23 +363,41 @@ void DebugInfo::EmitFunctionStart(tree FnDecl, Function *Fn,
   }
 
   StringRef FnName = getFunctionName(FnDecl);
-
+  // If the Function * hasn't been created yet, use a bogus value for
+  // the debug internal linkage bit.
+  bool hasInternalLinkage = true;
+  Function *Fn = 0;
+  if (GET_DECL_LLVM_INDEX(FnDecl)) {
+    Fn = cast<Function>DECL_LLVM(FnDecl);
+    if (Fn)
+      hasInternalLinkage = Fn->hasInternalLinkage();
+  }
   DISubprogram SP = 
     DebugFactory.CreateSubprogram(SPContext,
                                   FnName, FnName,
                                   LinkageName,
                                   getOrCreateFile(Loc.file), lineno,
                                   FNType,
-                                  Fn->hasInternalLinkage(),
-                                  true /*definition*/,
-                                  Virtuality, VIndex, ContainingType);
-                          
+                                  hasInternalLinkage,
+                                  definition,
+                                  Virtuality, VIndex, ContainingType,
+                                  DECL_ARTIFICIAL (FnDecl), optimize,
+                                  Fn);
 
   SPCache[FnDecl] = WeakVH(SP.getNode());
+  RegionMap[FnDecl] = WeakVH(SP.getNode());
+  if (SPDeclIsSet && SPDecl.getNode() != SP.getNode())
+    SPDecl.getNode()->replaceAllUsesWith(SP.getNode());
+  return SP;
+}
 
+/// EmitFunctionStart - Constructs the debug code for entering a function -
+/// "llvm.dbg.func.start."
+void DebugInfo::EmitFunctionStart(tree FnDecl) {
+  setCurrentLexicalBlock(FnDecl);
+  DISubprogram SP = CreateSubprogramFromFnDecl(FnDecl);
   // Push function on region stack.
   RegionStack.push_back(WeakVH(SP.getNode()));
-  RegionMap[FnDecl] = WeakVH(SP.getNode());
 }
 
 /// getOrCreateNameSpace - Get name space descriptor for the tree node.
@@ -391,10 +416,40 @@ DINameSpace DebugInfo::getOrCreateNameSpace(tree Node, DIDescriptor Context) {
   return DNS;
 }
 
-/// findRegion - Find tree_node N's region.
-DIDescriptor DebugInfo::findRegion(tree Node) {
-  if (Node == NULL_TREE)
+/// findRegion - Find the region (context) of a GCC tree.
+DIDescriptor DebugInfo::findRegion(tree exp) {
+  if (exp == NULL_TREE)
     return getOrCreateFile(main_input_filename);
+
+  tree Node = exp;
+  location_t *p_locus = 0;
+  tree_code code = TREE_CODE(exp);
+  enum tree_code_class tree_cc = TREE_CODE_CLASS(code);
+  switch (tree_cc) {
+  case tcc_declaration:  /* A decl node */
+    p_locus = &DECL_SOURCE_LOCATION(exp);
+    break;
+
+  case tcc_expression:  /* an expression */
+  case tcc_comparison:  /* a comparison expression */
+  case tcc_unary:  /* a unary arithmetic expression */
+  case tcc_binary:  /* a binary arithmetic expression */
+    Node = TREE_BLOCK(exp);
+    p_locus = EXPR_LOCUS(exp);
+    break;
+
+  case tcc_exceptional:
+    switch (code) {
+    case BLOCK:
+      p_locus = &BLOCK_SOURCE_LOCATION(Node);
+      break;
+    default:
+      gcc_unreachable ();
+    }
+    break;
+  default:
+    break;
+  }
 
   std::map<tree_node *, WeakVH>::iterator I = RegionMap.find(Node);
   if (I != RegionMap.end())
@@ -405,18 +460,36 @@ DIDescriptor DebugInfo::findRegion(tree Node) {
     DIType Ty = getOrCreateType(Node);
     return DIDescriptor(Ty.getNode());
   } else if (DECL_P (Node)) {
-    if (TREE_CODE (Node) == NAMESPACE_DECL) {
+    switch (TREE_CODE(Node)) {
+    default:
+      /// What kind of DECL is this?
+      return findRegion (DECL_CONTEXT (Node));
+    case NAMESPACE_DECL: {
       DIDescriptor NSContext = findRegion(DECL_CONTEXT(Node));
       DINameSpace NS = getOrCreateNameSpace(Node, NSContext);
       return DIDescriptor(NS.getNode());
     }
-    return findRegion (DECL_CONTEXT (Node));
+    case FUNCTION_DECL: {
+      DISubprogram SP = CreateSubprogramFromFnDecl(Node);
+      return SP;
+    }
+    }
   } else if (TREE_CODE(Node) == BLOCK) {
-    // TREE_BLOCK is GCC's lexical block.
-    // Recursively create all necessary contexts:
+    // Recursively establish ancestor scopes.
     DIDescriptor context = findRegion(BLOCK_SUPERCONTEXT(Node));
+    // If we don't have a location, use the last-seen info.
+    unsigned int line;
+    const char *fullpath;
+    if (LOCATION_FILE(*p_locus) == (char*)0) {
+      fullpath = CurFullPath;
+      line = CurLineNo;
+    } else {
+      fullpath = LOCATION_FILE(*p_locus);
+      line = LOCATION_LINE(*p_locus);
+    }
+    DIFile F(getOrCreateFile(fullpath));
     DILexicalBlock lexical_block = 
-      DebugFactory.CreateLexicalBlock(context, CurLineNo);
+      DebugFactory.CreateLexicalBlock(context, F, line, 0U);
     RegionMap[Node] = WeakVH(lexical_block.getNode());
     return DIDescriptor(lexical_block);
   }
@@ -445,10 +518,6 @@ void DebugInfo::EmitFunctionEnd(BasicBlock *CurBB, bool EndFunction) {
 void DebugInfo::EmitDeclare(tree decl, unsigned Tag, const char *Name,
                             tree type, Value *AI, LLVMBuilder &Builder) {
 
-  // Do not emit variable declaration info, for now.
-  if (optimize)
-    return;
-
   // Ignore compiler generated temporaries.
   if (DECL_IGNORED_P(decl))
     return;
@@ -462,20 +531,19 @@ void DebugInfo::EmitDeclare(tree decl, unsigned Tag, const char *Name,
   DIType Ty = getOrCreateType(type);
   if (DECL_ARTIFICIAL (decl))
       Ty = DebugFactory.CreateArtificialType(Ty);
+  // If type info is not available then do not emit debug info for this var.
+  if (!Ty.getNode())
+    return;
   llvm::DIVariable D =
     DebugFactory.CreateVariable(Tag, VarScope,
                                 Name, getOrCreateFile(Loc.file),
-                                Loc.line, Ty);
+                                Loc.line, Ty, optimize);
 
   // Insert an llvm.dbg.declare into the current block.
   Instruction *Call = DebugFactory.InsertDeclare(AI, D, 
                                                  Builder.GetInsertBlock());
-
-  llvm::DILocation DO(NULL);
-  llvm::DILocation DL = 
-    DebugFactory.CreateLocation(CurLineNo, 0 /* column */, VarScope, DO);
   
-  Call->setMetadata("dbg", DL.getNode());
+  Call->setDebugLoc(DebugLoc::get(Loc.line, 0, VarScope.getNode()));
 }
 
 
@@ -524,19 +592,15 @@ void DebugInfo::EmitStopPoint(Function *Fn, BasicBlock *CurBB,
     
     if (RegionStack.empty())
       return;
-    llvm::DIDescriptor DR(cast<MDNode>(RegionStack.back()));
-    llvm::DIScope DS = llvm::DIScope(DR.getNode());
-    llvm::DILocation DO(NULL);
-    llvm::DILocation DL = 
-      DebugFactory.CreateLocation(CurLineNo, 0 /* column */, DS, DO);
-    Builder.SetCurrentDebugLocation(DL.getNode());
+    MDNode *Scope = cast<MDNode>(RegionStack.back());
+    Builder.SetCurrentDebugLocation(DebugLoc::get(CurLineNo,0/*col*/,Scope));
   }
 }
 
 /// EmitGlobalVariable - Emit information about a global variable.
 ///
 void DebugInfo::EmitGlobalVariable(GlobalVariable *GV, tree decl) {
-  if (DECL_ARTIFICIAL(decl))
+  if (DECL_ARTIFICIAL(decl) || DECL_IGNORED_P(decl))
     return;
   // Gather location information.
   expanded_location Loc = expand_location(DECL_SOURCE_LOCATION(decl));
@@ -631,7 +695,7 @@ DIType DebugInfo::createMethodType(tree type) {
   sprintf(FwdTypeName, "fwd.type.%d", FwdTypeCount++);
   llvm::DIType FwdType = 
     DebugFactory.CreateCompositeType(llvm::dwarf::DW_TAG_subroutine_type,
-                                     getOrCreateFile(main_input_filename),
+                                     findRegion(TYPE_CONTEXT(type)),
                                      FwdTypeName,
                                      getOrCreateFile(main_input_filename),
                                      0, 0, 0, 0, 0,
@@ -719,7 +783,7 @@ DIType DebugInfo::createPointerType(tree type) {
   
   StringRef PName = FromTy.getName();
   DIType PTy = 
-    DebugFactory.CreateDerivedType(Tag, findRegion(TYPE_CONTEXT(type)), 
+    DebugFactory.CreateDerivedType(Tag, findRegion(TYPE_CONTEXT(type)),
                                    Tag == DW_TAG_pointer_type ? 
                                    StringRef() : PName,
                                    getOrCreateFile(main_input_filename),
@@ -1027,7 +1091,7 @@ DIType DebugInfo::createStructType(tree type) {
                                       getOrCreateFile(MemLoc.file),
                                       MemLoc.line, SPTy, false, false,
                                       Virtuality, VIndex, ContainingType,
-                                      DECL_ARTIFICIAL (Member));
+                                      DECL_ARTIFICIAL (Member), optimize);
       EltTys.push_back(SP);
       SPCache[Member] = WeakVH(SP.getNode());
     }
@@ -1178,6 +1242,7 @@ DIType DebugInfo::getOrCreateType(tree type) {
       // gen_type_die(TYPE_OFFSET_BASETYPE(type), context_die);
       // gen_type_die(TREE_TYPE(type), context_die);
       // gen_ptr_to_mbr_type_die(type, context_die);
+      // PR 7104
       break;
     }
 

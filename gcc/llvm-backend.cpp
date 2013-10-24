@@ -92,6 +92,9 @@ TargetMachine *TheTarget = 0;
 TargetFolder *TheFolder = 0;
 TypeConverter *TheTypeConverter = 0;
 
+// A list of thunks to post-process.
+std::vector<tree> Thunks;
+
 /// DisableLLVMOptimizations - Allow the user to specify:
 /// "-mllvm -disable-llvm-optzns" on the llvm-gcc command line to force llvm
 /// optimizations off.
@@ -122,8 +125,8 @@ static void destroyOptimizationPasses();
 // than the LLVM Value pointer while using PCH.
 
 // Collection of LLVM Values
-static std::vector<Value *> LLVMValues;
-typedef DenseMap<Value *, unsigned> LLVMValuesMapTy;
+static std::vector<Value*> LLVMValues;
+typedef DenseMap<Value*, unsigned> LLVMValuesMapTy;
 static LLVMValuesMapTy LLVMValuesMap;
 
 /// LocalLLVMValueIDs - This is the set of local IDs we have in our mapping,
@@ -421,6 +424,15 @@ void llvm_initialize_backend(void) {
     ArgStrings.push_back(Arg);
   }
 
+  // LLVM doesn't implement -freorder-blocks, but we can make tail-dup more
+  // aggressive as a poor man's block reordering.
+  // Tail-merge-size should always be at least one above tail-dup-size so they
+  // won't pull in opposite directions.
+  if (flag_reorder_blocks) {
+    ArgStrings.push_back("--tail-dup-size=5");
+    ArgStrings.push_back("--tail-merge-size=6");
+  }
+
   if (flag_limited_precision > 0) {
     std::string Arg("--limit-float-precision="+utostr(flag_limited_precision));
     ArgStrings.push_back(Arg);
@@ -512,6 +524,8 @@ void llvm_initialize_backend(void) {
   if (!flag_pch_file &&
       debug_info_level > DINFO_LEVEL_NONE)
     TheDebugInfo = new DebugInfo(TheModule);
+  else
+    TheDebugInfo = 0;
 }
 
 /// performLateBackendInitialization - Set backend options that may only be
@@ -585,6 +599,11 @@ void llvm_pch_read(const unsigned char *Buffer, unsigned Size) {
   readLLVMValues();
 
   flag_llvm_pch_read = 1;
+}
+
+// Initialize remainign llvm specific data structures after pch is loaded.
+void llvm_post_pch_read() {
+  readLLVMTypeUsers();
 }
 
 /// llvm_pch_write_init - Initialize PCH writing. 
@@ -849,6 +868,47 @@ void llvm_asm_file_end(void) {
   timevar_push(TV_LLVM_PERFILE);
   LLVMContext &Context = getGlobalContext();
 
+  // Assign the correct linkage to the thunks now that we've set the linkage and
+  // visibility to their targets.
+  SmallPtrSet<tree, 4> ThunkOfThunk;
+
+  for (std::vector<tree>::iterator
+         I = Thunks.begin(), E = Thunks.end(); I != E; ++I) {
+    tree thunk = *I;
+    tree thunk_target = lang_hooks.thunk_target(thunk);
+
+    if (lang_hooks.function_is_thunk_p (thunk_target)) {
+      ThunkOfThunk.insert(thunk);
+      continue;
+    }
+
+    Function *Thunk = cast<Function>(DECL_LLVM(thunk));
+    const Function *ThunkTarget = cast<Function>(DECL_LLVM(thunk_target));
+
+    Thunk->setLinkage(ThunkTarget->getLinkage());
+    Thunk->setVisibility(ThunkTarget->getVisibility());
+  }
+
+  // There's a situation where a thunk calls another thunk. In that case, we
+  // want to process first the thunk that calls a non-thunk. Then we process
+  // each thunk in turn until all thunks have been processed.
+  while (!ThunkOfThunk.empty())
+    for (SmallPtrSet<tree, 4>::iterator
+           I = ThunkOfThunk.begin(), E = ThunkOfThunk.end(); I != E; ++I) {
+      tree thunk = *I;
+      tree thunk_target = lang_hooks.thunk_target(thunk);
+
+      if (!ThunkOfThunk.count(thunk_target)) {
+        Function *Thunk = cast<Function>(DECL_LLVM(thunk));
+        const Function *ThunkTarget = cast<Function>(DECL_LLVM(thunk_target));
+
+        Thunk->setLinkage(ThunkTarget->getLinkage());
+        Thunk->setVisibility(ThunkTarget->getVisibility());
+        ThunkOfThunk.erase(thunk);
+        break;
+      }
+    }
+
   performLateBackendInitialization();
   createPerFunctionOptimizationPasses();
 
@@ -991,23 +1051,13 @@ void llvm_emit_code_for_current_function(tree fndecl) {
     return;  // Do not process broken code.
   }
 
-  // Initial fill of TypeRefinementDatabase::TypeUsers[] if we're
-  // using a PCH.  Won't work until the GCC PCH has been read in and
-  // digested.
-  {
-    static bool done = false;
-    if (!done && flag_llvm_pch_read) {
-      readLLVMTypeUsers();
-      done = true;
-    }
-  }
-
   timevar_push(TV_LLVM_FUNCS);
 
   // Convert the AST to raw/ugly LLVM code.
   Function *Fn;
   {
-    TreeToLLVM Emitter(fndecl);
+    TreeToLLVM *Emitter = new TreeToLLVM(fndecl);
+    // FIXME: should we store TheTreeToLLVM right here (current in constructor)?
     enum symbol_visibility vis = DECL_VISIBILITY (fndecl);
 
     if (vis != VISIBILITY_DEFAULT)
@@ -1015,7 +1065,8 @@ void llvm_emit_code_for_current_function(tree fndecl) {
       // visibility that's not supported by the target.
       targetm.asm_out.visibility(fndecl, vis);
 
-    Fn = Emitter.EmitFunction();
+    Fn = TheTreeToLLVM->EmitFunction();
+    Emitter->~TreeToLLVM();
   }
 
 #if 0
@@ -1106,6 +1157,8 @@ void emit_alias_to_llvm(tree decl, tree target, tree target_decl) {
     Linkage = GlobalValue::PrivateLinkage;
   else if (DECL_LLVM_LINKER_PRIVATE(decl))
     Linkage = GlobalValue::LinkerPrivateLinkage;
+  else if (DECL_LLVM_LINKER_PRIVATE_WEAK(decl))
+    Linkage = GlobalValue::LinkerPrivateWeakLinkage;
   else if (DECL_WEAK(decl))
     // The user may have explicitly asked for weak linkage - ignore flag_odr.
     Linkage = GlobalValue::WeakAnyLinkage;
@@ -1372,6 +1425,9 @@ void emit_global_to_llvm(tree decl) {
   } else if (CODE_CONTAINS_STRUCT (TREE_CODE (decl), TS_DECL_WITH_VIS)
              && DECL_LLVM_LINKER_PRIVATE(decl)) {
     Linkage = GlobalValue::LinkerPrivateLinkage;
+  } else if (CODE_CONTAINS_STRUCT (TREE_CODE (decl), TS_DECL_WITH_VIS)
+             && DECL_LLVM_LINKER_PRIVATE_WEAK(decl)) {
+    Linkage = GlobalValue::LinkerPrivateWeakLinkage;
   } else if (!TREE_PUBLIC(decl)) {
     Linkage = GlobalValue::InternalLinkage;
   } else if (DECL_WEAK(decl)) {
@@ -1440,7 +1496,8 @@ void emit_global_to_llvm(tree decl) {
 
     // Handle used decls
     if (DECL_PRESERVE_P (decl)) {
-      if (DECL_LLVM_LINKER_PRIVATE (decl))
+      if (DECL_LLVM_LINKER_PRIVATE (decl) ||
+          DECL_LLVM_LINKER_PRIVATE_WEAK (decl))
         AttributeCompilerUsedGlobals.insert(GV);
       else
         AttributeUsedGlobals.insert(GV);

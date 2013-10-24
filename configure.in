@@ -1524,7 +1524,8 @@ AC_ARG_WITH([build-sysroot],
   [  --with-build-sysroot=sysroot
                           use sysroot as the system root during the build],
   [if test x"$withval" != x ; then
-     SYSROOT_CFLAGS_FOR_TARGET="--sysroot=$withval"
+     # APPLE LOCAL 7852964 Use -isysroot instead of --sysroot.
+     SYSROOT_CFLAGS_FOR_TARGET="-isysroot $withval"
    fi],
   [SYSROOT_CFLAGS_FOR_TARGET=])
 AC_SUBST(SYSROOT_CFLAGS_FOR_TARGET)
@@ -2455,6 +2456,10 @@ case $build in
     # Apple's GCC has bugs in designated initializer handling, so disable
     # that too.
     stage1_cflags="-g -no-cpp-precomp -DHAVE_DESIGNATED_INITIALIZERS=0"
+    ;;
+  *-*-darwin*)
+    # -std=gnu89 never hurt
+    stage1_cflags="-g -std=gnu89"
     ;;
 esac
 
