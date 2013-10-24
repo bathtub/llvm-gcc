@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --                          A D A . S T R I N G S                           --
 --                                                                          --
@@ -14,7 +14,7 @@
 ------------------------------------------------------------------------------
 
 package Ada.Strings is
-   pragma Pure;
+pragma Pure (Strings);
 
    Space           : constant Character           := ' ';
    Wide_Space      : constant Wide_Character      := ' ';

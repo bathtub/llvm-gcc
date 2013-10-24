@@ -14,7 +14,7 @@
 
 HASH include "somerandomfile" /*{ dg-error "stray" "non-include" }*/
 /*{ dg-bogus "No such" "don't execute non-include" { target *-*-* } 15 }*/
-int resync_parser_1; /*{ dg-error "parse|syntax|expected" "" { target *-*-* } 15 }*/
+int resync_parser_1; /*{ dg-error "parse|syntax|expected" "" }*/
 
 HASHINCLUDE <somerandomfile> /*{ dg-error "stray|expected" "non-include 2" }*/
 /*{ dg-bogus "No such" "don't execute non-include 2" { target *-*-* } 18 }*/
@@ -40,5 +40,3 @@ void f ()
   int i = X;    /* { dg-error "undeclared|for each" "no macro X" } */
   int j = Y;    /* { dg-error "undeclared|for each" "no macro Y" } */
 }
-
-/* { dg-final { cleanup-saved-temps } } */

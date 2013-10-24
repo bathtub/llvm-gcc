@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-gimple" } */
+/* { dg-options "-O2 -fdump-tree-generic" } */
 
 int
 foo (int align)
@@ -8,7 +8,6 @@ foo (int align)
   return off ? align - off : 0;
 }
 
-/* We should have optimized away the mod operator before we gimpleized
+/* We should have optimized away the mod operator before we genericized
    the code.  */
-/* { dg-final { scan-tree-dump-times "%" 0 "gimple"} } */
-/* { dg-final { cleanup-tree-dump "gimple" } } */
+/* { dg-final { scan-tree-dump-times "%" 0 "generic"} } */

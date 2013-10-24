@@ -24,10 +24,11 @@ not be used in new projects.  Use @code{mkstemp} instead.
 static char tmpnam_buffer[L_tmpnam];
 static int tmpnam_counter;
 
-extern int getpid (void);
+extern int getpid ();
 
 char *
-tmpnam (char *s)
+tmpnam (s)
+     char *s;
 {
   int pid = getpid ();
 

@@ -87,7 +87,12 @@ void test##S (void)				\
     abort ();					\
 }
 
-#define pck __attribute__((packed))
+#ifdef __powerpc64__
+/* Temporary hack for broken PPC64 unaligned handling PR rtl-optimization/13674 */
+# define pck
+#else
+# define pck __attribute__((packed))
+#endif
 struct pck A { unsigned short i : 1, l : 1, j : 3, k : 11; }; T(A)
 struct pck B { unsigned short i : 4, j : 1, k : 11; unsigned int l; }; T(B)
 struct pck C { unsigned int l; unsigned short i : 4, j : 1, k : 11; }; T(C)

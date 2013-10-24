@@ -430,9 +430,6 @@ void FAR *out_desc;
                 }
             }
 
-            /* handle error breaks in while */
-            if (mode == BAD) break;
-
             /* build code tables */
             state->next = state->codes;
             lencode = (code const FAR *)(state->next);

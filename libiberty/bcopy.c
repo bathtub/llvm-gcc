@@ -9,23 +9,19 @@ Copies @var{length} bytes from memory region @var{in} to region
 
 */
 
-#include <stddef.h>
-
 void
-bcopy (const void *src, void *dest, size_t len)
+bcopy (src, dest, len)
+  register char *src, *dest;
+  int len;
 {
   if (dest < src)
-    {
-      const char *firsts = src;
-      char *firstd = dest;
-      while (len--)
-	*firstd++ = *firsts++;
-    }
+    while (len--)
+      *dest++ = *src++;
   else
     {
-      const char *lasts = (const char *)src + (len-1);
-      char *lastd = (char *)dest + (len-1);
+      char *lasts = src + (len-1);
+      char *lastd = dest + (len-1);
       while (len--)
-        *lastd-- = *lasts--;
+        *(char *)lastd-- = *(char *)lasts--;
     }
 }

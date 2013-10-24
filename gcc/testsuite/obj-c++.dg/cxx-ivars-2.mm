@@ -1,10 +1,11 @@
+// APPLE LOCAL file mainline
 // Check if the '- .cxx_construct' and '-.cxx_destruct' methods get called
 // and if they perform their desired function.
-
 // { dg-do run }
 // { dg-options "-fobjc-call-cxx-cdtors" }
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 #define CHECK_IF(expr) if(!(expr)) abort()
 
@@ -73,4 +74,5 @@ int main (void)
   
   [foo free];
   CHECK_IF(!ctor1_called && !ctor2_called && dtor1_called);
+
 }

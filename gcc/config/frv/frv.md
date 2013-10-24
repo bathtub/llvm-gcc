@@ -17,8 +17,8 @@
 
 ;; You should have received a copy of the GNU General Public License
 ;; along with GCC; see the file COPYING.  If not, write to
-;; the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-;; Boston, MA 02110-1301, USA.
+;; the Free Software Foundation, 59 Temple Place - Suite 330,
+;; Boston, MA 02111-1307, USA.
 
 ;;- See file "rtl.def" for documentation on define_insn, match_*, et. al.
 
@@ -41,7 +41,6 @@
    (UNSPEC_EH_RETURN_EPILOGUE	6)
    (UNSPEC_GOT			7)
    (UNSPEC_LDD			8)
-   (UNSPEC_OPTIONAL_MEMBAR	9)
 
    (UNSPEC_GETTLSOFF			200)
    (UNSPEC_TLS_LOAD_GOTTLSOFF12		201)
@@ -87,9 +86,7 @@
    (FDPIC_REG			15)
    ])
 
-(define_mode_macro IMODE [QI HI SI DI])
-(define_mode_attr IMODEsuffix [(QI "b") (HI "h") (SI "") (DI "d")])
-(define_mode_attr BREADsuffix [(QI "ub") (HI "uh") (SI "") (DI "d")])
+
 
 ;; ::::::::::::::::::::
 ;; ::
@@ -1209,7 +1206,7 @@
        (eq_attr "type" "sqrt_single"))
   "(f1|f0) + fr550_float")
 
-;; Synthetic units for enforcing media issue restrictions.  Certain types
+;; Synthetic units for enforcing media issue restructions.  Certain types
 ;; of insn in M2 conflict with certain types in M0:
 ;;
 ;;			     M2
@@ -1507,7 +1504,6 @@
 ;; )
 ;;
 
-(include "predicates.md")
 
 ;; ::::::::::::::::::::
 ;; ::
@@ -1672,7 +1668,7 @@
 ;; Note - it is best to only have one movsi pattern and to handle
 ;; all the various contingencies by the use of alternatives.  This
 ;; allows reload the greatest amount of flexibility (since reload will
-;; only choose amongst alternatives for a selected insn, it will not
+;; only choose amoungst alternatives for a selected insn, it will not
 ;; replace the insn with another one).
 
 ;; Unfortunately, we do have to separate out load-type moves from the rest,
@@ -2142,44 +2138,25 @@
     FAIL;
 }")
 
-;; String/block set insn.
+;; String/block clear insn.
 ;; Argument 0 is the destination
 ;; Argument 1 is the length
-;; Argument 2 is the byte value -- ignore any value but zero
-;; Argument 3 is the alignment
+;; Argument 2 is the alignment
 
-(define_expand "setmemsi"
+(define_expand "clrmemsi"
   [(parallel [(set (match_operand:BLK 0 "" "")
-		   (match_operand 2 "" ""))
+		   (const_int 0))
 	      (use (match_operand:SI 1 "" ""))
-	      (use (match_operand:SI 3 "" ""))])]
+	      (use (match_operand:SI 2 "" ""))])]
   ""
   "
 {
-  /* If value to set is not zero, use the library routine.  */
-  if (operands[2] != const0_rtx)
-    FAIL;
-
   if (frv_expand_block_clear (operands))
     DONE;
   else
     FAIL;
 }")
-
 
-;; The "membar" part of a __builtin_read* or __builtin_write* function.
-;; Operand 0 is a volatile reference to the memory that the function reads
-;; or writes.  Operand 1 is the address being accessed, or zero if the
-;; address isn't a known constant.  Operand 2 describes the __builtin
-;; function (either FRV_IO_READ or FRV_IO_WRITE).
-(define_insn "optional_membar_<mode>"
-  [(set (match_operand:IMODE 0 "memory_operand" "=m")
-	(unspec:IMODE [(match_operand 1 "const_int_operand" "")
-		       (match_operand 2 "const_int_operand" "")]
-		      UNSPEC_OPTIONAL_MEMBAR))]
-  ""
-  "membar"
-  [(set_attr "length" "4")])
 
 ;; ::::::::::::::::::::
 ;; ::
@@ -2490,11 +2467,13 @@
       rtx addr;
       rtx temp3 = simplify_gen_subreg (SImode, operands[2], TImode, 12);
 
-      gcc_assert (GET_CODE (operands[1]) == MEM);
+      if (GET_CODE (operands[1]) != MEM)
+        abort ();
 
       addr = XEXP (operands[1], 0);
 
-      gcc_assert (GET_CODE (addr) == PLUS);
+      if (GET_CODE (addr) != PLUS)
+        abort ();
 
       emit_move_insn (temp3, XEXP (addr, 1));
 
@@ -4499,7 +4478,7 @@
       case ASHIFT:   return \"csll %4, %z5, %2, %1, %e0\";
       case ASHIFTRT: return \"csra %4, %z5, %2, %1, %e0\";
       case LSHIFTRT: return \"csrl %4, %z5, %2, %1, %e0\";
-      default:       gcc_unreachable ();
+      default:       abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -4522,7 +4501,7 @@
       case AND: return \"cmand %4, %5, %2, %1, %e0\";
       case IOR: return \"cmor %4, %5, %2, %1, %e0\";
       case XOR: return \"cmxor %4, %5, %2, %1, %e0\";
-      default:  gcc_unreachable ();
+      default:  abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -4563,7 +4542,7 @@
     {
       case DIV:  return \"csdiv %4, %z5, %2, %1, %e0\";
       case UDIV: return \"cudiv %4, %z5, %2, %1, %e0\";
-      default:   gcc_unreachable ();
+      default:   abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -4584,7 +4563,7 @@
     {
       case NOT: return \"cnot %4, %2, %1, %e0\";
       case NEG: return \"csub %., %4, %2, %1, %e0\";
-      default:  gcc_unreachable ();
+      default:  abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -4659,7 +4638,7 @@
     {
       case ABS: return \"cfabss %4, %2, %1, %e0\";
       case NEG: return \"cfnegs %4, %2, %1, %e0\";
-      default:  gcc_unreachable ();
+      default:  abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -4681,7 +4660,7 @@
     {
       case PLUS:  return \"cfadds %4, %5, %2, %1, %e0\";
       case MINUS: return \"cfsubs %4, %5, %2, %1, %e0\";
-      default:    gcc_unreachable ();
+      default:    abort ();
     }
 }"
   [(set_attr "length" "4")
@@ -5424,7 +5403,8 @@
   rtx lr = gen_rtx_REG (Pmode, LR_REGNO);
   rtx addr;
 
-  gcc_assert (GET_CODE (operands[0]) == MEM);
+  if (GET_CODE (operands[0]) != MEM)
+    abort ();
 
   addr = XEXP (operands[0], 0);
   if (! call_operand (addr, Pmode))
@@ -5509,7 +5489,8 @@
 {
   rtx addr;
 
-  gcc_assert (GET_CODE (operands[0]) == MEM);
+  if (GET_CODE (operands[0]) != MEM)
+    abort ();
 
   addr = XEXP (operands[0], 0);
   if (! sibcall_operand (addr, Pmode))
@@ -5576,7 +5557,8 @@
   rtx lr = gen_rtx_REG (Pmode, LR_REGNO);
   rtx addr;
 
-  gcc_assert (GET_CODE (operands[1]) == MEM);
+  if (GET_CODE (operands[1]) != MEM)
+    abort ();
 
   addr = XEXP (operands[1], 0);
   if (! call_operand (addr, Pmode))
@@ -5642,7 +5624,8 @@
 {
   rtx addr;
 
-  gcc_assert (GET_CODE (operands[1]) == MEM);
+  if (GET_CODE (operands[1]) != MEM)
+    abort ();
 
   addr = XEXP (operands[1], 0);
   if (! sibcall_operand (addr, Pmode))
@@ -5854,9 +5837,11 @@
   rtx reg2;
   rtx reg3;
 
-  gcc_assert (GET_CODE (operands[1]) == CONST_INT);
+  if (GET_CODE (operands[1]) != CONST_INT)
+    abort ();
 
-  gcc_assert (GET_CODE (operands[2]) == CONST_INT);
+  if (GET_CODE (operands[2]) != CONST_INT)
+    abort ();
 
   /* If we can't generate an immediate instruction, promote to register.  */
   if (! IN_RANGE_P (INTVAL (range), -2048, 2047))
@@ -5928,7 +5913,7 @@
 ;; Called after register allocation to add any instructions needed for the
 ;; epilogue.  Using an epilogue insn is favored compared to putting all of the
 ;; instructions in the FUNCTION_EPILOGUE macro, since it allows the scheduler
-;; to intermix instructions with the restores of the caller saved registers.
+;; to intermix instructions with the restires of the caller saved registers.
 ;; In some cases, it might be necessary to emit a barrier instruction as the
 ;; first insn to prevent such scheduling.
 (define_expand "epilogue"

@@ -1,5 +1,5 @@
 /* -----------------------------------------------------------------------
-   ffi.c - Copyright (c) 2003, 2004, 2006 Kaz Kojima
+   ffi.c - Copyright (c) 2003 Kaz Kojima
    
    SuperH SHmedia Foreign Function Interface 
 
@@ -31,21 +31,48 @@
 #define NGREGARG 8
 #define NFREGARG 12
 
+/* If the structure has essentialy an unique element, return its type.  */
+static int
+simple_type (ffi_type *arg)
+{
+  if (arg->type != FFI_TYPE_STRUCT)
+    return arg->type;
+  else if (arg->elements[1])
+    return FFI_TYPE_STRUCT;
+
+  return simple_type (arg->elements[0]);
+}
+
 static int
 return_type (ffi_type *arg)
 {
+  unsigned short type;
 
   if (arg->type != FFI_TYPE_STRUCT)
     return arg->type;
 
+  type = simple_type (arg->elements[0]);
+  if (! arg->elements[1])
+    {
+      switch (type)
+	{
+	case FFI_TYPE_SINT8:
+	case FFI_TYPE_UINT8:
+	case FFI_TYPE_SINT16:
+	case FFI_TYPE_UINT16:
+	case FFI_TYPE_SINT32:
+	case FFI_TYPE_UINT32:
+	case FFI_TYPE_SINT64:
+	case FFI_TYPE_UINT64:
+	  return FFI_TYPE_UINT64;
+
+	default:
+	  return type;
+	}
+    }
+
   /* gcc uses r2 if the result can be packed in on register.  */
-  if (arg->size <= sizeof (UINT8))
-    return FFI_TYPE_UINT8;
-  else if (arg->size <= sizeof (UINT16))
-    return FFI_TYPE_UINT16;
-  else if (arg->size <= sizeof (UINT32))
-    return FFI_TYPE_UINT32;
-  else if (arg->size <= sizeof (UINT64))
+  if (arg->size <= sizeof (UINT64))
     return FFI_TYPE_UINT64;
 
   return FFI_TYPE_STRUCT;
@@ -54,7 +81,9 @@ return_type (ffi_type *arg)
 /* ffi_prep_args is called by the assembly routine once stack space
    has been allocated for the function's arguments */
 
+/*@-exportheader@*/
 void ffi_prep_args(char *stack, extended_cif *ecif)
+/*@=exportheader@*/
 {
   register unsigned int i;
   register unsigned int avn;
@@ -76,10 +105,8 @@ void ffi_prep_args(char *stack, extended_cif *ecif)
   for (i = 0, p_arg = ecif->cif->arg_types; i < avn; i++, p_arg++, p_argv++)
     {
       size_t z;
-      int align;
 
       z = (*p_arg)->size;
-      align = (*p_arg)->alignment;
       if (z < sizeof (UINT32))
 	{
 	  switch ((*p_arg)->type)
@@ -101,7 +128,7 @@ void ffi_prep_args(char *stack, extended_cif *ecif)
 	      break;
   
 	    case FFI_TYPE_STRUCT:
-	      memcpy (argp, *p_argv, z);
+	      *(UINT64 *) argp = (UINT64) *(UINT32 *)(*p_argv);
 	      break;
 
 	    default:
@@ -109,31 +136,12 @@ void ffi_prep_args(char *stack, extended_cif *ecif)
 	    }
 	  argp += sizeof (UINT64);
 	}
-      else if (z == sizeof (UINT32) && align == sizeof (UINT32))
+      else if (z == sizeof (UINT32))
 	{
-	  switch ((*p_arg)->type)
-	    {
-	    case FFI_TYPE_INT:
-	    case FFI_TYPE_SINT32:
-	      *(SINT64 *) argp = (SINT64) *(SINT32 *) (*p_argv);
-	      break;
-
-	    case FFI_TYPE_FLOAT:
-	    case FFI_TYPE_POINTER:
-	    case FFI_TYPE_UINT32:
-	    case FFI_TYPE_STRUCT:
-	      *(UINT64 *) argp = (UINT64) *(UINT32 *) (*p_argv);
-	      break;
-
-	    default:
-	      FFI_ASSERT(0);
-	      break;
-	    }
+	  *(UINT64 *) argp = (UINT64) *(UINT32 *) (*p_argv);
 	  argp += sizeof (UINT64);
 	}
-      else if (z == sizeof (UINT64)
-	       && align == sizeof (UINT64)
-	       && ((int) *p_argv & (sizeof (UINT64) - 1)) == 0)
+      else if (z == sizeof (UINT64))
 	{
 	  *(UINT64 *) argp = *(UINT64 *) (*p_argv);
 	  argp += sizeof (UINT64);
@@ -158,7 +166,6 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
   int n, m;
   int greg;
   int freg;
-  int fpair = -1;
 
   greg = (return_type (cif->rtype) == FFI_TYPE_STRUCT ? 1 : 0);
   freg = 0;
@@ -174,13 +181,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 	  cif->bytes += sizeof (UINT64) - sizeof (float);
 	  if (freg >= NFREGARG - 1)
 	    continue;
-	  if (fpair < 0)
-	    {
-	      fpair = freg;
-	      freg += 2;
-	    }
-	  else
-	    fpair = -1;
+	  freg++;
 	  cif->flags2 += ((cif->arg_types)[i]->type) << (2 * j++);
 	  break;
 
@@ -189,6 +190,7 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
 	    continue;
 	  if ((freg + 1) < NFREGARG)
 	    {
+	      freg = (freg + 1) & ~1;
 	      freg += 2;
 	      cif->flags2 += ((cif->arg_types)[i]->type) << (2 * j++);
 	    }
@@ -236,14 +238,22 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
   return FFI_OK;
 }
 
-extern void ffi_call_SYSV(void (*)(char *, extended_cif *), extended_cif *,
-			  unsigned, unsigned, long long, unsigned *,
+/*@-declundef@*/
+/*@-exportheader@*/
+extern void ffi_call_SYSV(void (*)(char *, extended_cif *), 
+			  /*@out@*/ extended_cif *, 
+			  unsigned, unsigned, long long,
+			  /*@out@*/ unsigned *, 
 			  void (*fn)());
+/*@=declundef@*/
+/*@=exportheader@*/
 
-void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
+void ffi_call(/*@dependent@*/ ffi_cif *cif, 
+	      void (*fn)(), 
+	      /*@out@*/ void *rvalue, 
+	      /*@dependent@*/ void **avalue)
 {
   extended_cif ecif;
-  UINT64 trvalue;
 
   ecif.cif = cif;
   ecif.avalue = avalue;
@@ -251,13 +261,12 @@ void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
   /* If the return value is a struct and we don't have a return	*/
   /* value address then we need to make one		        */
 
-  if (cif->rtype->type == FFI_TYPE_STRUCT
-      && return_type (cif->rtype) != FFI_TYPE_STRUCT)
-    ecif.rvalue = &trvalue;
-  else if ((rvalue == NULL) && 
+  if ((rvalue == NULL) && 
       (cif->rtype->type == FFI_TYPE_STRUCT))
     {
+      /*@-sysunrecog@*/
       ecif.rvalue = alloca(cif->rtype->size);
+      /*@=sysunrecog@*/
     }
   else
     ecif.rvalue = rvalue;
@@ -265,18 +274,15 @@ void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
   switch (cif->abi) 
     {
     case FFI_SYSV:
-      ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, cif->flags, cif->flags2,
-		    ecif.rvalue, fn);
+      /*@-usedef@*/
+      ffi_call_SYSV(ffi_prep_args, &ecif, cif->bytes, 
+		    cif->flags, cif->flags2, ecif.rvalue, fn);
+      /*@=usedef@*/
       break;
     default:
       FFI_ASSERT(0);
       break;
     }
-
-  if (rvalue
-      && cif->rtype->type == FFI_TYPE_STRUCT
-      && return_type (cif->rtype) != FFI_TYPE_STRUCT)
-    memcpy (rvalue, &trvalue, cif->rtype->size);
 }
 
 extern void ffi_closure_SYSV (void);
@@ -341,16 +347,15 @@ ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
   int i, avn;
   int greg, freg;
   ffi_cif *cif;
-  int fpair = -1;
 
   cif = closure->cif;
   avalue = alloca (cif->nargs * sizeof (void *));
 
   /* Copy the caller's structure return value address so that the closure
      returns the data directly to the caller.  */
-  if (return_type (cif->rtype) == FFI_TYPE_STRUCT)
+  if (cif->rtype->type == FFI_TYPE_STRUCT)
     {
-      rvalue = (UINT64 *) *pgr;
+      rvalue = *pgr;
       greg = 1;
     }
   else
@@ -394,24 +399,11 @@ ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
 	  if ((*p_arg)->type == FFI_TYPE_FLOAT)
 	    {
 	      if (freg < NFREGARG - 1)
-		{
-		  if (fpair >= 0)
-		    {
-		      avalue[i] = (UINT32 *) pfr + fpair;
-		      fpair = -1;
-		    }
-		  else
-		    {
 #ifdef __LITTLE_ENDIAN__
-		      fpair = freg;
-		      avalue[i] = (UINT32 *) pfr + (1 ^ freg);
+		avalue[i] = (UINT32 *) pfr + (1 ^ freg++);
 #else
-		      fpair = 1 ^ freg;
-		      avalue[i] = (UINT32 *) pfr + freg;
+		avalue[i] = (UINT32 *) pfr + freg++;
 #endif
-		      freg += 2;
-		    }
-		}
 	      else
 #ifdef __LITTLE_ENDIAN__
 		avalue[i] = pgr + greg;
@@ -433,6 +425,7 @@ ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
 	    avalue[i] = pgr + greg;
 	  else
 	    {
+	      freg = (freg + 1) & ~1;
 	      avalue[i] = pfr + (freg >> 1);
 	      freg += 2;
 	    }
@@ -450,6 +443,6 @@ ffi_closure_helper_SYSV (ffi_closure *closure, UINT64 *rvalue,
   (closure->fun) (cif, rvalue, avalue, closure->user_data);
 
   /* Tell ffi_closure_SYSV how to perform return type promotions.  */
-  return return_type (cif->rtype);
+  return cif->rtype->type;
 }
 

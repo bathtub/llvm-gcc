@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdarg.h>
-extern void abort (void);
 extern int inside_main;
 
 int
-sprintf (char *buf, const char *fmt, ...)
+/* APPLE LOCAL radar 6112293 */
+(sprintf) (char *buf, const char *fmt, ...)
 {
   va_list ap;
   int r;

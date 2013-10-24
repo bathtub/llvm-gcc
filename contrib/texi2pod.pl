@@ -16,8 +16,8 @@
 
 # You should have received a copy of the GNU General Public License
 # along with GCC; see the file COPYING.  If not, write to
-# the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-# Boston MA 02110-1301, USA.
+# the Free Software Foundation, 59 Temple Place - Suite 330,
+# Boston MA 02111-1307, USA.
 
 # This does trivial (and I mean _trivial_) conversion of Texinfo
 # markup to Perl POD format.  It's intended to be used to extract
@@ -36,7 +36,6 @@ $shift = "";
 $fnno = 1;
 $inf = "";
 $ibase = "";
-@ipath = ();
 
 while ($_ = shift) {
     if (/^-D(.*)$/) {
@@ -52,13 +51,6 @@ while ($_ = shift) {
 	die "flags may only contain letters, digits, hyphens, dashes and underscores\n"
 	    unless $flag =~ /^[a-zA-Z0-9_-]+$/;
 	$defs{$flag} = $value;
-    } elsif (/^-I(.*)$/) {
-	if ($1 ne "") {
-	    $flag = $1;
-	} else {
-	    $flag = shift;
-	}
-        push (@ipath, $flag);
     } elsif (/^-/) {
 	usage();
     } else {
@@ -162,8 +154,6 @@ while(<$inf>) {
 	} elsif ($ended =~ /^(?:itemize|enumerate|[fv]?table)$/) {
 	    $_ = "\n=back\n";
 	    $ic = pop @icstack;
-	} elsif ($ended eq "multitable") {
-	    $_ = "\n=back\n";
 	} else {
 	    die "unknown command \@end $ended at line $.\n";
 	}
@@ -237,16 +227,11 @@ while(<$inf>) {
     /^\@include\s+(.+)$/ and do {
 	push @instack, $inf;
 	$inf = gensym();
-	$file = postprocess($1);
 
-	# Try cwd and $ibase, then explicit -I paths.
-	$done = 0;
-	foreach $path ("", $ibase, @ipath) {
-	    $mypath = $file;
-	    $mypath = $path . "/" . $mypath if ($path ne "");
-	    open($inf, "<" . $mypath) and ($done = 1, last);
-	}
-	die "cannot find $file" if !$done;
+	# Try cwd and $ibase.
+	open($inf, "<" . $1) 
+	    or open($inf, "<" . $ibase . "/" . $1)
+		or die "cannot open $1 or $ibase/$1: $!\n";
 	next;
     };
 
@@ -254,8 +239,6 @@ while(<$inf>) {
 	and $_ = "\n=head2 $1\n";
     /^\@subsection\s+(.+)$/
 	and $_ = "\n=head3 $1\n";
-    /^\@subsubsection\s+(.+)$/
-	and $_ = "\n=head4 $1\n";
 
     # Block command handlers:
     /^\@itemize(?:\s+(\@[a-z]+|\*|-))?/ and do {
@@ -264,7 +247,7 @@ while(<$inf>) {
 	if (defined $1) {
 	    $ic = $1;
 	} else {
-	    $ic = '*';
+	    $ic = '@bullet';
 	}
 	$_ = "\n=over 4\n";
 	$endw = "itemize";
@@ -280,12 +263,6 @@ while(<$inf>) {
 	}
 	$_ = "\n=over 4\n";
 	$endw = "enumerate";
-    };
-
-    /^\@multitable\s.*/ and do {
-	push @endwstack, $endw;
-	$endw = "multitable";
-	$_ = "\n=over 4\n";
     };
 
     /^\@([fv]?table)\s+(\@[a-z]+)/ and do {
@@ -305,16 +282,6 @@ while(<$inf>) {
 	$endw = $1;
 	$shift = "\t";
 	$_ = "";	# need a paragraph break
-    };
-
-    /^\@item\s+(.*\S)\s*$/ and $endw eq "multitable" and do {
-	@columns = ();
-	for $column (split (/\s*\@tab\s*/, $1)) {
-	    # @strong{...} is used a @headitem work-alike
-	    $column =~ s/^\@strong{(.*)}$/$1/;
-	    push @columns, $column;
-	}
-	$_ = "\n=item ".join (" : ", @columns)."\n";
     };
 
     /^\@itemx?\s*(.+)?$/ and do {
@@ -385,10 +352,6 @@ sub postprocess
     # keep references of the form @ref{...}, print them bold
     s/\@(?:ref)\{([^\}]*)\}/B<$1>/g;
 
-    # Change double single quotes to double quotes.
-    s/''/"/g;
-    s/``/"/g;
-
     # Cross references are thrown away, as are @noindent and @refill.
     # (@noindent is impossible in .pod, and @refill is unnecessary.)
     # @* is also impossible in .pod; we discard it and any newline that
@@ -401,9 +364,6 @@ sub postprocess
     s/\@refill//g;
     s/\@gol//g;
     s/\@\*\s*\n?//g;
-
-    # Anchors are thrown away
-    s/\@anchor\{(?:[^\}]*)\}//g;
 
     # @uref can take one, two, or three arguments, with different
     # semantics each time.  @url and @email are just like @uref with

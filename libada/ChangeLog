@@ -1,61 +1,14 @@
-2007-07-19  Release Manager
+2005-07-07  Release Manager
 
-	* GCC 4.2.1 released.
-
-2007-05-13  Release Manager
-
-	* GCC 4.2.0 released.
-
-2006-11-16  Paolo Bonzini  <bonzini@gnu.org>
-
-	PR bootstrap/29802
-	* configure.ac: Call GCC_TOPLEV_SUBDIRS.
-	* configure: Regenerate.
-	* Makefile.in: Replace host_subdir.
-
-2006-10-16  Brooks Moses  <bmoses@stanford.edu>
-
-	* Makefile.in: Add dummy "pdf" target.
-
-2006-05-23  Carlos O'Donell  <carlos@codesourcery.com>
-
-	* Makefile.in: Add install-html target.
-
-2005-12-05  Paolo Bonzini  <bonzini@gnu.org>
-
-	* Makefile.in (FLAGS_TO_PASS): Add GCC_FOR_TARGET.
+	* GCC 4.0.1 released.
 
 2005-04-27  James E Wilson  <wilson@specifixinc.com>
 
 	* Makefile.in (html): New.
 
-2005-02-28  Paolo Bonzini  <bonzini@gnu.org>
+2005-04-20  Release Manager
 
-	PR bootstrap/17383
-	* Makefile.in (GCC_DIR): Add $(HOST_SUBDIR) to the definition.
-
-2004-12-03  Nathanael Nerode  <neroden@gcc.gnu.org>
-
-	* Makefile.in: Add stamp file for building libada, to avoid
-	duplicate builds every time all-gnattools is called.
-
-2004-12-02  Nathanael Nerode  <neroden@gcc.gnu.org>
-
-	* Makefile.in: Build gcc/ada/Makefile (by running gcc/ada/configure)
-	here.
-
-2004-08-16  Nathanael Nerode  <neroden@gcc.gnu.org>
-
-	* configure.ac: Replace AC_CANONICAL_SYSTEM with _BUILD, _HOST,
-	_TARGET.
-	* configure: Regenerate.
-
-2004-07-18  Nathanael Nerode  <neroden@gcc.gnu.org>
-
-	* configure.ac, Makefile.in: Remove gnattools-specific code
-	(see gnattools directory).
-	* Makefile.in: Remove dead rts-* targets.
-	* configure: Regenerate.
+	* GCC 4.0.0 released.
 
 2004-05-25  Daniel Jacobowitz  <drow@false.org>
 

@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,7 +39,6 @@ exception statement from your version. */
 
 package gnu.java.lang;
 
-import java.io.File;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 
@@ -92,10 +91,8 @@ final class MainThread extends Thread
       {
         try
 	  {
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
-	    // Permit main class name to be specified in file-system format.
-	    klass_name = klass_name.replace(File.separatorChar, '.');
-            klass = cl.loadClass(klass_name);
+	    klass = Class.forName(klass_name, true,
+				  ClassLoader.getSystemClassLoader());
 	  }
 	catch (ClassNotFoundException x)
 	  {
@@ -131,7 +128,5 @@ final class MainThread extends Thread
     return mainName;
   }
 
-  // Note: this function name is known to the stack tracing code.
-  // You shouldn't change this without also updating stacktrace.cc.
   private native void call_main();
 }

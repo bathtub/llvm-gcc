@@ -9,7 +9,7 @@ struct A
 
 template <typename T> struct B : T
 {
-  B() { foo(T()); } // { dg-error "cannot convert" }
+  B() { foo(T()); }
 };
 
 B<A> b;

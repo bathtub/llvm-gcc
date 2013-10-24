@@ -12,6 +12,4 @@ int FOO( /* { dg-error "parse error|syntax error|expected" "error on this line" 
 	), bar;
 
 int baz FOO /* { dg-error "parse error|syntax error|expected" "error on this line" } */
-;
-
-/* { dg-final { cleanup-saved-temps } } */
+; /* { dg-warning "no type or storage class" "warning on this line" } */

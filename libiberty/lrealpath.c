@@ -17,8 +17,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /*
 
@@ -73,7 +73,8 @@ extern char *canonicalize_file_name (const char *);
 #endif
 
 char *
-lrealpath (const char *filename)
+lrealpath (filename)
+     const char *filename;
 {
   /* Method 1: The system has a compile time upper bound on a filename
      path.  Use that and realpath() to canonicalize the name.  This is
@@ -117,7 +118,7 @@ lrealpath (const char *filename)
       {
 	/* PATH_MAX is bounded.  */
 	char *buf, *rp, *ret;
-	buf = (char *) malloc (path_max);
+	buf = malloc (path_max);
 	if (buf == NULL)
 	  return NULL;
 	rp = realpath (filename, buf);

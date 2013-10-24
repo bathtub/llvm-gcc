@@ -1,14 +1,19 @@
+/* APPLE LOCAL file mainline */
 /* Check if the @defs() construct preserves the correct
    layout of bitfields.  */
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-options "-lobjc -Wpadded" } */
 /* { dg-do run } */
+/* APPLE LOCAL radar 4894756 */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */ 
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
-#include <stdlib.h>
-#include <string.h>
-
+extern "C" {
+  extern void abort(void);
+  extern int strcmp(const char *str1, const char *str2);
+}
 #define CHECK_IF(expr) if(!(expr)) abort()
 
 enum Enum { one, two, three, four };

@@ -1,8 +1,9 @@
+/* APPLE LOCAL file mainline */
 /* { dg-do compile } */
-
 /* Another gimplifier ICE... */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @interface MyView: Object {
   int _frame;

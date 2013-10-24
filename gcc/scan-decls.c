@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
    Written by Per Bothner <bothner@cygnus.com>, July 1993.  */
 
@@ -38,6 +38,13 @@ int extern_C_braces_length = 0;
 #define MAX_EXTERN_C_BRACES  200
 char extern_C_braces[MAX_EXTERN_C_BRACES];
 #define in_extern_C_brace (extern_C_braces_length>0)
+
+/* APPLE LOCAL begin CW asm blocks */
+/* Dummies needed because we use them in cpplib, yuck.  */
+int flag_iasm_blocks;
+int iasm_state;
+bool iasm_in_operands;
+/* APPLE LOCAL end CW asm blocks */
 
 /* True if the function declaration currently being scanned is
    prefixed by extern "C".  */
@@ -202,8 +209,6 @@ scan_decls (cpp_reader *pfile, int argc ATTRIBUTE_UNUSED,
 		 parameter list */
 	      while (token->type != CPP_SEMICOLON && token->type != CPP_EOF)
 		token = get_a_token (pfile);
-	      if (token->type == CPP_EOF)
-		return 0;
 	      goto new_statement;
 	    }
 	  break;

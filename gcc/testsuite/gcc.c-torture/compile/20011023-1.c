@@ -1,3 +1,5 @@
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-fnested-functions" } */
 /* Test whether tree inlining works with prototyped nested functions.  */
 
 extern void foo (char *x);

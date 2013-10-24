@@ -1,10 +1,11 @@
+/* APPLE LOCAL file mainline */
 /* Test for passing arguments to ObjC methods in the context of template
    expansion.  */
 /* Contributed by Ziemowit Laski  <zlaski@apple.com>.  */
-
 /* { dg-do run } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 
 #define CHECK_IF(expr) if(!(expr)) abort()

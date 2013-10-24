@@ -1,5 +1,6 @@
 /* { dg-do compile } */
-/* { dg-options "-fno-unit-at-a-time" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-fno-unit-at-a-time -fnested-functions" } */
 
 int f(int i)
 {

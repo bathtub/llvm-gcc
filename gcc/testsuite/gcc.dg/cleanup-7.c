@@ -1,5 +1,6 @@
 /* { dg-do run } */
-/* { dg-options "" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-O2 -g -fnested-functions" } */
 /* Verify that the search for function happens in the proper scope.  */
 
 extern void exit(int);

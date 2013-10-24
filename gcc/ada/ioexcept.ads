@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --                        I O _ E X C E P T I O N S                         --
 --                                                                          --
@@ -13,12 +13,6 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-pragma Ada_2005;
---  Explicit setting of Ada 2005 mode is required here, since we want to with a
---  child unit (not possible in Ada 83 mode), and Text_IO is not considered to
---  be an internal unit that is automatically compiled in Ada 2005 mode (since
---  a user is allowed to redeclare IO_Exceptions).
-
+pragma Ada_95;
 with Ada.IO_Exceptions;
-
 package IO_Exceptions renames Ada.IO_Exceptions;

@@ -1,4 +1,4 @@
-// { dg-do assemble }
+// { dg-do assemble { xfail *-*-* } }
 // regression test -
 
 // by Paul Burchard <burchard@pobox.com>, Level Set Systems, Inc.

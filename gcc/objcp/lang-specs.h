@@ -1,5 +1,6 @@
+/* APPLE LOCAL file mainline */
 /* Definitions for specs for Objective-C++.
-   Copyright (C) 2005 Free Software Foundation, Inc.
+   Copyright (C) 2004 Free Software Foundation, Inc.
    Contributed by Ziemowit Laski  <zlaski@apple.com>
 
 This file is part of GCC.
@@ -16,8 +17,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* This is the contribution to the `default_compilers' array in gcc.c for
    obj-c++.  It is based on -- and should be kept in sync with -- the g++
@@ -37,7 +38,8 @@ Boston, MA 02110-1301, USA.  */
       cc1objplus %{save-temps|no-integrated-cpp:-fpreprocessed %{save-temps:%b.mii} %{!save-temps:%g.mii}}\
 	      %{!save-temps:%{!no-integrated-cpp:%(cpp_unique_options)}}\
 	%(cc1_options) %2 %{+e1*}\
-        -o %g.s %{!o*:--output-pch=%i.gch} %W{o*:--output-pch=%*}%V}}}",
+        "/* APPLE LOCAL ss2 */" \
+        -o %g.s %{!o*:--output-pch=%i.gch} %W{o*:--output-pch=%*} %{fsave-repository=*: \n as %a -o %w%* %g.s %A}%V}}}",
      CPLUSPLUS_CPP_SPEC, 0, 0},
   {"@objective-c++",
     "%{E|M|MM:cc1objplus -E %(cpp_options) %2 %(cpp_debug_options)}\

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1996-2006, Free Software Foundation, Inc.         --
+--          Copyright (C) 1996-2004 Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS For A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -40,7 +40,7 @@
 with Unchecked_Conversion;
 
 package System.Aux_DEC is
-   pragma Preelaborate;
+pragma Elaborate_Body (Aux_DEC);
 
    subtype Short_Address is Address;
    --  In some versions of System.Aux_DEC, notably that for VMS on the
@@ -209,13 +209,13 @@ package System.Aux_DEC is
    type Unsigned_Quadword_Array is
       array (Integer range <>) of Unsigned_Quadword;
 
-   function To_Address (X : Integer) return Address;
+   function To_Address      (X : Integer)           return Address;
    pragma Pure_Function (To_Address);
 
    function To_Address_Long (X : Unsigned_Longword) return Address;
    pragma Pure_Function (To_Address_Long);
 
-   function To_Integer (X : Address) return Integer;
+   function To_Integer      (X : Address)           return Integer;
 
    function To_Unsigned_Longword (X : Address)     return Unsigned_Longword;
    function To_Unsigned_Longword (X : AST_Handler) return Unsigned_Longword;
@@ -288,17 +288,17 @@ package System.Aux_DEC is
    procedure Clear_Interlocked
      (Bit          : in out Boolean;
       Old_Value    : out Boolean;
-      Retry_Count  : Natural;
+      Retry_Count  : in Natural;
       Success_Flag : out Boolean);
 
    procedure Set_Interlocked
      (Bit          : in out Boolean;
       Old_Value    : out Boolean;
-      Retry_Count  : Natural;
+      Retry_Count  : in Natural;
       Success_Flag : out Boolean);
 
    procedure Add_Interlocked
-     (Addend       : Short_Integer;
+     (Addend       : in Short_Integer;
       Augend       : in out Aligned_Word;
       Sign         : out Integer);
 
@@ -322,67 +322,67 @@ package System.Aux_DEC is
 
    procedure Add_Atomic
      (To           : in out Aligned_Integer;
-      Amount       : Integer);
+      Amount       : in Integer);
 
    procedure Add_Atomic
      (To           : in out Aligned_Integer;
-      Amount       : Integer;
-      Retry_Count  : Natural;
+      Amount       : in Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Integer;
       Success_Flag : out Boolean);
 
    procedure Add_Atomic
      (To           : in out Aligned_Long_Integer;
-      Amount       : Long_Integer);
+      Amount       : in Long_Integer);
 
    procedure Add_Atomic
      (To           : in out Aligned_Long_Integer;
-      Amount       : Long_Integer;
-      Retry_Count  : Natural;
+      Amount       : in Long_Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Long_Integer;
       Success_Flag : out Boolean);
 
    procedure And_Atomic
      (To           : in out Aligned_Integer;
-      From         : Integer);
+      From         : in Integer);
 
    procedure And_Atomic
      (To           : in out Aligned_Integer;
-      From         : Integer;
-      Retry_Count  : Natural;
+      From         : in Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Integer;
       Success_Flag : out Boolean);
 
    procedure And_Atomic
      (To           : in out Aligned_Long_Integer;
-      From         : Long_Integer);
+      From         : in Long_Integer);
 
    procedure And_Atomic
      (To           : in out Aligned_Long_Integer;
-      From         : Long_Integer;
-      Retry_Count  : Natural;
+      From         : in Long_Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Long_Integer;
       Success_Flag : out Boolean);
 
    procedure Or_Atomic
      (To           : in out Aligned_Integer;
-      From         : Integer);
+      From         : in Integer);
 
    procedure Or_Atomic
      (To           : in out Aligned_Integer;
-      From         : Integer;
-      Retry_Count  : Natural;
+      From         : in Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Integer;
       Success_Flag : out Boolean);
 
    procedure Or_Atomic
      (To           : in out Aligned_Long_Integer;
-      From         : Long_Integer);
+      From         : in Long_Integer);
 
    procedure Or_Atomic
      (To           : in out Aligned_Long_Integer;
-      From         : Long_Integer;
-      Retry_Count  : Natural;
+      From         : in Long_Integer;
+      Retry_Count  : in Natural;
       Old_Value    : out Long_Integer;
       Success_Flag : out Boolean);
 
@@ -407,22 +407,22 @@ package System.Aux_DEC is
       OK_Empty       => +2);
 
    procedure Insqhi
-     (Item   : Address;
-      Header : Address;
+     (Item   : in  Address;
+      Header : in  Address;
       Status : out Insq_Status);
 
    procedure Remqhi
-     (Header : Address;
+     (Header : in  Address;
       Item   : out Address;
       Status : out Remq_Status);
 
    procedure Insqti
-     (Item   : Address;
-      Header : Address;
+     (Item   : in  Address;
+      Header : in  Address;
       Status : out Insq_Status);
 
    procedure Remqti
-     (Header : Address;
+     (Header : in  Address;
       Item   : out Address;
       Status : out Remq_Status);
 

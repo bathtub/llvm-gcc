@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -34,24 +34,18 @@ Boston, MA 02110-1301, USA.  */
 #include "libgfortran.h"
 
 
-#if defined (HAVE_GFC_LOGICAL_4) && defined (HAVE_GFC_INTEGER_8)
-
-
-extern void count_8_l4 (gfc_array_i8 * const restrict, 
-	gfc_array_l4 * const restrict, const index_type * const restrict);
+extern void count_8_l4 (gfc_array_i8 *, gfc_array_l4 *, index_type *);
 export_proto(count_8_l4);
 
 void
-count_8_l4 (gfc_array_i8 * const restrict retarray, 
-	gfc_array_l4 * const restrict array, 
-	const index_type * const restrict pdim)
+count_8_l4 (gfc_array_i8 *retarray, gfc_array_l4 *array, index_type *pdim)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type sstride[GFC_MAX_DIMENSIONS];
   index_type dstride[GFC_MAX_DIMENSIONS];
-  const GFC_LOGICAL_4 * restrict base;
-  GFC_INTEGER_8 * restrict dest;
+  GFC_LOGICAL_4 *base;
+  GFC_INTEGER_8 *dest;
   index_type rank;
   index_type n;
   index_type len;
@@ -62,6 +56,11 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
 
+  /* TODO:  It should be a front end job to correctly set the strides.  */
+
+  if (array->dim[0].stride == 0)
+    array->dim[0].stride = 1;
+
   len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
   delta = array->dim[dim].stride;
 
@@ -69,24 +68,16 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
     {
       sstride[n] = array->dim[n].stride;
       extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
     }
   for (n = dim; n < rank; n++)
     {
       sstride[n] = array->dim[n + 1].stride;
       extent[n] =
         array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
     }
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
-
       for (n = 0; n < rank; n++)
         {
           retarray->dim[n].lbound = 0;
@@ -97,24 +88,18 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
             retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
         }
 
-      retarray->offset = 0;
+      retarray->data
+	 = internal_malloc_size (sizeof (GFC_INTEGER_8)
+		 		 * retarray->dim[rank-1].stride
+				 * extent[rank-1]);
+      retarray->base = 0;
       retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
-
-      alloc_size = sizeof (GFC_INTEGER_8) * retarray->dim[rank-1].stride
-    		   * extent[rank-1];
-
-      if (alloc_size == 0)
-	{
-	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
-	  return;
-	}
-      else
-	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
+      if (retarray->dim[0].stride == 0)
+	retarray->dim[0].stride = 1;
+
       if (rank != GFC_DESCRIPTOR_RANK (retarray))
 	runtime_error ("rank of return array incorrect");
     }
@@ -132,7 +117,7 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
 
   while (base)
     {
-      const GFC_LOGICAL_4 * restrict src;
+      GFC_LOGICAL_4 *src;
       GFC_INTEGER_8 result;
       src = base;
       {
@@ -162,7 +147,7 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           base -= sstride[n] * extent[n];
           dest -= dstride[n] * extent[n];
           n++;
@@ -182,4 +167,3 @@ count_8_l4 (gfc_array_i8 * const restrict retarray,
     }
 }
 
-#endif

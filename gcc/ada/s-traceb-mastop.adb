@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 1999-2005, AdaCore                     --
+--           Copyright (C) 1999-2003 Ada Core Technologies, Inc.            --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,7 +31,8 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This version uses System.Machine_State_Operations routines
+--  This version assumes that System.Machine_State_Operations.Pop_Frame can
+--  work with the Info parameter being null.
 
 with System.Machine_State_Operations;
 
@@ -72,7 +73,7 @@ package body System.Traceback is
          Code := Get_Code_Loc (M);
          exit when Code = Null_Address or else N_Skips = Skip_Frames;
 
-         Pop_Frame (M);
+         Pop_Frame (M, System.Null_Address);
          N_Skips := N_Skips + 1;
       end loop;
 
@@ -89,7 +90,7 @@ package body System.Traceback is
             Trace (Len) := Code;
          end if;
 
-         Pop_Frame (M);
+         Pop_Frame (M, System.Null_Address);
       end loop;
 
       Free_Machine_State (M);
@@ -100,8 +101,8 @@ package body System.Traceback is
    ------------------
 
    function C_Call_Chain
-     (Traceback : System.Address;
-      Max_Len   : Natural) return Natural
+     (Traceback   : System.Address;
+      Max_Len     : Natural) return Natural
    is
       Val : Natural;
    begin

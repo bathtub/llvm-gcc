@@ -1,7 +1,6 @@
-// Low-level functions for atomic operations: sh version  -*- C++ -*-
+// Low-level functions for atomic operations: Generic version  -*- C++ -*-
 
-// Copyright (C) 1999, 2001, 2002, 2003, 2004, 2005, 2006
-// Free Software Foundation, Inc.
+// Copyright (C) 1999, 2001, 2002, 2003 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -16,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -70,38 +69,55 @@ __atomic_add (volatile _Atomic_word* __mem, int __val)
       : "r0");
 }
 
-#else /* !__SH4A__ */
+#else
 
 /* This is generic/atomicity.h */
 
-#include <ext/atomicity.h>
-#include <ext/concurrence.h>
+#include <bits/gthr.h>
 
-namespace 
+#define _GLIBCPP_NEED_GENERIC_MUTEX
+
+typedef int _Atomic_word;
+
+namespace __gnu_cxx
 {
-  __gnu_cxx::__mutex atomic_mutex;
-} // anonymous namespace
+  extern __gthread_mutex_t _Atomic_add_mutex;
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
+#ifndef __GTHREAD_MUTEX_INIT
+  extern __gthread_once_t _Atomic_add_mutex_once;
+  extern void __gthread_atomic_add_mutex_once();
+#endif
+}
 
-  _Atomic_word
-  __attribute__ ((__unused__))
-  __exchange_and_add(volatile _Atomic_word* __mem, int __val)
-  {
-    __gnu_cxx::__scoped_lock sentry(atomic_mutex);
-    _Atomic_word __result;
-    __result = *__mem;
-    *__mem += __val;
-    return __result;
-  }
+static inline _Atomic_word
+__attribute__ ((__unused__))
+__exchange_and_add (volatile _Atomic_word* __mem, int __val)
+{
+#ifndef __GTHREAD_MUTEX_INIT
+  __gthread_once (&__gnu_cxx::_Atomic_add_mutex_once,
+                  __gnu_cxx::__gthread_atomic_add_mutex_once);
+#endif
 
-  void
-  __attribute__ ((__unused__))
-  __atomic_add(volatile _Atomic_word* __mem, int __val)
-  { __exchange_and_add(__mem, __val); }
+  _Atomic_word __result;
 
-_GLIBCXX_END_NAMESPACE
+  __gthread_mutex_lock (&__gnu_cxx::_Atomic_add_mutex);
 
-#endif /* !__SH4A__ */
+  __result = *__mem;
+  *__mem += __val;
+
+  __gthread_mutex_unlock (&__gnu_cxx::_Atomic_add_mutex);
+  return __result;
+}
+
+
+static inline void
+__attribute__ ((__unused__))
+__atomic_add (volatile _Atomic_word* __mem, int __val)
+{
+  (void) __exchange_and_add (__mem, __val);
+}
+
+
+#endif
 
 #endif /* atomicity.h */

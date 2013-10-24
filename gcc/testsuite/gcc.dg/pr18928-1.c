@@ -1,5 +1,5 @@
 /* PR rtl-optimization/18928 */
-/* { dg-do compile { target fpic } } */
+/* { dg-do compile { target i?86-*-linux* } } */
 /* { dg-options "-O2 -fPIC" } */
 
 const char *toHex( unsigned short u )

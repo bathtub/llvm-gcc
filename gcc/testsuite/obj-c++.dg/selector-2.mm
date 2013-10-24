@@ -1,8 +1,10 @@
+/* APPLE LOCAL file mainline */
 /* Test that we don't ICE when issuing a -Wselector warning.  */
 /* { dg-options "-Wselector" } */
 /* { dg-do compile } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @interface Foo
 @end

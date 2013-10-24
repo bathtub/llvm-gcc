@@ -1,7 +1,6 @@
 // Hashtable implementation used by containers -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -16,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -71,8 +70,8 @@
 #include <bits/stl_function.h>
 #include <ext/hash_fun.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
-
+namespace __gnu_cxx
+{
   using std::size_t;
   using std::ptrdiff_t;
   using std::forward_iterator_tag;
@@ -84,27 +83,27 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   using std::pair;
   using std::__iterator_category;
 
-  template<class _Val>
+  template <class _Val>
     struct _Hashtable_node
     {
       _Hashtable_node* _M_next;
       _Val _M_val;
     };
 
-  template<class _Val, class _Key, class _HashFcn, class _ExtractKey, 
-	   class _EqualKey, class _Alloc = std::allocator<_Val> >
+  template <class _Val, class _Key, class _HashFcn, class _ExtractKey, 
+	    class _EqualKey, class _Alloc = std::allocator<_Val> >
     class hashtable;
 
-  template<class _Val, class _Key, class _HashFcn,
-	   class _ExtractKey, class _EqualKey, class _Alloc>
+  template <class _Val, class _Key, class _HashFcn,
+	    class _ExtractKey, class _EqualKey, class _Alloc>
     struct _Hashtable_iterator;
 
-  template<class _Val, class _Key, class _HashFcn,
-	   class _ExtractKey, class _EqualKey, class _Alloc>
+  template <class _Val, class _Key, class _HashFcn,
+	    class _ExtractKey, class _EqualKey, class _Alloc>
     struct _Hashtable_const_iterator;
 
-  template<class _Val, class _Key, class _HashFcn,
-	   class _ExtractKey, class _EqualKey, class _Alloc>
+  template <class _Val, class _Key, class _HashFcn,
+	    class _ExtractKey, class _EqualKey, class _Alloc>
     struct _Hashtable_iterator
     {
       typedef hashtable<_Val, _Key, _HashFcn, _ExtractKey, _EqualKey, _Alloc>
@@ -127,9 +126,9 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       _Hashtable* _M_ht;
 
       _Hashtable_iterator(_Node* __n, _Hashtable* __tab)
-      : _M_cur(__n), _M_ht(__tab) { }
+      : _M_cur(__n), _M_ht(__tab) {}
 
-      _Hashtable_iterator() { }
+      _Hashtable_iterator() {}
 
       reference
       operator*() const
@@ -154,8 +153,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       { return _M_cur != __it._M_cur; }
     };
 
-  template<class _Val, class _Key, class _HashFcn,
-	   class _ExtractKey, class _EqualKey, class _Alloc>
+  template <class _Val, class _Key, class _HashFcn,
+	    class _ExtractKey, class _EqualKey, class _Alloc>
     struct _Hashtable_const_iterator
     {
       typedef hashtable<_Val, _Key, _HashFcn, _ExtractKey, _EqualKey, _Alloc>
@@ -179,12 +178,12 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       const _Hashtable* _M_ht;
 
       _Hashtable_const_iterator(const _Node* __n, const _Hashtable* __tab)
-      : _M_cur(__n), _M_ht(__tab) { }
+      : _M_cur(__n), _M_ht(__tab) {}
 
-      _Hashtable_const_iterator() { }
+      _Hashtable_const_iterator() {}
 
       _Hashtable_const_iterator(const iterator& __it)
-      : _M_cur(__it._M_cur), _M_ht(__it._M_ht) { }
+      : _M_cur(__it._M_cur), _M_ht(__it._M_ht) {}
 
       reference
       operator*() const
@@ -231,13 +230,14 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     return pos == __last ? *(__last - 1) : *pos;
   }
 
-  // Forward declaration of operator==.  
-  template<class _Val, class _Key, class _HF, class _Ex,
-	   class _Eq, class _All>
+  // Forward declaration of operator==.
+  
+  template <class _Val, class _Key, class _HF, class _Ex,
+	    class _Eq, class _All>
     class hashtable;
 
-  template<class _Val, class _Key, class _HF, class _Ex,
-	   class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex,
+	    class _Eq, class _All>
     bool
     operator==(const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht1,
 	       const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht2);
@@ -249,9 +249,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   // allocator type are identical.  This is because, for hashtables,
   // this extra storage is negligible.  Additionally, a base class
   // wouldn't serve any other purposes; it wouldn't, for example,
-  // simplify the exception-handling code.  
-  template<class _Val, class _Key, class _HashFcn,
-	   class _ExtractKey, class _EqualKey, class _Alloc>
+  // simplify the exception-handling code.
+  
+  template <class _Val, class _Key, class _HashFcn,
+	    class _ExtractKey, class _EqualKey, class _Alloc>
     class hashtable
     {
     public:
@@ -407,7 +408,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       end() const
       { return const_iterator(0, this); }
 
-      template<class _Vl, class _Ky, class _HF, class _Ex, class _Eq,
+      template <class _Vl, class _Ky, class _HF, class _Ex, class _Eq,
 		class _Al>
         friend bool
         operator==(const hashtable<_Vl, _Ky, _HF, _Ex, _Eq, _Al>&,
@@ -426,7 +427,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       elems_in_bucket(size_type __bucket) const
       {
 	size_type __result = 0;
-	for (_Node* __n = _M_buckets[__bucket]; __n; __n = __n->_M_next)
+	for (_Node* __cur = _M_buckets[__bucket]; __cur; __cur = __cur->_M_next)
 	  __result += 1;
 	return __result;
       }
@@ -451,17 +452,17 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       iterator
       insert_equal_noresize(const value_type& __obj);
 
-      template<class _InputIterator>
+      template <class _InputIterator>
         void
         insert_unique(_InputIterator __f, _InputIterator __l)
         { insert_unique(__f, __l, __iterator_category(__f)); }
 
-      template<class _InputIterator>
+      template <class _InputIterator>
         void
         insert_equal(_InputIterator __f, _InputIterator __l)
         { insert_equal(__f, __l, __iterator_category(__f)); }
 
-      template<class _InputIterator>
+      template <class _InputIterator>
         void
         insert_unique(_InputIterator __f, _InputIterator __l,
 		      input_iterator_tag)
@@ -470,7 +471,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    insert_unique(*__f);
 	}
 
-      template<class _InputIterator>
+      template <class _InputIterator>
         void
         insert_equal(_InputIterator __f, _InputIterator __l,
 		     input_iterator_tag)
@@ -479,7 +480,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    insert_equal(*__f);
 	}
 
-      template<class _ForwardIterator>
+      template <class _ForwardIterator>
         void
         insert_unique(_ForwardIterator __f, _ForwardIterator __l,
 		      forward_iterator_tag)
@@ -490,7 +491,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    insert_unique_noresize(*__f);
 	}
 
-      template<class _ForwardIterator>
+      template <class _ForwardIterator>
         void
         insert_equal(_ForwardIterator __f, _ForwardIterator __l,
 		     forward_iterator_tag)
@@ -512,7 +513,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	for (__first = _M_buckets[__n];
 	     __first && !_M_equals(_M_get_key(__first->_M_val), __key);
 	     __first = __first->_M_next)
-	  { }
+	  {}
 	return iterator(__first, this);
       }
 
@@ -524,7 +525,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	for (__first = _M_buckets[__n];
 	     __first && !_M_equals(_M_get_key(__first->_M_val), __key);
 	     __first = __first->_M_next)
-	  { }
+	  {}
 	return const_iterator(__first, this);
       }
 
@@ -632,7 +633,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       _M_copy_from(const hashtable& __ht);
     };
 
-  template<class _Val, class _Key, class _HF, class _ExK, class _EqK,
+  template <class _Val, class _Key, class _HF, class _ExK, class _EqK,
 	    class _All>
     _Hashtable_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>&
     _Hashtable_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>::
@@ -649,7 +650,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return *this;
     }
 
-  template<class _Val, class _Key, class _HF, class _ExK, class _EqK,
+  template <class _Val, class _Key, class _HF, class _ExK, class _EqK,
 	    class _All>
     inline _Hashtable_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>
     _Hashtable_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>::
@@ -660,7 +661,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return __tmp;
     }
 
-  template<class _Val, class _Key, class _HF, class _ExK, class _EqK,
+  template <class _Val, class _Key, class _HF, class _ExK, class _EqK,
 	    class _All>
     _Hashtable_const_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>&
     _Hashtable_const_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>::
@@ -677,7 +678,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return *this;
     }
 
-  template<class _Val, class _Key, class _HF, class _ExK, class _EqK,
+  template <class _Val, class _Key, class _HF, class _ExK, class _EqK,
 	    class _All>
     inline _Hashtable_const_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>
     _Hashtable_const_iterator<_Val, _Key, _HF, _ExK, _EqK, _All>::
@@ -688,7 +689,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return __tmp;
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     bool
     operator==(const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht1,
 	       const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht2)
@@ -705,7 +706,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	  // Check same length of lists
 	  for (; __cur1 && __cur2;
 	       __cur1 = __cur1->_M_next, __cur2 = __cur2->_M_next)
-	    { } 
+	    {}
 	  if (__cur1 || __cur2)
 	    return false;
 	  // Now check one's elements are in the other
@@ -713,7 +714,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	       __cur1 = __cur1->_M_next)
 	    {
 	      bool _found__cur1 = false;
-	      for (__cur2 = __ht2._M_buckets[__n];
+	      for (_Node* __cur2 = __ht2._M_buckets[__n];
 		   __cur2; __cur2 = __cur2->_M_next)
 		{
 		  if (__cur1->_M_val == __cur2->_M_val)
@@ -729,20 +730,20 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return true;
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     inline bool
     operator!=(const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht1,
 	       const hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>& __ht2)
     { return !(__ht1 == __ht2); }
 
-  template<class _Val, class _Key, class _HF, class _Extract, class _EqKey,
+  template <class _Val, class _Key, class _HF, class _Extract, class _EqKey,
 	    class _All>
     inline void
     swap(hashtable<_Val, _Key, _HF, _Extract, _EqKey, _All>& __ht1,
 	 hashtable<_Val, _Key, _HF, _Extract, _EqKey, _All>& __ht2)
     { __ht1.swap(__ht2); }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     pair<typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::iterator, bool>
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     insert_unique_noresize(const value_type& __obj)
@@ -761,7 +762,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return pair<iterator, bool>(iterator(__tmp, this), true);
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::iterator
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     insert_equal_noresize(const value_type& __obj)
@@ -786,7 +787,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return iterator(__tmp, this);
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::reference
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     find_or_insert(const value_type& __obj)
@@ -807,7 +808,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return __tmp->_M_val;
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     pair<typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::iterator,
 	 typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::iterator>
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
@@ -833,7 +834,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return _Pii(end(), end());
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     pair<typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::const_iterator,
 	 typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::const_iterator>
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
@@ -862,7 +863,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return _Pii(end(), end());
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     typename hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::size_type
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     erase(const key_type& __key)
@@ -902,7 +903,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       return __erased;
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     erase(const iterator& __it)
     {
@@ -940,7 +941,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     erase(iterator __first, iterator __last)
@@ -965,7 +966,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     inline void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     erase(const_iterator __first, const_iterator __last)
@@ -976,14 +977,14 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 		     const_cast<hashtable*>(__last._M_ht)));
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     inline void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     erase(const const_iterator& __it)
     { erase(iterator(const_cast<_Node*>(__it._M_cur),
 		     const_cast<hashtable*>(__it._M_ht))); }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     resize(size_type __num_elements_hint)
@@ -1030,7 +1031,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     _M_erase_bucket(const size_type __n, _Node* __first, _Node* __last)
@@ -1055,7 +1056,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     _M_erase_bucket(const size_type __n, _Node* __last)
@@ -1071,7 +1072,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	}
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     clear()
@@ -1090,7 +1091,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       _M_num_elements = 0;
     }
 
-  template<class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
+  template <class _Val, class _Key, class _HF, class _Ex, class _Eq, class _All>
     void
     hashtable<_Val, _Key, _HF, _Ex, _Eq, _All>::
     _M_copy_from(const hashtable& __ht)
@@ -1124,7 +1125,6 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	  __throw_exception_again;
 	}
     }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace __gnu_cxx
 
 #endif

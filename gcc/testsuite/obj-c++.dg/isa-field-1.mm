@@ -1,7 +1,9 @@
+/* APPLE LOCAL file mainline */
 /* Ensure there are no bizarre difficulties with accessing the 'isa' field of objects.  */
 /* { dg-do compile } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @interface Object (Test)
 - (Class) test1: (id)object;
@@ -14,12 +16,12 @@
 @implementation Object (Test)
 
 Class test1(id object) {
-  Class cls = object->isa;
-  return cls;
+    Class cls = object->isa;
+    return cls;
 }
 - (Class) test1: (id)object {
-  Class cls = object->isa;
-  return cls;
+    Class cls = object->isa;
+    return cls;
 }
 
 @end
@@ -27,17 +29,17 @@ Class test1(id object) {
 @implementation Derived
 
 Class test2(id object) {
-  Class cls = object->isa;
-  return cls;
+    Class cls = object->isa;
+    return cls;
 }
 - (Class) test2: (id)object {
-  Class cls = object->isa;
-  return cls;
+    Class cls = object->isa;
+    return cls;
 }
 
 @end
 
 Class test3(id object) {
-  Class cls = object->isa;
-  return cls;
+    Class cls = object->isa;
+    return cls;
 }

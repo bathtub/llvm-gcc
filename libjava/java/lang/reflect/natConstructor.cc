@@ -1,6 +1,6 @@
 // natConstructor.cc - Native code for Constructor class.
 
-/* Copyright (C) 1999, 2000, 2001, 2002, 2003, 2006  Free Software Foundation
+/* Copyright (C) 1999, 2000, 2001, 2002, 2003  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -12,7 +12,6 @@ details.  */
 
 #include <gcj/cni.h>
 #include <jvm.h>
-#include <java-stack.h>
 
 #include <java/lang/ArrayIndexOutOfBoundsException.h>
 #include <java/lang/IllegalAccessException.h>
@@ -24,9 +23,10 @@ details.  */
 #include <gcj/method.h>
 
 jint
-java::lang::reflect::Constructor::getModifiersInternal ()
+java::lang::reflect::Constructor::getModifiers ()
 {
-  return _Jv_FromReflectedConstructor (this)->accflags;
+  // Ignore all unknown flags.
+  return _Jv_FromReflectedConstructor (this)->accflags & Modifier::ALL_FLAGS;
 }
 
 void
@@ -55,7 +55,20 @@ java::lang::reflect::Constructor::newInstance (jobjectArray args)
   // Check accessibility, if required.
   if (! (Modifier::isPublic (meth->accflags) || this->isAccessible()))
     {
-      Class *caller = _Jv_StackTrace::GetCallingClass (&Constructor::class$);
+      gnu::gcj::runtime::StackTrace *t 
+	= new gnu::gcj::runtime::StackTrace(4);
+      Class *caller = NULL;
+      try
+	{
+	  for (int i = 1; !caller; i++)
+	    {
+	      caller = t->classAt (i);
+	    }
+	}
+      catch (::java::lang::ArrayIndexOutOfBoundsException *e)
+	{
+	}
+
       if (! _Jv_CheckAccess(caller, declaringClass, meth->accflags))
 	throw new IllegalAccessException;
     }

@@ -1,7 +1,6 @@
 // Vector implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -16,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -66,8 +65,8 @@
 #include <bits/functexcept.h>
 #include <bits/concept_check.h>
 
-_GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
-
+namespace _GLIBCXX_STD
+{
   /**
    *  @if maint
    *  See bits/stl_deque.h's _Deque_base for an explanation.
@@ -76,33 +75,23 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
   template<typename _Tp, typename _Alloc>
     struct _Vector_base
     {
-      typedef typename _Alloc::template rebind<_Tp>::other _Tp_alloc_type;
-
       struct _Vector_impl 
-      : public _Tp_alloc_type
+      : public _Alloc
       {
 	_Tp*           _M_start;
 	_Tp*           _M_finish;
 	_Tp*           _M_end_of_storage;
-	_Vector_impl(_Tp_alloc_type const& __a)
-	: _Tp_alloc_type(__a), _M_start(0), _M_finish(0), _M_end_of_storage(0)
+	_Vector_impl(_Alloc const& __a)
+	: _Alloc(__a), _M_start(0), _M_finish(0), _M_end_of_storage(0)
 	{ }
       };
       
     public:
       typedef _Alloc allocator_type;
 
-      _Tp_alloc_type&
-      _M_get_Tp_allocator()
-      { return *static_cast<_Tp_alloc_type*>(&this->_M_impl); }
-
-      const _Tp_alloc_type&
-      _M_get_Tp_allocator() const
-      { return *static_cast<const _Tp_alloc_type*>(&this->_M_impl); }
-
       allocator_type
       get_allocator() const
-      { return allocator_type(_M_get_Tp_allocator()); }
+      { return *static_cast<const _Alloc*>(&this->_M_impl); }
 
       _Vector_base(const allocator_type& __a)
       : _M_impl(__a)
@@ -159,20 +148,17 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
     class vector : protected _Vector_base<_Tp, _Alloc>
     {
       // Concept requirements.
-      typedef typename _Alloc::value_type                _Alloc_value_type;
       __glibcxx_class_requires(_Tp, _SGIAssignableConcept)
-      __glibcxx_class_requires2(_Tp, _Alloc_value_type, _SameTypeConcept)
-      
-      typedef _Vector_base<_Tp, _Alloc>			 _Base;
-      typedef vector<_Tp, _Alloc>			 vector_type;
-      typedef typename _Base::_Tp_alloc_type		 _Tp_alloc_type;
+
+      typedef _Vector_base<_Tp, _Alloc>			_Base;
+      typedef vector<_Tp, _Alloc>			vector_type;
 
     public:
       typedef _Tp					 value_type;
-      typedef typename _Tp_alloc_type::pointer           pointer;
-      typedef typename _Tp_alloc_type::const_pointer     const_pointer;
-      typedef typename _Tp_alloc_type::reference         reference;
-      typedef typename _Tp_alloc_type::const_reference   const_reference;
+      typedef typename _Alloc::pointer                   pointer;
+      typedef typename _Alloc::const_pointer             const_pointer;
+      typedef typename _Alloc::reference                 reference;
+      typedef typename _Alloc::const_reference           const_reference;
       typedef __gnu_cxx::__normal_iterator<pointer, vector_type> iterator;
       typedef __gnu_cxx::__normal_iterator<const_pointer, vector_type>
       const_iterator;
@@ -180,13 +166,17 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
       typedef std::reverse_iterator<iterator>		 reverse_iterator;
       typedef size_t					 size_type;
       typedef ptrdiff_t					 difference_type;
-      typedef _Alloc                        		 allocator_type;
+      typedef typename _Base::allocator_type		 allocator_type;
 
     protected:
+      /** @if maint
+       *  These two functions and three data members are all from the
+       *  base class.  They should be pretty self-explanatory, as
+       *  %vector uses a simple contiguous allocation scheme.  @endif
+       */
       using _Base::_M_allocate;
       using _Base::_M_deallocate;
       using _Base::_M_impl;
-      using _Base::_M_get_Tp_allocator;
 
     public:
       // [23.2.4.1] construct/copy/destroy
@@ -206,14 +196,29 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        *
        *  This constructor fills the %vector with @a n copies of @a value.
        */
-      explicit
-      vector(size_type __n, const value_type& __value = value_type(),
+      vector(size_type __n, const value_type& __value,
 	     const allocator_type& __a = allocator_type())
       : _Base(__n, __a)
       {
 	std::__uninitialized_fill_n_a(this->_M_impl._M_start, __n, __value,
-				      _M_get_Tp_allocator());
+				      this->get_allocator());
 	this->_M_impl._M_finish = this->_M_impl._M_start + __n;
+      }
+
+      /**
+       *  @brief  Create a %vector with default elements.
+       *  @param  n  The number of elements to initially create.
+       *
+       *  This constructor fills the %vector with @a n copies of a
+       *  default-constructed element.
+       */
+      explicit
+      vector(size_type __n)
+      : _Base(__n, allocator_type())
+      {
+	std::__uninitialized_fill_n_a(this->_M_impl._M_start, __n, value_type(),
+				      this->get_allocator());
+	this->_M_impl._M_finish = this->_M_impl._M_start + __n;	
       }
 
       /**
@@ -226,11 +231,11 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        *  @a x (for fast expansion) will not be copied.
        */
       vector(const vector& __x)
-      : _Base(__x.size(), __x._M_get_Tp_allocator())
+      : _Base(__x.size(), __x.get_allocator())
       { this->_M_impl._M_finish =
 	  std::__uninitialized_copy_a(__x.begin(), __x.end(),
 				      this->_M_impl._M_start,
-				      _M_get_Tp_allocator());
+				      this->get_allocator());
       }
 
       /**
@@ -266,7 +271,8 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       ~vector()
       { std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
-		      _M_get_Tp_allocator()); }
+		      this->get_allocator());
+      }
 
       /**
        *  @brief  %Vector assignment operator.
@@ -325,7 +331,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       iterator
       begin()
-      { return iterator(this->_M_impl._M_start); }
+      { return iterator (this->_M_impl._M_start); }
 
       /**
        *  Returns a read-only (constant) iterator that points to the
@@ -334,7 +340,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       const_iterator
       begin() const
-      { return const_iterator(this->_M_impl._M_start); }
+      { return const_iterator (this->_M_impl._M_start); }
 
       /**
        *  Returns a read/write iterator that points one past the last
@@ -343,7 +349,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       iterator
       end()
-      { return iterator(this->_M_impl._M_finish); }
+      { return iterator (this->_M_impl._M_finish); }
 
       /**
        *  Returns a read-only (constant) iterator that points one past
@@ -352,7 +358,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       const_iterator
       end() const
-      { return const_iterator(this->_M_impl._M_finish); }
+      { return const_iterator (this->_M_impl._M_finish); }
 
       /**
        *  Returns a read/write reverse iterator that points to the
@@ -394,12 +400,12 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
       /**  Returns the number of elements in the %vector.  */
       size_type
       size() const
-      { return size_type(this->_M_impl._M_finish - this->_M_impl._M_start); }
+      { return size_type(end() - begin()); }
 
       /**  Returns the size() of the largest possible %vector.  */
       size_type
       max_size() const
-      { return _M_get_Tp_allocator().max_size(); }
+      { return size_type(-1) / sizeof(value_type); }
 
       /**
        *  @brief  Resizes the %vector to the specified number of elements.
@@ -413,13 +419,27 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        *  given data.
        */
       void
-      resize(size_type __new_size, value_type __x = value_type())
+      resize(size_type __new_size, const value_type& __x)
       {
 	if (__new_size < size())
-	  _M_erase_at_end(this->_M_impl._M_start + __new_size);
+	  erase(begin() + __new_size, end());
 	else
 	  insert(end(), __new_size - size(), __x);
       }
+
+      /**
+       *  @brief  Resizes the %vector to the specified number of elements.
+       *  @param  new_size  Number of elements the %vector should contain.
+       *
+       *  This function will resize the %vector to the specified
+       *  number of elements.  If the number is smaller than the
+       *  %vector's current size the %vector is truncated, otherwise
+       *  the %vector is extended and new elements are
+       *  default-constructed.
+       */
+      void
+      resize(size_type __new_size)
+      { resize(__new_size, value_type()); }
 
       /**
        *  Returns the total number of elements that the %vector can
@@ -427,8 +447,8 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       size_type
       capacity() const
-      { return size_type(this->_M_impl._M_end_of_storage
-			 - this->_M_impl._M_start); }
+      { return size_type(const_iterator(this->_M_impl._M_end_of_storage)
+			 - begin()); }
 
       /**
        *  Returns true if the %vector is empty.  (Thus begin() would
@@ -472,7 +492,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       reference
       operator[](size_type __n)
-      { return *(this->_M_impl._M_start + __n); }
+      { return *(begin() + __n); }
 
       /**
        *  @brief  Subscript access to the data contained in the %vector.
@@ -487,7 +507,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       const_reference
       operator[](size_type __n) const
-      { return *(this->_M_impl._M_start + __n); }
+      { return *(begin() + __n); }
 
     protected:
       /// @if maint Safety check used only from at().  @endif
@@ -566,21 +586,6 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
       const_reference
       back() const
       { return *(end() - 1); }
-
-      // _GLIBCXX_RESOLVE_LIB_DEFECTS
-      // DR 464. Suggestion for new member functions in standard containers.
-      // data access
-      /**
-       *   Returns a pointer such that [data(), data() + size()) is a valid
-       *   range.  For a non-empty %vector, data() == &front().
-       */
-      pointer
-      data()
-      { return pointer(this->_M_impl._M_start); }
-
-      const_pointer
-      data() const
-      { return const_pointer(this->_M_impl._M_start); }
 
       // [23.2.4.3] modifiers
       /**
@@ -731,11 +736,6 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
 	std::swap(this->_M_impl._M_finish, __x._M_impl._M_finish);
 	std::swap(this->_M_impl._M_end_of_storage,
 		  __x._M_impl._M_end_of_storage);
-
-	// _GLIBCXX_RESOLVE_LIB_DEFECTS
-	// 431. Swapping containers with unequal allocators.
-	std::__alloc_swap<_Tp_alloc_type>::_S_do_it(_M_get_Tp_allocator(),
-						    __x._M_get_Tp_allocator());
       }
 
       /**
@@ -746,7 +746,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
        */
       void
       clear()
-      { _M_erase_at_end(this->_M_impl._M_start); }
+      { erase(begin(), end()); }
 
     protected:
       /**
@@ -764,7 +764,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
 	  try
 	    {
 	      std::__uninitialized_copy_a(__first, __last, __result,
-					  _M_get_Tp_allocator());
+					  this->get_allocator());
 	      return __result;
 	    }
 	  catch(...)
@@ -785,7 +785,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
 	  this->_M_impl._M_start = _M_allocate(__n);
 	  this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
 	  std::__uninitialized_fill_n_a(this->_M_impl._M_start, __n, __value,
-					_M_get_Tp_allocator());
+					this->get_allocator());
 	  this->_M_impl._M_finish = this->_M_impl._M_end_of_storage;
 	}
 
@@ -822,7 +822,7 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
 	  this->_M_impl._M_finish =
 	    std::__uninitialized_copy_a(__first, __last,
 					this->_M_impl._M_start,
-					_M_get_Tp_allocator());
+					this->get_allocator());
 	}
 
 
@@ -910,17 +910,6 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
       // Called by insert(p,x)
       void
       _M_insert_aux(iterator __position, const value_type& __x);
-
-      // Internal erase functions follow.
-
-      // Called by erase(q1,q2), clear(), resize(), _M_fill_assign,
-      // _M_assign_aux.
-      void
-      _M_erase_at_end(pointer __pos)
-      {
-	std::_Destroy(__pos, this->_M_impl._M_finish, _M_get_Tp_allocator());
-	this->_M_impl._M_finish = __pos;
-      }
     };
 
 
@@ -986,7 +975,6 @@ _GLIBCXX_BEGIN_NESTED_NAMESPACE(std, _GLIBCXX_STD)
     inline void
     swap(vector<_Tp, _Alloc>& __x, vector<_Tp, _Alloc>& __y)
     { __x.swap(__y); }
-
-_GLIBCXX_END_NESTED_NAMESPACE
+} // namespace std
 
 #endif /* _VECTOR_H */

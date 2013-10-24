@@ -1,3 +1,4 @@
+/* APPLE LOCAL begin mainline 2005-04-06 4071679 */
 /* i386-darwin host-specific hook definitions.
    Copyright (C) 2003, 2005 Free Software Foundation, Inc.
 
@@ -15,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -29,3 +30,4 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
    to include config/host-darwin.h.  */
 
 const struct host_hooks host_hooks = HOST_HOOKS_INITIALIZER;
+/* APPLE LOCAL end mainline 2005-04-06 4071679 */

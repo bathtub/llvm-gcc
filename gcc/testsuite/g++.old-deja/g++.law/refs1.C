@@ -10,13 +10,13 @@
 
 class C {
 private:
-   const char** list;
+   char** list;
 public:
-   C(const char** );
+   C(char** );
    void count (int&);
 };
 
-C::C (const char** l) {
+C::C (char** l) {
    list = l;
 }
 
@@ -29,7 +29,7 @@ void C::count (int& total) {
    }
 }
 
-const char * foo[] = {
+char * foo[] = {
    "one", "two", "three", NULL};
 
 int main() {

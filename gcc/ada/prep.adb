@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2002-2005, Free Software Foundation, Inc.         --
+--          Copyright (C) 2002-2003, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -35,6 +35,7 @@ with Snames;   use Snames;
 with Sinput;
 with Stringt;  use Stringt;
 with Table;
+with Types;    use Types;
 
 with GNAT.Heap_Sort_G;
 
@@ -128,7 +129,7 @@ package body Prep is
    -- Behaviour --
    ---------------
 
-   --  Accesses to procedure specified by procedure Initialize
+   --  Accesses to procedure specified by procedure Initialize.
 
    Error_Msg : Error_Msg_Proc;
    --  Report an error
@@ -159,7 +160,7 @@ package body Prep is
       --  Used to detect multiple #else.
 
       Deleting : Boolean;
-      --  Set to True when the code should be deleted or commented out
+      --  Set to True when the code should be deleted or commented out.
 
       Match_Seen : Boolean;
       --  Set to True when a condition in an #if or an #elsif is True.
@@ -276,7 +277,8 @@ package body Prep is
          then
             for J in Index + 1 .. Definition'Last loop
                case Definition (J) is
-                  when '_' | '.' | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' =>
+                  when '_' | '.' | '0' .. '9' |
+                    'a' .. 'z' | 'A' .. 'Z' =>
                      null;
 
                   when others =>
@@ -335,7 +337,8 @@ package body Prep is
       --  Put the symbol name in the result
 
       declare
-         Sym : constant String := Name_Buffer (1 .. Name_Len);
+         Sym : constant String :=
+           Name_Buffer (1 .. Name_Len);
 
       begin
          for Index in 1 .. Name_Len loop
@@ -372,13 +375,13 @@ package body Prep is
    ----------------
 
    function Expression (Evaluate_It : Boolean) return Boolean is
-      Evaluation : Boolean := Evaluate_It;
+      Evaluation       : Boolean := Evaluate_It;
       --  Is set to False after an "or else" when left term is True and
       --  after an "and then" when left term is False.
 
-      Final_Result : Boolean := False;
+      Final_Result     : Boolean := False;
 
-      Current_Result : Boolean := False;
+      Current_Result   : Boolean := False;
       --  Value of a term
 
       Current_Operator : Operator := None;
@@ -428,7 +431,6 @@ package body Prep is
                Scan.all;
 
                if Token = Tok_Apostrophe then
-
                   --  symbol'Defined
 
                   Scan.all;
@@ -689,9 +691,9 @@ package body Prep is
 
       procedure Output_Line (From, To : Source_Ptr);
       --  Output a line or the end of a line from the buffer to the output
-      --  file, followed by an end of line terminator. Depending on the value
-      --  of Deleting and the switches, the line may be commented out, blank or
-      --  not output at all.
+      --  file, followed by an end of line terminator.
+      --  Depending on the value of Deleting and the switches, the line
+      --  may be commented out, blank or not output at all.
 
       ------------
       -- Output --
@@ -738,12 +740,13 @@ package body Prep is
    begin
       Start_Of_Processing := Scan_Ptr;
 
-      --  We need to call Scan for the first time, because Initialize_Scanner
+      --  We need to call Scan for the first time, because Initialyze_Scanner
       --  is no longer doing it.
 
       Scan.all;
 
-      Input_Line_Loop : loop
+      Input_Line_Loop :
+      loop
          exit Input_Line_Loop when Token = Tok_EOF;
 
          Preprocessor_Line := False;
@@ -758,9 +761,9 @@ package body Prep is
 
                   case Token is
 
-                     --  #if
-
                      when Tok_If =>
+                        --  #if
+
                         declare
                            If_Ptr : constant Source_Ptr := Token_Ptr;
 
@@ -804,9 +807,9 @@ package body Prep is
                            end;
                         end;
 
-                     --  #elsif
-
                      when Tok_Elsif =>
+                        --  #elsif
+
                         Cond := False;
 
                         if Pp_States.Last = 0
@@ -858,9 +861,9 @@ package body Prep is
                            end if;
                         end if;
 
-                     --  #else
-
                      when Tok_Else =>
+                        --  #else
+
                         if Pp_States.Last = 0 then
                            Error_Msg ("no IF for this ELSE", Token_Ptr);
 
@@ -904,9 +907,9 @@ package body Prep is
                            Go_To_End_Of_Line;
                         end if;
 
-                     --  #end if;
-
                      when Tok_End =>
+                        --  #end if;
+
                         if Pp_States.Last = 0 then
                            Error_Msg ("no IF for this END", Token_Ptr);
                         end if;
@@ -942,15 +945,15 @@ package body Prep is
 
                         Go_To_End_Of_Line;
 
-                        --  Decrement the depth of the #if stack
+                        --  Decrement the depth of the #if stack.
 
                         if Pp_States.Last > 0 then
                            Pp_States.Decrement_Last;
                         end if;
 
-                     --  Illegal preprocessor line
-
                      when others =>
+                        --  Illegal preprocessor line
+
                         if Pp_States.Last = 0 then
                            Error_Msg ("IF expected", Token_Ptr);
 
@@ -988,8 +991,8 @@ package body Prep is
                        and then Special_Character = '$'
                      then
                         declare
-                           Dollar_Ptr : constant Source_Ptr := Token_Ptr;
-                           Symbol     : Symbol_Id;
+                           Dollar_Ptr   : constant Source_Ptr := Token_Ptr;
+                           Symbol       : Symbol_Id;
 
                         begin
                            Scan.all;
@@ -1002,7 +1005,8 @@ package body Prep is
 
                               Symbol := Index_Of (Token_Name);
 
-                              --  If symbol exists, replace by its value
+                              --  If there is such a symbol, replace it by its
+                              --  value.
 
                               if Symbol /= No_Symbol then
                                  Output (Start_Of_Processing, Dollar_Ptr - 1);
@@ -1067,17 +1071,17 @@ package body Prep is
                   and then Sinput.Source (Token_Ptr + 1) = ASCII.LF)
             then
                Start_Of_Processing := Token_Ptr + 2;
+
             else
                Start_Of_Processing := Token_Ptr + 1;
             end if;
          end if;
 
-         --  Now, scan the first token of the next line. If the token is EOF,
-         --  the scan ponter will not move, and the token will still be EOF.
+         --  Now, we scan the first token of the next line.
+         --  If the token is EOF, the scan ponter will not move, and the token
+         --  will still be EOF.
 
-         Set_Ignore_Errors (To => True);
          Scan.all;
-         Set_Ignore_Errors (To => False);
       end loop Input_Line_Loop;
 
       --  Report an error for any missing some "#end if;"

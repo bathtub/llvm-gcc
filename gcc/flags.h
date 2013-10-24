@@ -1,6 +1,6 @@
 /* Compilation switch flag definitions for GCC.
    Copyright (C) 1987, 1988, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2002,
-   2003, 2004, 2005, 2006, 2007
+   2003, 2004, 2005
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -17,8 +17,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #ifndef GCC_FLAGS_H
 #define GCC_FLAGS_H
@@ -58,16 +58,15 @@ extern enum debug_info_level debug_info_level;
    debugging information.  */
 extern bool use_gnu_debug_info_extensions;
 
-/* Enumerate visibility settings.  This is deliberately ordered from most
-   to least visibility.  */
+/* Enumerate visibility settings.  */
 #ifndef SYMBOL_VISIBILITY_DEFINED
 #define SYMBOL_VISIBILITY_DEFINED
 enum symbol_visibility
 {
   VISIBILITY_DEFAULT,
-  VISIBILITY_PROTECTED,
+  VISIBILITY_INTERNAL,
   VISIBILITY_HIDDEN,
-  VISIBILITY_INTERNAL
+  VISIBILITY_PROTECTED
 };
 #endif
 
@@ -83,14 +82,8 @@ struct visibility_flags
 /* Global visibility options.  */
 extern struct visibility_flags visibility_options;
 
-/* Nonzero means do optimizations.  -opt.  */
-
-extern int optimize;
-
-/* Nonzero means optimize for size.  -Os.  */
-
-extern int optimize_size;
-
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
 /* Do print extra warnings (such as for uninitialized variables).
    -W/-Wextra.  */
 
@@ -101,6 +94,11 @@ extern bool extra_warnings;
    -Wunused option.  */
 
 extern void set_Wunused (int setting);
+
+/* Nonzero means warn about function definitions that default the return type
+   or that use a null return and have a return-type other than void.  */
+
+extern int warn_return_type;
 
 /* Nonzero means warn about any objects definitions whose size is larger
    than N bytes.  Also want about function definitions whose returned
@@ -113,11 +111,6 @@ extern HOST_WIDE_INT larger_than_size;
    aliasing safe.  */
 
 extern int warn_strict_aliasing;
-
-/* Nonzero means warn about optimizations which rely on undefined
-   signed overflow.  */
-
-extern int warn_strict_overflow;
 
 /* Temporarily suppress certain warnings.
    This is set while reading code from a system header file.  */
@@ -144,11 +137,25 @@ extern int flag_short_enums;
 
 extern int flag_pcc_struct_return;
 
+/* APPLE LOCAL begin fwritable strings  */
+/* Nonzero for -fwritable-strings:
+   store string constants in data segment and don't uniquize them.  */
+
+extern int flag_writable_strings;
+/* APPLE LOCAL end fwritable strings  */
+
 /* 0 means straightforward implementation of complex divide acceptable.
    1 means wide ranges of inputs must work for complex divide.
    2 means C99-like requirements for complex multiply and divide.  */
 
 extern int flag_complex_method;
+
+/* APPLE LOCAL begin -fobey-inline */
+/* Nonzero for -fobey-inline: 'inline' keyword must be obeyed, regardless
+   of codesize.  */
+
+extern int flag_obey_inline;
+/* APPLE LOCAL end -fobey-inline */
 
 /* Nonzero means that we don't want inlining by virtue of -fno-inline,
    not just because the tree inliner turned us off.  */
@@ -187,10 +194,6 @@ extern int flag_shlib;
 
 extern int flag_debug_asm;
 
-/* Generate code for GNU or NeXT Objective-C runtime environment.  */
-
-extern int flag_next_runtime;
-
 extern int flag_dump_rtl_in_asm;
 
 /* If one, renumber instruction UIDs to reduce the number of
@@ -219,9 +222,13 @@ extern bool g_switch_set;
    of two not less than the variable, for .align output.  */
 
 extern int align_loops_log;
-extern int align_loops_max_skip;
+/* APPLE LOCAL begin optimization pragmas 4760857*/
+/* remove align_loops_max_skip */
+/* APPLE LOCAL end optimization pragmas 4760857*/
 extern int align_jumps_log;
-extern int align_jumps_max_skip;
+/* APPLE LOCAL begin optimization pragmas 4760857*/
+/* remove align_jumps_max_skip */
+/* APPLE LOCAL end optimization pragmas 4760857*/
 extern int align_labels_log;
 extern int align_labels_max_skip;
 extern int align_functions_log;
@@ -269,7 +276,7 @@ extern const char *flag_random_seed;
 
 /* True if the given mode has a NaN representation and the treatment of
    NaN operands is important.  Certain optimizations, such as folding
-   x * 0 into 0, are not correct for NaN operands, and are normally
+   x * 0 into x, are not correct for NaN operands, and are normally
    disabled for modes with NaNs.  The user can ask for them to be
    done anyway using the -funsafe-math-optimizations switch.  */
 #define HONOR_NANS(MODE) \
@@ -293,53 +300,38 @@ extern const char *flag_random_seed;
 #define HONOR_SIGN_DEPENDENT_ROUNDING(MODE) \
   (MODE_HAS_SIGN_DEPENDENT_ROUNDING (MODE) && flag_rounding_math)
 
-/* True if overflow wraps around for the given integral type.  That
-   is, TYPE_MAX + 1 == TYPE_MIN.  */
-#define TYPE_OVERFLOW_WRAPS(TYPE) \
-  (TYPE_UNSIGNED (TYPE) || flag_wrapv)
+/* APPLE LOCAL begin -fast or -fastf or -fastcp */
+/* Nonzero if we should perform SPEC oriented optimizations for C.  */
+extern int flag_fast;
+/* Nonzero if we should perform SPEC oriented optimizations for C that is
+   produced by the NAG Fortan-to-C translator.  */
+extern int flag_fastf;
+/* Nonzero if we should perform SPEC oriented optimizations for C++.  */
+extern int flag_fastcp;
+/* APPLE LOCAL end -fast or -fastf or -fastcp */
 
-/* True if overflow is undefined for the given integral type.  We may
-   optimize on the assumption that values in the type never overflow.
+/* APPLE LOCAL begin gdb only used symbols */
+#ifdef DBX_ONLY_USED_SYMBOLS
+/* Nonzero if generating debugger info for used symbols only.  */
+extern int flag_debug_only_used_symbols;
+#endif
+/* APPLE LOCAL end gdb only used symbols */
 
-   IMPORTANT NOTE: Any optimization based on TYPE_OVERFLOW_UNDEFINED
-   must issue a warning based on warn_strict_overflow.  In some cases
-   it will be appropriate to issue the warning immediately, and in
-   other cases it will be appropriate to simply set a flag and let the
-   caller decide whether a warning is appropriate or not.  */
-#define TYPE_OVERFLOW_UNDEFINED(TYPE) \
-  (!TYPE_UNSIGNED (TYPE) && !flag_wrapv && !flag_trapv && flag_strict_overflow)
+/* APPLE LOCAL begin predictive compilation */
+extern int predictive_compilation;
+/* APPLE LOCAL end predictive compilation */
 
-/* True if overflow for the given integral type should issue a
-   trap.  */
-#define TYPE_OVERFLOW_TRAPS(TYPE) \
-  (!TYPE_UNSIGNED (TYPE) && flag_trapv)
+/* APPLE LOCAL begin disable_typechecking_for_spec_flag */
+extern int disable_typechecking_for_spec_flag;
+/* APPLE LOCAL end disable_typechecking_for_spec_flag */
 
-/* Names for the different levels of -Wstrict-overflow=N.  The numeric
-   values here correspond to N.  */
+/* APPLE LOCAL begin Altivec */
+extern int flag_disable_opts_for_faltivec;
+/* APPLE LOCAL end Altivec */
 
-enum warn_strict_overflow_code
-{
-  /* Overflow warning that should be issued with -Wall: a questionable
-     construct that is easy to avoid even when using macros.  Example:
-     folding (x + CONSTANT > x) to 1.  */
-  WARN_STRICT_OVERFLOW_ALL = 1,
-  /* Overflow warning about folding a comparison to a constant because
-     of undefined signed overflow, other than cases covered by
-     WARN_STRICT_OVERFLOW_ALL.  Example: folding (abs (x) >= 0) to 1
-     (this is false when x == INT_MIN).  */
-  WARN_STRICT_OVERFLOW_CONDITIONAL = 2,
-  /* Overflow warning about changes to comparisons other than folding
-     them to a constant.  Example: folding (x + 1 > 1) to (x > 0).  */
-  WARN_STRICT_OVERFLOW_COMPARISON = 3,
-  /* Overflow warnings not covered by the above cases.  Example:
-     folding ((x * 10) / 5) to (x * 2).  */
-  WARN_STRICT_OVERFLOW_MISC = 4,
-  /* Overflow warnings about reducing magnitude of constants in
-     comparison.  Example: folding (x + 2 > y) to (x + 1 >= y).  */
-  WARN_STRICT_OVERFLOW_MAGNITUDE = 5
-};
-
-/* Whether to emit an overflow warning whose code is C.  */
-#define issue_strict_overflow_warning(c) (warn_strict_overflow >= (int) (c))
+/* APPLE LOCAL begin ss2 */
+extern int flag_pch_file;
+extern int flag_save_repository;
+/* APPLE LOCAL end ss2 */
 
 #endif /* ! GCC_FLAGS_H */

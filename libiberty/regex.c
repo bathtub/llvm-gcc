@@ -2,9 +2,7 @@
    version 0.12.
    (Implements POSIX draft P1003.2/D11.2, except for some of the
    internationalization features.)
-
-   Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
-   2002, 2005 Free Software Foundation, Inc.
+   Copyright (C) 1993-1999, 2000, 2001, 2002 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
 
    The GNU C Library is free software; you can redistribute it and/or
@@ -19,8 +17,8 @@
 
    You should have received a copy of the GNU Lesser General Public
    License along with the GNU C Library; if not, write to the Free
-   Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-   02110-1301 USA.  */
+   Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+   02111-1307 USA.  */
 
 /* This file has been modified for usage in libiberty.  It includes "xregex.h"
    instead of <regex.h>.  The "xregex.h" header file renames all external
@@ -41,6 +39,14 @@
 #endif
 
 #include <ansidecl.h>
+
+#ifndef PARAMS
+# if defined __GNUC__ || (defined __STDC__ && __STDC__)
+#  define PARAMS(args) args
+# else
+#  define PARAMS(args) ()
+# endif  /* GCC.  */
+#endif  /* Not PARAMS.  */
 
 #ifndef INSIDE_RECURSION
 
@@ -271,10 +277,10 @@ extern char *re_syntax_table;
 
 static char re_syntax_table[CHAR_SET_SIZE];
 
-static void init_syntax_once (void);
+static void init_syntax_once PARAMS ((void));
 
 static void
-init_syntax_once (void)
+init_syntax_once ()
 {
    register int c;
    static int done = 0;
@@ -405,44 +411,44 @@ typedef char boolean;
 # define false 0
 # define true 1
 
-static reg_errcode_t byte_regex_compile (const char *pattern, size_t size,
-                                         reg_syntax_t syntax,
-                                         struct re_pattern_buffer *bufp);
+static reg_errcode_t byte_regex_compile _RE_ARGS ((const char *pattern, size_t size,
+                                                   reg_syntax_t syntax,
+                                                   struct re_pattern_buffer *bufp));
 
-static int byte_re_match_2_internal (struct re_pattern_buffer *bufp,
-                                     const char *string1, int size1,
-                                     const char *string2, int size2,
-                                     int pos,
-                                     struct re_registers *regs,
-                                     int stop);
-static int byte_re_search_2 (struct re_pattern_buffer *bufp,
-                             const char *string1, int size1,
-                             const char *string2, int size2,
-                             int startpos, int range,
-                             struct re_registers *regs, int stop);
-static int byte_re_compile_fastmap (struct re_pattern_buffer *bufp);
+static int byte_re_match_2_internal PARAMS ((struct re_pattern_buffer *bufp,
+					     const char *string1, int size1,
+					     const char *string2, int size2,
+					     int pos,
+					     struct re_registers *regs,
+					     int stop));
+static int byte_re_search_2 PARAMS ((struct re_pattern_buffer *bufp,
+				     const char *string1, int size1,
+				     const char *string2, int size2,
+				     int startpos, int range,
+				     struct re_registers *regs, int stop));
+static int byte_re_compile_fastmap PARAMS ((struct re_pattern_buffer *bufp));
 
 #ifdef MBS_SUPPORT
-static reg_errcode_t wcs_regex_compile (const char *pattern, size_t size,
-                                        reg_syntax_t syntax,
-                                        struct re_pattern_buffer *bufp);
+static reg_errcode_t wcs_regex_compile _RE_ARGS ((const char *pattern, size_t size,
+                                                   reg_syntax_t syntax,
+                                                   struct re_pattern_buffer *bufp));
 
 
-static int wcs_re_match_2_internal (struct re_pattern_buffer *bufp,
-                                    const char *cstring1, int csize1,
-                                    const char *cstring2, int csize2,
-                                    int pos,
-                                    struct re_registers *regs,
-                                    int stop,
-                                    wchar_t *string1, int size1,
-                                    wchar_t *string2, int size2,
-                                    int *mbs_offset1, int *mbs_offset2);
-static int wcs_re_search_2 (struct re_pattern_buffer *bufp,
-                            const char *string1, int size1,
-                            const char *string2, int size2,
-                            int startpos, int range,
-                            struct re_registers *regs, int stop);
-static int wcs_re_compile_fastmap (struct re_pattern_buffer *bufp);
+static int wcs_re_match_2_internal PARAMS ((struct re_pattern_buffer *bufp,
+					    const char *cstring1, int csize1,
+					    const char *cstring2, int csize2,
+					    int pos,
+					    struct re_registers *regs,
+					    int stop,
+					    wchar_t *string1, int size1,
+					    wchar_t *string2, int size2,
+					    int *mbs_offset1, int *mbs_offset2));
+static int wcs_re_search_2 PARAMS ((struct re_pattern_buffer *bufp,
+				    const char *string1, int size1,
+				    const char *string2, int size2,
+				    int startpos, int range,
+				    struct re_registers *regs, int stop));
+static int wcs_re_compile_fastmap PARAMS ((struct re_pattern_buffer *bufp));
 #endif
 
 /* These are the command codes that appear in compiled regular
@@ -610,7 +616,11 @@ typedef enum
 # define UCHAR_T unsigned char
 # define COMPILED_BUFFER_VAR bufp->buffer
 # define OFFSET_ADDRESS_SIZE 2
-# define PREFIX(name) byte_##name
+# if defined (__STDC__) || defined (ALMOST_STDC) || defined (HAVE_STRINGIZE)
+#  define PREFIX(name) byte_##name
+# else
+#  define PREFIX(name) byte_/**/name
+# endif
 # define ARG_PREFIX(name) name
 # define PUT_CHAR(c) putchar (c)
 #else
@@ -620,8 +630,13 @@ typedef enum
 #  define COMPILED_BUFFER_VAR wc_buffer
 #  define OFFSET_ADDRESS_SIZE 1 /* the size which STORE_NUMBER macro use */
 #  define CHAR_CLASS_SIZE ((__alignof__(wctype_t)+sizeof(wctype_t))/sizeof(CHAR_T)+1)
-#  define PREFIX(name) wcs_##name
-#  define ARG_PREFIX(name) c##name
+#  if defined (__STDC__) || defined (ALMOST_STDC) || defined (HAVE_STRINGIZE)
+#   define PREFIX(name) wcs_##name
+#   define ARG_PREFIX(name) c##name
+#  else
+#   define PREFIX(name) wcs_/**/name
+#   define ARG_PREFIX(name) c/**/name
+#  endif
 /* Should we use wide stream??  */
 #  define PUT_CHAR(c) printf ("%C", c);
 #  define TRUE 1
@@ -688,9 +703,11 @@ typedef enum
 # endif
 
 # ifdef DEBUG
-static void PREFIX(extract_number) (int *dest, UCHAR_T *source);
+static void PREFIX(extract_number) _RE_ARGS ((int *dest, UCHAR_T *source));
 static void
-PREFIX(extract_number) (int *dest, UCHAR_T *source)
+PREFIX(extract_number) (dest, source)
+    int *dest;
+    UCHAR_T *source;
 {
 #  ifdef WCHAR
   *dest = *source;
@@ -718,10 +735,12 @@ PREFIX(extract_number) (int *dest, UCHAR_T *source)
   } while (0)
 
 # ifdef DEBUG
-static void PREFIX(extract_number_and_incr) (int *destination,
-                                             UCHAR_T **source);
+static void PREFIX(extract_number_and_incr) _RE_ARGS ((int *destination,
+						       UCHAR_T **source));
 static void
-PREFIX(extract_number_and_incr) (int *destination, UCHAR_T **source)
+PREFIX(extract_number_and_incr) (destination, source)
+    int *destination;
+    UCHAR_T **source;
 {
   PREFIX(extract_number) (destination, *source);
   *source += OFFSET_ADDRESS_SIZE;
@@ -772,7 +791,8 @@ static int debug;
 
 #  ifndef DEFINED_ONCE
 void
-print_fastmap (char *fastmap)
+print_fastmap (fastmap)
+    char *fastmap;
 {
   unsigned was_a_range = 0;
   unsigned i = 0;
@@ -804,7 +824,9 @@ print_fastmap (char *fastmap)
    the START pointer into it and ending just before the pointer END.  */
 
 void
-PREFIX(print_partial_compiled_pattern) (UCHAR_T *start, UCHAR_T *end)
+PREFIX(print_partial_compiled_pattern) (start, end)
+    UCHAR_T *start;
+    UCHAR_T *end;
 {
   int mcnt, mcnt2;
   UCHAR_T *p1;
@@ -1137,7 +1159,8 @@ PREFIX(print_partial_compiled_pattern) (UCHAR_T *start, UCHAR_T *end)
 
 
 void
-PREFIX(print_compiled_pattern) (struct re_pattern_buffer *bufp)
+PREFIX(print_compiled_pattern) (bufp)
+    struct re_pattern_buffer *bufp;
 {
   UCHAR_T *buffer = (UCHAR_T*) bufp->buffer;
 
@@ -1169,8 +1192,12 @@ PREFIX(print_compiled_pattern) (struct re_pattern_buffer *bufp)
 
 
 void
-PREFIX(print_double_string) (const CHAR_T *where, const CHAR_T *string1,
-                             int size1, const CHAR_T *string2, int size2)
+PREFIX(print_double_string) (where, string1, size1, string2, size2)
+    const CHAR_T *where;
+    const CHAR_T *string1;
+    const CHAR_T *string2;
+    int size1;
+    int size2;
 {
   int this_char;
 
@@ -1203,7 +1230,8 @@ PREFIX(print_double_string) (const CHAR_T *where, const CHAR_T *string1,
 
 #  ifndef DEFINED_ONCE
 void
-printchar (int c)
+printchar (c)
+     int c;
 {
   putc (c, stderr);
 }
@@ -1240,8 +1268,11 @@ static size_t convert_mbs_to_wcs (CHAR_T *dest, const unsigned char* src,
 				  size_t len, int *offset_buffer,
 				  char *is_binary);
 static size_t
-convert_mbs_to_wcs (CHAR_T *dest, const unsigned char*src, size_t len,
-                    int *offset_buffer, char *is_binary)
+convert_mbs_to_wcs (dest, src, len, offset_buffer, is_binary)
+     CHAR_T *dest;
+     const unsigned char* src;
+     size_t len; /* the length of multibyte string.  */
+
      /* It hold correspondances between src(char string) and
 	dest(wchar_t string) for optimization.
 	e.g. src  = "xxxyzz"
@@ -1251,6 +1282,8 @@ convert_mbs_to_wcs (CHAR_T *dest, const unsigned char*src, size_t len,
 	  offset_buffer = {0, 0+3("xxx"), 0+3+1("y"), 0+3+1+2("zz")}
 	  	        = {0, 3, 4, 6}
      */
+     int *offset_buffer;
+     char *is_binary;
 {
   wchar_t *pdest = dest;
   const unsigned char *psrc = src;
@@ -1321,7 +1354,8 @@ reg_syntax_t re_syntax_options;
    defined in regex.h.  We return the old syntax.  */
 
 reg_syntax_t
-re_set_syntax (reg_syntax_t syntax)
+re_set_syntax (syntax)
+    reg_syntax_t syntax;
 {
   reg_syntax_t ret = re_syntax_options;
 
@@ -1840,35 +1874,35 @@ static CHAR_T PREFIX(reg_unset_dummy);
 # define REG_UNSET(e) ((e) == REG_UNSET_VALUE)
 
 /* Subroutine declarations and macros for regex_compile.  */
-static void PREFIX(store_op1) (re_opcode_t op, UCHAR_T *loc, int arg);
-static void PREFIX(store_op2) (re_opcode_t op, UCHAR_T *loc,
-                               int arg1, int arg2);
-static void PREFIX(insert_op1) (re_opcode_t op, UCHAR_T *loc,
-                                int arg, UCHAR_T *end);
-static void PREFIX(insert_op2) (re_opcode_t op, UCHAR_T *loc,
-                                int arg1, int arg2, UCHAR_T *end);
-static boolean PREFIX(at_begline_loc_p) (const CHAR_T *pattern,
-                                         const CHAR_T *p,
-                                         reg_syntax_t syntax);
-static boolean PREFIX(at_endline_loc_p) (const CHAR_T *p,
-                                         const CHAR_T *pend,
-                                         reg_syntax_t syntax);
+static void PREFIX(store_op1) _RE_ARGS ((re_opcode_t op, UCHAR_T *loc, int arg));
+static void PREFIX(store_op2) _RE_ARGS ((re_opcode_t op, UCHAR_T *loc,
+				 int arg1, int arg2));
+static void PREFIX(insert_op1) _RE_ARGS ((re_opcode_t op, UCHAR_T *loc,
+				  int arg, UCHAR_T *end));
+static void PREFIX(insert_op2) _RE_ARGS ((re_opcode_t op, UCHAR_T *loc,
+				  int arg1, int arg2, UCHAR_T *end));
+static boolean PREFIX(at_begline_loc_p) _RE_ARGS ((const CHAR_T *pattern,
+					   const CHAR_T *p,
+					   reg_syntax_t syntax));
+static boolean PREFIX(at_endline_loc_p) _RE_ARGS ((const CHAR_T *p,
+					   const CHAR_T *pend,
+					   reg_syntax_t syntax));
 # ifdef WCHAR
-static reg_errcode_t wcs_compile_range (CHAR_T range_start,
-                                        const CHAR_T **p_ptr,
-                                        const CHAR_T *pend,
-                                        char *translate,
-                                        reg_syntax_t syntax,
-                                        UCHAR_T *b,
-                                        CHAR_T *char_set);
-static void insert_space (int num, CHAR_T *loc, CHAR_T *end);
+static reg_errcode_t wcs_compile_range _RE_ARGS ((CHAR_T range_start,
+						  const CHAR_T **p_ptr,
+						  const CHAR_T *pend,
+						  char *translate,
+						  reg_syntax_t syntax,
+						  UCHAR_T *b,
+						  CHAR_T *char_set));
+static void insert_space _RE_ARGS ((int num, CHAR_T *loc, CHAR_T *end));
 # else /* BYTE */
-static reg_errcode_t byte_compile_range (unsigned int range_start,
-                                         const char **p_ptr,
-                                         const char *pend,
-                                         char *translate,
-                                         reg_syntax_t syntax,
-                                         unsigned char *b);
+static reg_errcode_t byte_compile_range _RE_ARGS ((unsigned int range_start,
+						   const char **p_ptr,
+						   const char *pend,
+						   char *translate,
+						   reg_syntax_t syntax,
+						   unsigned char *b));
 # endif /* WCHAR */
 
 /* Fetch the next character in the uncompiled pattern---translating it
@@ -1920,7 +1954,7 @@ static reg_errcode_t byte_compile_range (unsigned int range_start,
    ? (char) translate[(unsigned char) (d)] : (d))
 # else /* BYTE */
 #   define TRANSLATE(d) \
-  (translate ? (char) translate[(unsigned char) (d)] : (char) (d))
+  (translate ? (char) translate[(unsigned char) (d)] : (d))
 #  endif /* WCHAR */
 # endif
 
@@ -2226,7 +2260,8 @@ static PREFIX(register_info_type) *PREFIX(reg_info_dummy);
    but don't make them smaller.  */
 
 static void
-PREFIX(regex_grow_registers) (int num_regs)
+PREFIX(regex_grow_registers) (num_regs)
+     int num_regs;
 {
   if (num_regs > regs_allocated_size)
     {
@@ -2247,8 +2282,9 @@ PREFIX(regex_grow_registers) (int num_regs)
 # endif /* not MATCH_MAY_ALLOCATE */
 
 # ifndef DEFINED_ONCE
-static boolean group_in_compile_stack (compile_stack_type compile_stack,
-                                       regnum_t regnum);
+static boolean group_in_compile_stack _RE_ARGS ((compile_stack_type
+						 compile_stack,
+						 regnum_t regnum));
 # endif /* not DEFINED_ONCE */
 
 /* `regex_compile' compiles PATTERN (of length SIZE) according to SYNTAX.
@@ -2279,9 +2315,11 @@ static boolean group_in_compile_stack (compile_stack_type compile_stack,
 # endif /* WCHAR */
 
 static reg_errcode_t
-PREFIX(regex_compile) (const char *ARG_PREFIX(pattern),
-                       size_t ARG_PREFIX(size), reg_syntax_t syntax,
-                       struct re_pattern_buffer *bufp)
+PREFIX(regex_compile) (ARG_PREFIX(pattern), ARG_PREFIX(size), syntax, bufp)
+     const char *ARG_PREFIX(pattern);
+     size_t ARG_PREFIX(size);
+     reg_syntax_t syntax;
+     struct re_pattern_buffer *bufp;
 {
   /* We fetch characters from PATTERN here.  Even though PATTERN is
      `char *' (i.e., signed), we declare these variables as unsigned, so
@@ -4226,7 +4264,10 @@ PREFIX(regex_compile) (const char *ARG_PREFIX(pattern),
 /* ifdef WCHAR, integer parameter is 1 wchar_t.  */
 
 static void
-PREFIX(store_op1) (re_opcode_t op, UCHAR_T *loc, int arg)
+PREFIX(store_op1) (op, loc, arg)
+    re_opcode_t op;
+    UCHAR_T *loc;
+    int arg;
 {
   *loc = (UCHAR_T) op;
   STORE_NUMBER (loc + 1, arg);
@@ -4237,7 +4278,10 @@ PREFIX(store_op1) (re_opcode_t op, UCHAR_T *loc, int arg)
 /* ifdef WCHAR, integer parameter is 1 wchar_t.  */
 
 static void
-PREFIX(store_op2) (re_opcode_t op, UCHAR_T *loc, int arg1, int arg2)
+PREFIX(store_op2) (op, loc, arg1, arg2)
+    re_opcode_t op;
+    UCHAR_T *loc;
+    int arg1, arg2;
 {
   *loc = (UCHAR_T) op;
   STORE_NUMBER (loc + 1, arg1);
@@ -4250,7 +4294,11 @@ PREFIX(store_op2) (re_opcode_t op, UCHAR_T *loc, int arg1, int arg2)
 /* ifdef WCHAR, integer parameter is 1 wchar_t.  */
 
 static void
-PREFIX(insert_op1) (re_opcode_t op, UCHAR_T *loc, int arg, UCHAR_T *end)
+PREFIX(insert_op1) (op, loc, arg, end)
+    re_opcode_t op;
+    UCHAR_T *loc;
+    int arg;
+    UCHAR_T *end;
 {
   register UCHAR_T *pfrom = end;
   register UCHAR_T *pto = end + 1 + OFFSET_ADDRESS_SIZE;
@@ -4266,8 +4314,11 @@ PREFIX(insert_op1) (re_opcode_t op, UCHAR_T *loc, int arg, UCHAR_T *end)
 /* ifdef WCHAR, integer parameter is 1 wchar_t.  */
 
 static void
-PREFIX(insert_op2) (re_opcode_t op, UCHAR_T *loc, int arg1,
-                    int arg2, UCHAR_T *end)
+PREFIX(insert_op2) (op, loc, arg1, arg2, end)
+    re_opcode_t op;
+    UCHAR_T *loc;
+    int arg1, arg2;
+    UCHAR_T *end;
 {
   register UCHAR_T *pfrom = end;
   register UCHAR_T *pto = end + 1 + 2 * OFFSET_ADDRESS_SIZE;
@@ -4284,8 +4335,9 @@ PREFIX(insert_op2) (re_opcode_t op, UCHAR_T *loc, int arg1,
    least one character before the ^.  */
 
 static boolean
-PREFIX(at_begline_loc_p) (const CHAR_T *pattern, const CHAR_T *p,
-                          reg_syntax_t syntax)
+PREFIX(at_begline_loc_p) (pattern, p, syntax)
+    const CHAR_T *pattern, *p;
+    reg_syntax_t syntax;
 {
   const CHAR_T *prev = p - 2;
   boolean prev_prev_backslash = prev > pattern && prev[-1] == '\\';
@@ -4302,8 +4354,9 @@ PREFIX(at_begline_loc_p) (const CHAR_T *pattern, const CHAR_T *p,
    at least one character after the $, i.e., `P < PEND'.  */
 
 static boolean
-PREFIX(at_endline_loc_p) (const CHAR_T *p, const CHAR_T *pend,
-                          reg_syntax_t syntax)
+PREFIX(at_endline_loc_p) (p, pend, syntax)
+    const CHAR_T *p, *pend;
+    reg_syntax_t syntax;
 {
   const CHAR_T *next = p;
   boolean next_backslash = *next == '\\';
@@ -4324,7 +4377,9 @@ PREFIX(at_endline_loc_p) (const CHAR_T *p, const CHAR_T *pend,
    false if it's not.  */
 
 static boolean
-group_in_compile_stack (compile_stack_type compile_stack, regnum_t regnum)
+group_in_compile_stack (compile_stack, regnum)
+    compile_stack_type compile_stack;
+    regnum_t regnum;
 {
   int this_element;
 
@@ -4344,7 +4399,10 @@ group_in_compile_stack (compile_stack_type compile_stack, regnum_t regnum)
 /* This insert space, which size is "num", into the pattern at "loc".
    "end" must point the end of the allocated buffer.  */
 static void
-insert_space (int num, CHAR_T *loc, CHAR_T *end)
+insert_space (num, loc, end)
+     int num;
+     CHAR_T *loc;
+     CHAR_T *end;
 {
   register CHAR_T *pto = end;
   register CHAR_T *pfrom = end - num;
@@ -4356,9 +4414,13 @@ insert_space (int num, CHAR_T *loc, CHAR_T *end)
 
 #ifdef WCHAR
 static reg_errcode_t
-wcs_compile_range (CHAR_T range_start_char, const CHAR_T **p_ptr,
-                   const CHAR_T *pend, RE_TRANSLATE_TYPE translate,
-                   reg_syntax_t syntax, CHAR_T *b, CHAR_T *char_set)
+wcs_compile_range (range_start_char, p_ptr, pend, translate, syntax, b,
+		   char_set)
+     CHAR_T range_start_char;
+     const CHAR_T **p_ptr, *pend;
+     CHAR_T *char_set, *b;
+     RE_TRANSLATE_TYPE translate;
+     reg_syntax_t syntax;
 {
   const CHAR_T *p = *p_ptr;
   CHAR_T range_start, range_end;
@@ -4439,9 +4501,12 @@ wcs_compile_range (CHAR_T range_start_char, const CHAR_T **p_ptr,
    `regex_compile' itself.  */
 
 static reg_errcode_t
-byte_compile_range (unsigned int range_start_char, const char **p_ptr,
-                    const char *pend, RE_TRANSLATE_TYPE translate,
-                    reg_syntax_t syntax, unsigned char *b)
+byte_compile_range (range_start_char, p_ptr, pend, translate, syntax, b)
+     unsigned int range_start_char;
+     const char **p_ptr, *pend;
+     RE_TRANSLATE_TYPE translate;
+     reg_syntax_t syntax;
+     unsigned char *b;
 {
   unsigned this_char;
   const char *p = *p_ptr;
@@ -4522,7 +4587,8 @@ byte_compile_range (unsigned int range_start_char, const char **p_ptr,
 static unsigned char truncate_wchar (CHAR_T c);
 
 static unsigned char
-truncate_wchar (CHAR_T c)
+truncate_wchar (c)
+     CHAR_T c;
 {
   unsigned char buf[MB_CUR_MAX];
   mbstate_t state;
@@ -4538,7 +4604,8 @@ truncate_wchar (CHAR_T c)
 #endif /* WCHAR */
 
 static int
-PREFIX(re_compile_fastmap) (struct re_pattern_buffer *bufp)
+PREFIX(re_compile_fastmap) (bufp)
+     struct re_pattern_buffer *bufp;
 {
   int j, k;
 #ifdef MATCH_MAY_ALLOCATE
@@ -4857,7 +4924,8 @@ PREFIX(re_compile_fastmap) (struct re_pattern_buffer *bufp)
 #else /* not INSIDE_RECURSION */
 
 int
-re_compile_fastmap (struct re_pattern_buffer *bufp)
+re_compile_fastmap (bufp)
+     struct re_pattern_buffer *bufp;
 {
 # ifdef MBS_SUPPORT
   if (MB_CUR_MAX != 1)
@@ -4885,9 +4953,11 @@ weak_alias (__re_compile_fastmap, re_compile_fastmap)
    freeing the old data.  */
 
 void
-re_set_registers (struct re_pattern_buffer *bufp,
-                  struct re_registers *regs, unsigned num_regs,
-                  regoff_t *starts, regoff_t *ends)
+re_set_registers (bufp, regs, num_regs, starts, ends)
+    struct re_pattern_buffer *bufp;
+    struct re_registers *regs;
+    unsigned num_regs;
+    regoff_t *starts, *ends;
 {
   if (num_regs)
     {
@@ -4913,8 +4983,11 @@ weak_alias (__re_set_registers, re_set_registers)
    doesn't let you say where to stop matching.  */
 
 int
-re_search (struct re_pattern_buffer *bufp, const char *string, int size,
-           int startpos, int range, struct re_registers *regs)
+re_search (bufp, string, size, startpos, range, regs)
+     struct re_pattern_buffer *bufp;
+     const char *string;
+     int size, startpos, range;
+     struct re_registers *regs;
 {
   return re_search_2 (bufp, NULL, 0, string, size, startpos, range,
 		      regs, size);
@@ -4946,9 +5019,14 @@ weak_alias (__re_search, re_search)
    stack overflow).  */
 
 int
-re_search_2 (struct re_pattern_buffer *bufp, const char *string1, int size1,
-             const char *string2, int size2, int startpos, int range,
-             struct re_registers *regs, int stop)
+re_search_2 (bufp, string1, size1, string2, size2, startpos, range, regs, stop)
+     struct re_pattern_buffer *bufp;
+     const char *string1, *string2;
+     int size1, size2;
+     int startpos;
+     int range;
+     struct re_registers *regs;
+     int stop;
 {
 # ifdef MBS_SUPPORT
   if (MB_CUR_MAX != 1)
@@ -5004,10 +5082,15 @@ weak_alias (__re_search_2, re_search_2)
 
 
 static int
-PREFIX(re_search_2) (struct re_pattern_buffer *bufp, const char *string1,
-                     int size1, const char *string2, int size2,
-                     int startpos, int range,
-                     struct re_registers *regs, int stop)
+PREFIX(re_search_2) (bufp, string1, size1, string2, size2, startpos, range,
+		     regs, stop)
+     struct re_pattern_buffer *bufp;
+     const char *string1, *string2;
+     int size1, size2;
+     int startpos;
+     int range;
+     struct re_registers *regs;
+     int stop;
 {
   int val;
   register char *fastmap = bufp->fastmap;
@@ -5390,8 +5473,11 @@ PREFIX(re_search_2) (struct re_pattern_buffer *bufp, const char *string1,
 /* re_match is like re_match_2 except it takes only a single string.  */
 
 int
-re_match (struct re_pattern_buffer *bufp, const char *string,
-          int size, int pos, struct re_registers *regs)
+re_match (bufp, string, size, pos, regs)
+     struct re_pattern_buffer *bufp;
+     const char *string;
+     int size, pos;
+     struct re_registers *regs;
 {
   int result;
 # ifdef MBS_SUPPORT
@@ -5418,17 +5504,17 @@ weak_alias (__re_match, re_match)
 #endif /* not INSIDE_RECURSION */
 
 #ifdef INSIDE_RECURSION
-static boolean PREFIX(group_match_null_string_p) (UCHAR_T **p,
-                                                  UCHAR_T *end,
-					PREFIX(register_info_type) *reg_info);
-static boolean PREFIX(alt_match_null_string_p) (UCHAR_T *p,
-                                                UCHAR_T *end,
-					PREFIX(register_info_type) *reg_info);
-static boolean PREFIX(common_op_match_null_string_p) (UCHAR_T **p,
-                                                      UCHAR_T *end,
-					PREFIX(register_info_type) *reg_info);
-static int PREFIX(bcmp_translate) (const CHAR_T *s1, const CHAR_T *s2,
-                                   int len, char *translate);
+static boolean PREFIX(group_match_null_string_p) _RE_ARGS ((UCHAR_T **p,
+						    UCHAR_T *end,
+					PREFIX(register_info_type) *reg_info));
+static boolean PREFIX(alt_match_null_string_p) _RE_ARGS ((UCHAR_T *p,
+						  UCHAR_T *end,
+					PREFIX(register_info_type) *reg_info));
+static boolean PREFIX(common_op_match_null_string_p) _RE_ARGS ((UCHAR_T **p,
+							UCHAR_T *end,
+					PREFIX(register_info_type) *reg_info));
+static int PREFIX(bcmp_translate) _RE_ARGS ((const CHAR_T *s1, const CHAR_T *s2,
+				     int len, char *translate));
 #else /* not INSIDE_RECURSION */
 
 /* re_match_2 matches the compiled pattern in BUFP against the
@@ -5445,9 +5531,13 @@ static int PREFIX(bcmp_translate) (const CHAR_T *s1, const CHAR_T *s2,
    matched substring.  */
 
 int
-re_match_2 (struct re_pattern_buffer *bufp, const char *string1, int size1,
-            const char *string2, int size2, int pos,
-            struct re_registers *regs, int stop)
+re_match_2 (bufp, string1, size1, string2, size2, pos, regs, stop)
+     struct re_pattern_buffer *bufp;
+     const char *string1, *string2;
+     int size1, size2;
+     int pos;
+     struct re_registers *regs;
+     int stop;
 {
   int result;
 # ifdef MBS_SUPPORT
@@ -5476,7 +5566,7 @@ weak_alias (__re_match_2, re_match_2)
 #ifdef INSIDE_RECURSION
 
 #ifdef WCHAR
-static int count_mbs_length (int *, int);
+static int count_mbs_length PARAMS ((int *, int));
 
 /* This check the substring (from 0, to length) of the multibyte string,
    to which offset_buffer correspond. And count how many wchar_t_characters
@@ -5484,7 +5574,9 @@ static int count_mbs_length (int *, int);
    See convert_mbs_to_wcs.  */
 
 static int
-count_mbs_length(int *offset_buffer, int length)
+count_mbs_length(offset_buffer, length)
+     int *offset_buffer;
+     int length;
 {
   int upper, lower;
 
@@ -5525,26 +5617,33 @@ count_mbs_length(int *offset_buffer, int length)
    afterwards.  */
 #ifdef WCHAR
 static int
-wcs_re_match_2_internal (struct re_pattern_buffer *bufp,
-                         const char *cstring1, int csize1,
-                         const char *cstring2, int csize2,
-                         int pos,
-			 struct re_registers *regs,
-                         int stop,
+wcs_re_match_2_internal (bufp, cstring1, csize1, cstring2, csize2, pos,
+			 regs, stop, string1, size1, string2, size2,
+			 mbs_offset1, mbs_offset2)
+     struct re_pattern_buffer *bufp;
+     const char *cstring1, *cstring2;
+     int csize1, csize2;
+     int pos;
+     struct re_registers *regs;
+     int stop;
      /* string1 == string2 == NULL means string1/2, size1/2 and
 	mbs_offset1/2 need seting up in this function.  */
      /* We need wchar_t* buffers correspond to cstring1, cstring2.  */
-                         wchar_t *string1, int size1,
-                         wchar_t *string2, int size2,
+     wchar_t *string1, *string2;
+     /* We need the size of wchar_t buffers correspond to csize1, csize2.  */
+     int size1, size2;
      /* offset buffer for optimizatoin. See convert_mbs_to_wc.  */
-			 int *mbs_offset1, int *mbs_offset2)
+     int *mbs_offset1, *mbs_offset2;
 #else /* BYTE */
 static int
-byte_re_match_2_internal (struct re_pattern_buffer *bufp,
-                          const char *string1, int size1,
-                          const char *string2, int size2,
-                          int pos,
-			  struct re_registers *regs, int stop)
+byte_re_match_2_internal (bufp, string1, size1,string2, size2, pos,
+			  regs, stop)
+     struct re_pattern_buffer *bufp;
+     const char *string1, *string2;
+     int size1, size2;
+     int pos;
+     struct re_registers *regs;
+     int stop;
 #endif /* BYTE */
 {
   /* General temporaries.  */
@@ -6174,9 +6273,9 @@ byte_re_match_2_internal (struct re_pattern_buffer *bufp,
 	    uint32_t nrules;
 # endif /* _LIBC */
 #endif /* WCHAR */
-	    boolean negate = (re_opcode_t) *(p - 1) == charset_not;
+	    boolean not = (re_opcode_t) *(p - 1) == charset_not;
 
-            DEBUG_PRINT2 ("EXECUTING charset%s.\n", negate ? "_not" : "");
+            DEBUG_PRINT2 ("EXECUTING charset%s.\n", not ? "_not" : "");
 	    PREFETCH ();
 	    c = TRANSLATE (*d); /* The character to match.  */
 #ifdef WCHAR
@@ -6543,20 +6642,20 @@ byte_re_match_2_internal (struct re_pattern_buffer *bufp,
 	      if (c == *workp)
 		goto char_set_matched;
 
-	    negate = !negate;
+	    not = !not;
 
 	  char_set_matched:
-	    if (negate) goto fail;
+	    if (not) goto fail;
 #else
             /* Cast to `unsigned' instead of `unsigned char' in case the
                bit list is a full 32 bytes long.  */
 	    if (c < (unsigned) (*p * BYTEWIDTH)
 		&& p[1 + c / BYTEWIDTH] & (1 << (c % BYTEWIDTH)))
-	      negate = !negate;
+	      not = !not;
 
 	    p += 1 + *p;
 
-	    if (!negate) goto fail;
+	    if (!not) goto fail;
 #undef WORK_BUFFER_SIZE
 #endif /* WCHAR */
 	    SET_REGS_MATCHED ();
@@ -7046,15 +7145,15 @@ byte_re_match_2_internal (struct re_pattern_buffer *bufp,
 		else if ((re_opcode_t) p1[3] == charset
 			 || (re_opcode_t) p1[3] == charset_not)
 		  {
-		    int negate = (re_opcode_t) p1[3] == charset_not;
+		    int not = (re_opcode_t) p1[3] == charset_not;
 
 		    if (c < (unsigned) (p1[4] * BYTEWIDTH)
 			&& p1[5 + c / BYTEWIDTH] & (1 << (c % BYTEWIDTH)))
-		      negate = !negate;
+		      not = !not;
 
-                    /* `negate' is equal to 1 if c would match, which means
+                    /* `not' is equal to 1 if c would match, which means
                         that we can't change to pop_failure_jump.  */
-		    if (!negate)
+		    if (!not)
                       {
   		        p[-3] = (unsigned char) pop_failure_jump;
                         DEBUG_PRINT1 ("  No match => pop_failure_jump.\n");
@@ -7494,8 +7593,9 @@ byte_re_match_2_internal (struct re_pattern_buffer *bufp,
    We don't handle duplicates properly (yet).  */
 
 static boolean
-PREFIX(group_match_null_string_p) (UCHAR_T **p, UCHAR_T *end,
-                                   PREFIX(register_info_type) *reg_info)
+PREFIX(group_match_null_string_p) (p, end, reg_info)
+    UCHAR_T **p, *end;
+    PREFIX(register_info_type) *reg_info;
 {
   int mcnt;
   /* Point to after the args to the start_memory.  */
@@ -7605,8 +7705,9 @@ PREFIX(group_match_null_string_p) (UCHAR_T **p, UCHAR_T *end,
    byte past the last. The alternative can contain groups.  */
 
 static boolean
-PREFIX(alt_match_null_string_p) (UCHAR_T *p, UCHAR_T *end,
-                                 PREFIX(register_info_type) *reg_info)
+PREFIX(alt_match_null_string_p) (p, end, reg_info)
+    UCHAR_T *p, *end;
+    PREFIX(register_info_type) *reg_info;
 {
   int mcnt;
   UCHAR_T *p1 = p;
@@ -7641,8 +7742,9 @@ PREFIX(alt_match_null_string_p) (UCHAR_T *p, UCHAR_T *end,
    Sets P to one after the op and its arguments, if any.  */
 
 static boolean
-PREFIX(common_op_match_null_string_p) (UCHAR_T **p, UCHAR_T *end,
-                                       PREFIX(register_info_type) *reg_info)
+PREFIX(common_op_match_null_string_p) (p, end, reg_info)
+    UCHAR_T **p, *end;
+    PREFIX(register_info_type) *reg_info;
 {
   int mcnt;
   boolean ret;
@@ -7728,8 +7830,10 @@ PREFIX(common_op_match_null_string_p) (UCHAR_T **p, UCHAR_T *end,
    bytes; nonzero otherwise.  */
 
 static int
-PREFIX(bcmp_translate) (const CHAR_T *s1, const CHAR_T *s2, register int len,
-                        RE_TRANSLATE_TYPE translate)
+PREFIX(bcmp_translate) (s1, s2, len, translate)
+     const CHAR_T *s1, *s2;
+     register int len;
+     RE_TRANSLATE_TYPE translate;
 {
   register const UCHAR_T *p1 = (const UCHAR_T *) s1;
   register const UCHAR_T *p2 = (const UCHAR_T *) s2;
@@ -7762,8 +7866,10 @@ PREFIX(bcmp_translate) (const CHAR_T *s1, const CHAR_T *s2, register int len,
    We call regex_compile to do the actual compilation.  */
 
 const char *
-re_compile_pattern (const char *pattern, size_t length,
-                    struct re_pattern_buffer *bufp)
+re_compile_pattern (pattern, length, bufp)
+     const char *pattern;
+     size_t length;
+     struct re_pattern_buffer *bufp;
 {
   reg_errcode_t ret;
 
@@ -7809,14 +7915,15 @@ char *
    regcomp/regexec below without link errors.  */
 weak_function
 #endif
-re_comp (const char *s)
+re_comp (s)
+    const char *s;
 {
   reg_errcode_t ret;
 
   if (!s)
     {
       if (!re_comp_buf.buffer)
-	return (char *) gettext ("No previous regular expression");
+	return gettext ("No previous regular expression");
       return 0;
     }
 
@@ -7857,7 +7964,8 @@ int
 #ifdef _LIBC
 weak_function
 #endif
-re_exec (const char *s)
+re_exec (s)
+    const char *s;
 {
   const int len = strlen (s);
   return
@@ -7906,7 +8014,10 @@ re_exec (const char *s)
    the return codes and their meanings.)  */
 
 int
-regcomp (regex_t *preg, const char *pattern, int cflags)
+regcomp (preg, pattern, cflags)
+    regex_t *preg;
+    const char *pattern;
+    int cflags;
 {
   reg_errcode_t ret;
   reg_syntax_t syntax
@@ -7923,7 +8034,7 @@ regcomp (regex_t *preg, const char *pattern, int cflags)
 
   if (cflags & REG_ICASE)
     {
-      int i;
+      unsigned i;
 
       preg->translate
 	= (RE_TRANSLATE_TYPE) malloc (CHAR_SET_SIZE
@@ -7933,7 +8044,7 @@ regcomp (regex_t *preg, const char *pattern, int cflags)
 
       /* Map uppercase characters to corresponding lowercase ones.  */
       for (i = 0; i < CHAR_SET_SIZE; i++)
-        preg->translate[i] = ISUPPER (i) ? TOLOWER (i) : i;
+        preg->translate[i] = ISUPPER (i) ? TOLOWER (i) : (int) i;
     }
   else
     preg->translate = NULL;
@@ -7999,8 +8110,12 @@ weak_alias (__regcomp, regcomp)
    We return 0 if we find a match and REG_NOMATCH if not.  */
 
 int
-regexec (const regex_t *preg, const char *string, size_t nmatch,
-         regmatch_t pmatch[], int eflags)
+regexec (preg, string, nmatch, pmatch, eflags)
+    const regex_t *preg;
+    const char *string;
+    size_t nmatch;
+    regmatch_t pmatch[];
+    int eflags;
 {
   int ret;
   struct re_registers regs;
@@ -8062,8 +8177,11 @@ weak_alias (__regexec, regexec)
    from either regcomp or regexec.   We don't use PREG here.  */
 
 size_t
-regerror (int errcode, const regex_t *preg ATTRIBUTE_UNUSED,
-          char *errbuf, size_t errbuf_size)
+regerror (errcode, preg, errbuf, errbuf_size)
+    int errcode;
+    const regex_t *preg ATTRIBUTE_UNUSED;
+    char *errbuf;
+    size_t errbuf_size;
 {
   const char *msg;
   size_t msg_size;
@@ -8106,7 +8224,8 @@ weak_alias (__regerror, regerror)
 /* Free dynamically allocated space used by PREG.  */
 
 void
-regfree (regex_t *preg)
+regfree (preg)
+    regex_t *preg;
 {
   if (preg->buffer != NULL)
     free (preg->buffer);

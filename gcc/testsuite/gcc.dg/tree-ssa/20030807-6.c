@@ -1,7 +1,8 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-vrp1" } */
+/* { dg-options "-O1 -fdump-tree-dom3" } */
      
 
+/* APPLE LOCAL mainline 4840357 */
 void
 foo (distance, i, j)
      int distance[13][13];
@@ -11,6 +12,7 @@ foo (distance, i, j)
    distance[i][0] = ((distance[i][j]) < 0 ? -(distance[i][j])  : (distance[i][j]));
 }
 
+/* APPLE LOCAL mainline 4840357 */
 void
 foo2 (distance, i, j)
      int distance[13][13];
@@ -20,6 +22,7 @@ foo2 (distance, i, j)
    distance[i][0] = ((distance[i][j]) < 0 ? -(distance[i][j])  : (distance[i][j]));
 }
 
+/* APPLE LOCAL mainline 4840357 */
 void
 foo3 (distance, i, j)
      int distance[13][13];
@@ -29,6 +32,7 @@ foo3 (distance, i, j)
    distance[i][0] = ((distance[i][j]) < 0 ? -(distance[i][j])  : (distance[i][j]));
 }
 
+/* APPLE LOCAL mainline 4840357 */
 void
 foo4 (distance, i, j)
      double distance[13][13];
@@ -39,5 +43,6 @@ foo4 (distance, i, j)
 }
 
 /* There should be no ABS_EXPR.  */
-/* { dg-final { scan-tree-dump-times "ABS_EXPR " 0 "vrp1"} } */
-/* { dg-final { cleanup-tree-dump "vrp1" } } */
+/* { dg-final { scan-tree-dump-times "ABS_EXPR " 0 "dom3"} } */
+  
+

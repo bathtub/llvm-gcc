@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* { dg-do compile } */
 
 template <class T>
@@ -12,3 +13,4 @@ const char *enc2 = @encode(Vec<double>);
 
 /* { dg-final { scan-assembler "{Vec<float>=ffi}" } } */
 /* { dg-final { scan-assembler "{Vec<double>=ddi}" } } */
+

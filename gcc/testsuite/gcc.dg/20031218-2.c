@@ -3,7 +3,8 @@
    The problem was that this just to ICE with -O2 -g.  */
 
 /* { dg-do compile } */
-/* { dg-options "-O2 -g" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-O2 -g -fnested-functions" } */
 
 int f1 (int y)
 {

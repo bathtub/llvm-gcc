@@ -1,6 +1,6 @@
 // natVMClassLoader.cc - VMClassLoader native methods
 
-/* Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -34,7 +34,21 @@ details.  */
 #include <java/lang/StringBuffer.h>
 #include <java/lang/Runtime.h>
 #include <java/util/HashSet.h>
-#include <java/lang/VirtualMachineError.h>
+
+void
+java::lang::VMClassLoader::resolveClass (jclass klass)
+{
+  JvSynchronize sync (klass);
+  try
+    {
+      _Jv_Linker::wait_for_state (klass, JV_STATE_LINKED);
+    }
+  catch (java::lang::Throwable *x)
+    {
+      klass->set_state(JV_STATE_ERROR);
+      transformException(klass, x);
+    }
+}
 
 java::lang::Class *
 java::lang::VMClassLoader::defineClass (java::lang::ClassLoader *loader,
@@ -72,18 +86,16 @@ java::lang::VMClassLoader::defineClass (java::lang::ClassLoader *loader,
 	  klass->name = name2;
 	}
 
-      _Jv_Utf8Const *found_name = NULL;
       try
 	{
-	  _Jv_DefineClass (klass, data, offset, length, pd, &found_name);
+	  _Jv_DefineClass (klass, data, offset, length, pd);
 	}
       catch (java::lang::Throwable *ex)
 	{
 	  klass->state = JV_STATE_ERROR;
 	  klass->notifyAll ();
 
-	  if (found_name != NULL)
-	    _Jv_UnregisterInitiatingLoader (klass, klass->loader);
+	  _Jv_UnregisterInitiatingLoader (klass, klass->loader);
 
 	  // If EX is not a ClassNotFoundException, that's ok, because we
 	  // account for the possibility in defineClass().
@@ -95,20 +107,6 @@ java::lang::VMClassLoader::defineClass (java::lang::ClassLoader *loader,
     }
 #endif // INTERPRETER
 
-  if (! klass)
-    {
-      StringBuffer *sb = new StringBuffer();
-      if (name)
-	{
-	  sb->append(JvNewStringLatin1("found class file for class "));
-	  sb->append(name);
-	}
-      else
-	sb->append(JvNewStringLatin1("found unnamed class file"));
-      sb->append(JvNewStringLatin1(", but no interpreter configured in this libgcj"));
-      throw new VirtualMachineError(sb->toString());
-    }
-
   return klass;
 }
 
@@ -116,7 +114,6 @@ java::lang::ClassLoader *
 java::lang::VMClassLoader::getSystemClassLoaderInternal()
 {
   _Jv_InitClass (&gnu::gcj::runtime::ExtensionClassLoader::class$);
-  _Jv_CopyClassesToSystemLoader (gnu::gcj::runtime::ExtensionClassLoader::system_instance);
   return gnu::gcj::runtime::ExtensionClassLoader::system_instance;
 }
 
@@ -219,7 +216,7 @@ java::lang::VMClassLoader::loadClass(jstring name, jboolean resolve)
       // It isn't clear from the spec, but this is what other
       // implementations do in practice.
       if (resolve)
-	resolveClass (klass);
+	_Jv_InitClass (klass);
       else
 	_Jv_Linker::wait_for_state (klass, JV_STATE_LOADING);
 

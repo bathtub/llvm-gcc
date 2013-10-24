@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --            ADA.NUMERICS.GENERIC_COMPLEX_ELEMENTARY_FUNCTIONS             --
 --                                                                          --
@@ -19,7 +19,7 @@ generic
    use Complex_Types;
 
 package Ada.Numerics.Generic_Complex_Elementary_Functions is
-   pragma Pure;
+   pragma Pure (Ada.Numerics.Generic_Complex_Elementary_Functions);
 
    function Sqrt (X : Complex)   return Complex;
 

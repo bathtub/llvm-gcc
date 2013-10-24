@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -34,24 +34,18 @@ Boston, MA 02110-1301, USA.  */
 #include "libgfortran.h"
 
 
-#if defined (HAVE_GFC_REAL_8) && defined (HAVE_GFC_REAL_8)
-
-
-extern void sum_r8 (gfc_array_r8 * const restrict, 
-	gfc_array_r8 * const restrict, const index_type * const restrict);
+extern void sum_r8 (gfc_array_r8 *, gfc_array_r8 *, index_type *);
 export_proto(sum_r8);
 
 void
-sum_r8 (gfc_array_r8 * const restrict retarray, 
-	gfc_array_r8 * const restrict array, 
-	const index_type * const restrict pdim)
+sum_r8 (gfc_array_r8 *retarray, gfc_array_r8 *array, index_type *pdim)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type sstride[GFC_MAX_DIMENSIONS];
   index_type dstride[GFC_MAX_DIMENSIONS];
-  const GFC_REAL_8 * restrict base;
-  GFC_REAL_8 * restrict dest;
+  GFC_REAL_8 *base;
+  GFC_REAL_8 *dest;
   index_type rank;
   index_type n;
   index_type len;
@@ -62,6 +56,11 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
 
+  /* TODO:  It should be a front end job to correctly set the strides.  */
+
+  if (array->dim[0].stride == 0)
+    array->dim[0].stride = 1;
+
   len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
   delta = array->dim[dim].stride;
 
@@ -69,24 +68,16 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
     {
       sstride[n] = array->dim[n].stride;
       extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
     }
   for (n = dim; n < rank; n++)
     {
       sstride[n] = array->dim[n + 1].stride;
       extent[n] =
         array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
     }
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
-
       for (n = 0; n < rank; n++)
         {
           retarray->dim[n].lbound = 0;
@@ -97,24 +88,18 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
             retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
         }
 
-      retarray->offset = 0;
+      retarray->data
+	 = internal_malloc_size (sizeof (GFC_REAL_8)
+		 		 * retarray->dim[rank-1].stride
+				 * extent[rank-1]);
+      retarray->base = 0;
       retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
-
-      alloc_size = sizeof (GFC_REAL_8) * retarray->dim[rank-1].stride
-    		   * extent[rank-1];
-
-      if (alloc_size == 0)
-	{
-	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
-	  return;
-	}
-      else
-	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
+      if (retarray->dim[0].stride == 0)
+	retarray->dim[0].stride = 1;
+
       if (rank != GFC_DESCRIPTOR_RANK (retarray))
 	runtime_error ("rank of return array incorrect");
     }
@@ -132,7 +117,7 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
 
   while (base)
     {
-      const GFC_REAL_8 * restrict src;
+      GFC_REAL_8 *src;
       GFC_REAL_8 result;
       src = base;
       {
@@ -161,7 +146,7 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           base -= sstride[n] * extent[n];
           dest -= dstride[n] * extent[n];
           n++;
@@ -182,25 +167,22 @@ sum_r8 (gfc_array_r8 * const restrict retarray,
 }
 
 
-extern void msum_r8 (gfc_array_r8 * const restrict, 
-	gfc_array_r8 * const restrict, const index_type * const restrict,
-	gfc_array_l4 * const restrict);
+extern void msum_r8 (gfc_array_r8 *, gfc_array_r8 *, index_type *,
+					       gfc_array_l4 *);
 export_proto(msum_r8);
 
 void
-msum_r8 (gfc_array_r8 * const restrict retarray, 
-	gfc_array_r8 * const restrict array, 
-	const index_type * const restrict pdim, 
-	gfc_array_l4 * const restrict mask)
+msum_r8 (gfc_array_r8 * retarray, gfc_array_r8 * array,
+				  index_type *pdim, gfc_array_l4 * mask)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type sstride[GFC_MAX_DIMENSIONS];
   index_type dstride[GFC_MAX_DIMENSIONS];
   index_type mstride[GFC_MAX_DIMENSIONS];
-  GFC_REAL_8 * restrict dest;
-  const GFC_REAL_8 * restrict base;
-  const GFC_LOGICAL_4 * restrict mbase;
+  GFC_REAL_8 *dest;
+  GFC_REAL_8 *base;
+  GFC_LOGICAL_4 *mbase;
   int rank;
   int dim;
   index_type n;
@@ -210,6 +192,14 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
 
   dim = (*pdim) - 1;
   rank = GFC_DESCRIPTOR_RANK (array) - 1;
+
+  /* TODO:  It should be a front end job to correctly set the strides.  */
+
+  if (array->dim[0].stride == 0)
+    array->dim[0].stride = 1;
+
+  if (mask->dim[0].stride == 0)
+    mask->dim[0].stride = 1;
 
   len = array->dim[dim].ubound + 1 - array->dim[dim].lbound;
   if (len <= 0)
@@ -222,10 +212,6 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
       sstride[n] = array->dim[n].stride;
       mstride[n] = mask->dim[n].stride;
       extent[n] = array->dim[n].ubound + 1 - array->dim[n].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
-
     }
   for (n = dim; n < rank; n++)
     {
@@ -233,15 +219,10 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
       mstride[n] = mask->dim[n + 1].stride;
       extent[n] =
         array->dim[n + 1].ubound + 1 - array->dim[n + 1].lbound;
-
-      if (extent[n] < 0)
-	extent[n] = 0;
     }
 
   if (retarray->data == NULL)
     {
-      size_t alloc_size;
-
       for (n = 0; n < rank; n++)
         {
           retarray->dim[n].lbound = 0;
@@ -252,25 +233,18 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
             retarray->dim[n].stride = retarray->dim[n-1].stride * extent[n-1];
         }
 
-      alloc_size = sizeof (GFC_REAL_8) * retarray->dim[rank-1].stride
-    		   * extent[rank-1];
-
-      retarray->offset = 0;
+      retarray->data
+	 = internal_malloc_size (sizeof (GFC_REAL_8)
+		 		 * retarray->dim[rank-1].stride
+				 * extent[rank-1]);
+      retarray->base = 0;
       retarray->dtype = (array->dtype & ~GFC_DTYPE_RANK_MASK) | rank;
-
-      if (alloc_size == 0)
-	{
-	  /* Make sure we have a zero-sized array.  */
-	  retarray->dim[0].lbound = 0;
-	  retarray->dim[0].ubound = -1;
-	  return;
-	}
-      else
-	retarray->data = internal_malloc_size (alloc_size);
-
     }
   else
     {
+      if (retarray->dim[0].stride == 0)
+	retarray->dim[0].stride = 1;
+
       if (rank != GFC_DESCRIPTOR_RANK (retarray))
 	runtime_error ("rank of return array incorrect");
     }
@@ -299,8 +273,8 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
 
   while (base)
     {
-      const GFC_REAL_8 * restrict src;
-      const GFC_LOGICAL_4 * restrict msrc;
+      GFC_REAL_8 *src;
+      GFC_LOGICAL_4 *msrc;
       GFC_REAL_8 result;
       src = base;
       msrc = mbase;
@@ -332,7 +306,7 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           base -= sstride[n] * extent[n];
           mbase -= mstride[n] * extent[n];
           dest -= dstride[n] * extent[n];
@@ -353,56 +327,3 @@ msum_r8 (gfc_array_r8 * const restrict retarray,
         }
     }
 }
-
-
-extern void ssum_r8 (gfc_array_r8 * const restrict, 
-	gfc_array_r8 * const restrict, const index_type * const restrict,
-	GFC_LOGICAL_4 *);
-export_proto(ssum_r8);
-
-void
-ssum_r8 (gfc_array_r8 * const restrict retarray, 
-	gfc_array_r8 * const restrict array, 
-	const index_type * const restrict pdim, 
-	GFC_LOGICAL_4 * mask)
-{
-  index_type rank;
-  index_type n;
-  index_type dstride;
-  GFC_REAL_8 *dest;
-
-  if (*mask)
-    {
-      sum_r8 (retarray, array, pdim);
-      return;
-    }
-    rank = GFC_DESCRIPTOR_RANK (array);
-  if (rank <= 0)
-    runtime_error ("Rank of array needs to be > 0");
-
-  if (retarray->data == NULL)
-    {
-      retarray->dim[0].lbound = 0;
-      retarray->dim[0].ubound = rank-1;
-      retarray->dim[0].stride = 1;
-      retarray->dtype = (retarray->dtype & ~GFC_DTYPE_RANK_MASK) | 1;
-      retarray->offset = 0;
-      retarray->data = internal_malloc_size (sizeof (GFC_REAL_8) * rank);
-    }
-  else
-    {
-      if (GFC_DESCRIPTOR_RANK (retarray) != 1)
-	runtime_error ("rank of return array does not equal 1");
-
-      if (retarray->dim[0].ubound + 1 - retarray->dim[0].lbound != rank)
-        runtime_error ("dimension of return array incorrect");
-    }
-
-    dstride = retarray->dim[0].stride;
-    dest = retarray->data;
-
-    for (n = 0; n < rank; n++)
-      dest[n * dstride] = 0 ;
-}
-
-#endif

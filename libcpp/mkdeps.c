@@ -1,5 +1,5 @@
 /* Dependency generator for Makefile fragments.
-   Copyright (C) 2000, 2001, 2003, 2007 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2003 Free Software Foundation, Inc.
    Contributed by Zack Weinberg, Mar 2000
 
 This program is free software; you can redistribute it and/or modify it
@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
  In other words, you are welcome to use, share and improve this program.
  You are forbidden to forbid anyone else to use, share and improve
@@ -83,7 +83,7 @@ munge (const char *filename)
     }
 
   /* Now we know how big to make the buffer.  */
-  buffer = XNEWVEC (char, len + 1);
+  buffer = xmalloc (len + 1);
 
   for (p = filename, dst = buffer; *p; p++, dst++)
     {
@@ -141,13 +141,7 @@ apply_vpath (struct deps *d, const char *t)
 
   /* Remove leading ./ in any case.  */
   while (t[0] == '.' && IS_DIR_SEPARATOR (t[1]))
-    {
-      t += 2;
-      /* If we removed a leading ./, then also remove any /s after the
-	 first.  */
-      while (IS_DIR_SEPARATOR (t[0]))
-	++t;
-    }
+    t += 2;
 
   return t;
 }
@@ -157,7 +151,7 @@ apply_vpath (struct deps *d, const char *t)
 struct deps *
 deps_init (void)
 {
-  return XCNEW (struct deps);
+  return xcalloc (sizeof (struct deps), 1);
 }
 
 void
@@ -198,7 +192,8 @@ deps_add_target (struct deps *d, const char *t, int quote)
   if (d->ntargets == d->targets_size)
     {
       d->targets_size = d->targets_size * 2 + 4;
-      d->targetv = XRESIZEVEC (const char *, d->targetv, d->targets_size);
+      d->targetv = xrealloc (d->targetv,
+			     d->targets_size * sizeof (const char *));
     }
 
   t = apply_vpath (d, t);
@@ -228,8 +223,7 @@ deps_add_default_target (struct deps *d, const char *tgt)
 # define TARGET_OBJECT_SUFFIX ".o"
 #endif
       const char *start = lbasename (tgt);
-      char *o = (char *) alloca (strlen (start)
-                                 + strlen (TARGET_OBJECT_SUFFIX) + 1);
+      char *o = alloca (strlen (start) + strlen (TARGET_OBJECT_SUFFIX) + 1);
       char *suffix;
 
       strcpy (o, start);
@@ -251,7 +245,7 @@ deps_add_dep (struct deps *d, const char *t)
   if (d->ndeps == d->deps_size)
     {
       d->deps_size = d->deps_size * 2 + 8;
-      d->depv = XRESIZEVEC (const char *, d->depv, d->deps_size);
+      d->depv = xrealloc (d->depv, d->deps_size * sizeof (const char *));
     }
   d->depv[d->ndeps++] = t;
 }
@@ -267,7 +261,7 @@ deps_add_vpath (struct deps *d, const char *vpath)
     {
       for (p = elem; *p && *p != ':'; p++);
       len = p - elem;
-      copy = XNEWVEC (char, len + 1);
+      copy = xmalloc (len + 1);
       memcpy (copy, elem, len);
       copy[len] = '\0';
       if (*p == ':')
@@ -276,8 +270,9 @@ deps_add_vpath (struct deps *d, const char *vpath)
       if (d->nvpaths == d->vpaths_size)
 	{
 	  d->vpaths_size = d->vpaths_size * 2 + 8;
-	  d->vpathv = XRESIZEVEC (const char *, d->vpathv, d->vpaths_size);
-	  d->vpathlv = XRESIZEVEC (size_t, d->vpathlv, d->vpaths_size);
+	  d->vpathv = xrealloc (d->vpathv,
+				d->vpaths_size * sizeof (const char *));
+	  d->vpathlv = xrealloc (d->vpathlv, d->vpaths_size * sizeof (size_t));
 	}
       d->vpathv[d->nvpaths] = copy;
       d->vpathlv[d->nvpaths] = len;
@@ -387,7 +382,7 @@ deps_restore (struct deps *deps, FILE *fd, const char *self)
   unsigned int i, count;
   size_t num_to_read;
   size_t buf_size = 512;
-  char *buf = XNEWVEC (char, buf_size);
+  char *buf = xmalloc (buf_size);
 
   /* Number of dependences.  */
   if (fread (&count, 1, sizeof (count), fd) != sizeof (count))
@@ -402,7 +397,7 @@ deps_restore (struct deps *deps, FILE *fd, const char *self)
       if (buf_size < num_to_read + 1)
 	{
 	  buf_size = num_to_read + 1 + 127;
-	  buf = XRESIZEVEC (char, buf, buf_size);
+	  buf = xrealloc (buf, buf_size);
 	}
       if (fread (buf, 1, num_to_read, fd) != num_to_read)
 	return -1;

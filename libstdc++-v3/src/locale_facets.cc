@@ -1,4 +1,4 @@
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -14,7 +14,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,8 +28,8 @@
 
 #include <locale>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std 
+{
   // Definitions for static const data members of time_base.
   template<> 
     const char*
@@ -89,6 +89,5 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       *__fptr++ = (__flags & ios_base::uppercase) ? 'G' : 'g';
     *__fptr = '\0';
   }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 

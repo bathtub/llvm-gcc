@@ -15,8 +15,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #undef  DEFAULT_PCC_STRUCT_RETURN
 #define DEFAULT_PCC_STRUCT_RETURN 1
@@ -37,13 +37,20 @@ Boston, MA 02110-1301, USA.  */
         builtin_assert ("system=qnxnto");	\
         builtin_assert ("system=nto");		\
         builtin_assert ("system=unix");		\
+        if (flag_pic)				\
+          {					\
+            builtin_define ("__PIC__");		\
+            builtin_define ("__pic__");		\
+          }					\
     }						\
   while (0)
 
 #undef THREAD_MODEL_SPEC
 #define THREAD_MODEL_SPEC "posix"
 
-#ifdef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifdef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #define SYSROOT_SUFFIX_SPEC "x86"
 #endif
 

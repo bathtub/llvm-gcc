@@ -19,11 +19,6 @@
 struct exception;
 
 
-#if defined( AAB_DARWIN7_9_LONG_DOUBLE_FUNCS_2_CHECK )
-#include <architecture/ppc/math.h>
-#endif  /* AAB_DARWIN7_9_LONG_DOUBLE_FUNCS_2_CHECK */
-
-
 #if defined( BROKEN_CABS_CHECK )
 #ifdef __STDC__
 
@@ -33,8 +28,6 @@ struct exception;
 
  /* This is a comment
                          and it ends here. */
-
-
 #endif  /* BROKEN_CABS_CHECK */
 
 

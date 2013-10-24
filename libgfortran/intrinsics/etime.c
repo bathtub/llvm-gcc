@@ -1,5 +1,5 @@
 /* Implementation of the ETIME intrinsic.
-   Copyright (C) 2004, 2005, 2006 Free Software Foundation, Inc.
+   Copyright (C) 2004 Free Software Foundation, Inc.
    Contributed by Steven G. Kargl <kargls@comcast.net>.
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <sys/types.h>
@@ -46,6 +46,7 @@ void
 etime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
 {
   GFC_REAL_4 tu, ts, tt, *tp;
+  index_type dim;
 
 #if defined(HAVE_SYS_TIME_H) && defined(HAVE_SYS_RESOURCE_H)
   struct rusage rt;
@@ -71,6 +72,9 @@ etime_sub (gfc_array_r4 *t, GFC_REAL_4 *result)
   if (((t->dim[0].ubound + 1 - t->dim[0].lbound)) < 2)
     runtime_error ("Insufficient number of elements in TARRAY.");
 
+  if (t->dim[0].stride == 0)
+    t->dim[0].stride = 1;
+
   tp = t->data;
 
   *tp = tu;
@@ -88,5 +92,27 @@ etime (gfc_array_r4 *t)
 {
   GFC_REAL_4 val;
   etime_sub (t, &val);
+  return val;
+}
+
+/* LAPACK's test programs declares ETIME external, therefore we 
+   need this.  */
+
+extern GFC_REAL_4 etime_ (GFC_REAL_4 *t);
+export_proto_np(etime_);
+
+GFC_REAL_4
+etime_ (GFC_REAL_4 *t)
+{
+  gfc_array_r4 desc;
+  GFC_REAL_4 val;
+
+  /* We only fill in the fields that are used in etime_sub.  */
+  desc.dim[0].lbound = 0;
+  desc.dim[0].ubound = 1;
+  desc.dim[0].stride = 1;
+  desc.data = t;
+
+  etime_sub (&desc, &val);
   return val;
 }

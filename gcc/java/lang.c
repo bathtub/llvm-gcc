@@ -1,5 +1,5 @@
 /* Java(TM) language-specific utility routines.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -39,6 +39,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "langhooks.h"
 #include "langhooks-def.h"
 #include "flags.h"
+#include "xref.h"
 #include "ggc.h"
 #include "diagnostic.h"
 #include "tree-inline.h"
@@ -108,14 +109,6 @@ const char *const tree_code_name[] = {
 };
 #undef DEFTREECODE
 
-/* Table of machine-independent attributes.  */
-const struct attribute_spec java_attribute_table[] =
-{
- { "nonnull",                0, -1, false, true, true,
-			      NULL },
-  { NULL,                     0, 0, false, false, false, NULL }
-};
-
 /* Used to avoid printing error messages with bogus function
    prototypes.  Starts out false.  */
 static bool inhibit_error_function_printing;
@@ -123,6 +116,11 @@ static bool inhibit_error_function_printing;
 int compiling_from_source;
 
 const char *resource_name;
+
+/* When nonzero, we emit xref strings. Values of the flag for xref
+   backends are defined in xref_flag_table, xref.c.  */
+
+int flag_emit_xref = 0;
 
 /* When nonzero, -Wall was turned on.  */
 int flag_wall = 0;
@@ -140,6 +138,9 @@ int flag_deprecated = 1;
 
 /* Don't attempt to verify invocations.  */
 int flag_verify_invocations = 0; 
+
+/* True if the new bytecode verifier should be used.  */
+int flag_new_verifier = 0;
 
 /* When nonzero, print extra version information.  */
 static int v_flag = 0;
@@ -177,6 +178,8 @@ struct language_function GTY(())
 #define LANG_HOOKS_PARSE_FILE java_parse_file
 #undef LANG_HOOKS_MARK_ADDRESSABLE
 #define LANG_HOOKS_MARK_ADDRESSABLE java_mark_addressable
+#undef LANG_HOOKS_TRUTHVALUE_CONVERSION
+#define LANG_HOOKS_TRUTHVALUE_CONVERSION java_truthvalue_conversion
 #undef LANG_HOOKS_DUP_LANG_SPECIFIC_DECL
 #define LANG_HOOKS_DUP_LANG_SPECIFIC_DECL java_dup_lang_specific_decl
 #undef LANG_HOOKS_DECL_PRINTABLE_NAME
@@ -217,12 +220,6 @@ struct language_function GTY(())
 
 #undef LANG_HOOKS_CLEAR_BINDING_STACK
 #define LANG_HOOKS_CLEAR_BINDING_STACK java_clear_binding_stack
-
-#undef LANG_HOOKS_SET_DECL_ASSEMBLER_NAME
-#define LANG_HOOKS_SET_DECL_ASSEMBLER_NAME java_mangle_decl
-
-#undef LANG_HOOKS_ATTRIBUTE_TABLE
-#define LANG_HOOKS_ATTRIBUTE_TABLE java_attribute_table
 
 /* Each front end provides its own.  */
 const struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
@@ -346,7 +343,7 @@ java_handle_option (size_t scode, const char *arg, int value)
     default:
       if (cl_options[code].flags & CL_Java)
 	break;
-      gcc_unreachable ();
+      abort();
     }
 
   return 1;
@@ -367,9 +364,6 @@ java_init (void)
      init optimization.  */
   if (flag_indirect_dispatch)
     always_initialize_class_p = true;
-
-  if (!flag_indirect_dispatch)
-    flag_indirect_classes = false;
 
   /* Force minimum function alignment if g++ uses the least significant
      bit of function pointers to store the virtual bit. This is required
@@ -415,7 +409,7 @@ put_decl_string (const char *str, int len)
       if (decl_buf == NULL)
 	{
 	  decl_buflen = len + 100;
-	  decl_buf = XNEWVEC (char, decl_buflen);
+	  decl_buf = xmalloc (decl_buflen);
 	}
       else
 	{
@@ -588,9 +582,11 @@ java_init_options (unsigned int argc ATTRIBUTE_UNUSED,
   /* Java requires left-to-right evaluation of subexpressions.  */
   flag_evaluation_order = 1;
 
+  /* APPLE LOCAL begin mainline 4840357 */
   /* Unit at a time is disabled for Java because it is considered
      too expensive.  */
   no_unit_at_a_time_default = 1;
+  /* APPLE LOCAL end mainline 4840357 */
 
   jcf_path_init ();
 
@@ -621,14 +617,11 @@ java_post_options (const char **pfilename)
      must always verify everything.  */
   if (! flag_indirect_dispatch)
     flag_verify_invocations = true;
-
-  if (flag_reduced_reflection)
+  else
     {
-      if (flag_indirect_dispatch)
-        error ("-findirect-dispatch is incompatible "
-               "with -freduced-reflection");
-      if (flag_jni)
-        error ("-fjni is incompatible with -freduced-reflection");
+      /* If we are using indirect dispatch, then we want the new
+	 verifier as well.  */
+      flag_new_verifier = 1;
     }
 
   /* Open input file.  */
@@ -658,7 +651,7 @@ java_post_options (const char **pfilename)
 		error ("couldn't determine target name for dependency tracking");
 	      else
 		{
-		  char *buf = XNEWVEC (char, dot - filename +
+		  char *buf = xmalloc (dot - filename +
 				       3 + sizeof (TARGET_OBJECT_SUFFIX));
 		  strncpy (buf, filename, dot - filename);
 
@@ -765,6 +758,63 @@ java_tree_inlining_walk_subtrees (tree *tp ATTRIBUTE_UNUSED,
   #undef WALK_SUBTREE
 }
 
+/* APPLE LOCAL begin AltiVec */
+/* Placeholders to make linking work, remove when altivec support is correct */
+
+int comptypes (tree type1, tree type2);
+
+int
+comptypes (tree type1, tree type2)
+{
+  register tree t1 = type1;
+  register tree t2 = type2;
+  if (t1 == t2 || !t1 || !t2
+      || TREE_CODE (t1) == ERROR_MARK || TREE_CODE (t2) == ERROR_MARK)
+    return 1;
+  return 0;
+}
+
+tree default_conversion (tree exp);
+
+tree
+default_conversion (tree exp)
+{
+  return exp;
+}
+
+tree lang_build_type_variant (tree type, int constp ATTRIBUTE_UNUSED, int volatilep ATTRIBUTE_UNUSED);
+
+tree
+lang_build_type_variant (tree type, int constp ATTRIBUTE_UNUSED, int volatilep ATTRIBUTE_UNUSED)
+{
+  return type;
+}
+/* APPLE LOCAL end AltiVec */
+
+/* APPLE LOCAL begin constant cfstrings */
+enum { blabla } c_language;
+const char *constant_string_class_name = "die die";
+int flag_next_runtime = 1;
+/* APPLE LOCAL end constant cfstrings */
+
+/* APPLE LOCAL disable_typechecking_for_spec_flag */
+int disable_typechecking_for_spec_flag = 0;
+
+/* APPLE LOCAL begin CW asm blocks */
+/* Dummies needed because we use them from cpplib, yuck.  */
+int flag_iasm_blocks;
+int iasm_state;
+int iasm_in_operands;
+/* APPLE LOCAL end CW asm blocks */
+
+/* APPLE LOCAL begin 4174833 */
+tree
+objc_is_class_name (tree ARG_UNUSED (arg))
+{
+  return 0;
+}
+/* APPLE LOCAL end 4174833 */
+
 /* Every call to a static constructor has an associated boolean
    variable which is in the outermost scope of the calling method.
    This variable is used to avoid multiple calls to the static
@@ -804,7 +854,8 @@ merge_init_test_initialization (void **entry, void *x)
   /* See if we have remapped this declaration.  If we haven't there's
      a bug in the inliner.  */
   n = splay_tree_lookup (decl_map, (splay_tree_key) ite->value);
-  gcc_assert (n);
+  if (! n)
+    abort ();
 
   /* Create a new entry for the class and its remapped boolean
      variable.  If we already have a mapping for this class we've
@@ -821,7 +872,7 @@ merge_init_test_initialization (void **entry, void *x)
   does this by setting the DECL_INITIAL of the init_test_decl for that
   class, and no initializations are emitted for that class.
 
-  However, what if the method that is supposed to do the initialization
+  However, what if the method that is suppoed to do the initialization
   is itself inlined in the caller?  When expanding the called method
   we'll assume that the class initialization has already been done,
   because the DECL_INITIAL of the init_test_decl is set.

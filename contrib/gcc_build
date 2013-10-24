@@ -1,5 +1,5 @@
 #! /bin/sh
-
+# APPLE LOCAL file mainline
 ########################################################################
 #
 # File:   gcc_build
@@ -201,8 +201,7 @@ SVN_SERVER="gcc.gnu.org"
 # The path to the repository on that server.
 SVN_REPOSITORY="/svn/gcc/"
 # The branch to check out from that server.
-# Defaults to trunk if no branch is defined with -b.
-SVN_BRANCH=""
+SVN_BRANCH="trunk"
 # The SVN protocol to use.
 SVN_PROTOCOL="svn"
 # The username to use when connecting to the server.
@@ -286,10 +285,8 @@ if [ ${CHECKOUT} -eq 0 ] && test -n "${SVN_BRANCH}"; then
 fi
 
 # Validate the branch name.
-if test -n "${SVN_BRANCH}"; then
+if test "${SVN_BRANCH}" != "trunk"; then
     SVN_BRANCH="branches/${SVN_BRANCH}";
-else
-    SVN_BRANCH="trunk";
 fi
 
 # Checkout the tree.

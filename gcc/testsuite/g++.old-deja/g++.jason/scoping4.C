@@ -4,7 +4,7 @@
 
 class A {
 public:
-  typedef const char * Ptr;
+  typedef char * Ptr;
   Ptr s;
   Ptr get_string();
   A(Ptr string); // { s = string; };

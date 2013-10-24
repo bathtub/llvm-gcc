@@ -1,6 +1,7 @@
 /* Test various diagnostics of ill-formed constructs involving labels.  */
 /* { dg-do compile } */
-/* { dg-options "-Wunused" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-Wunused -fnested-functions" } */
 
 extern void dummy(void);
 

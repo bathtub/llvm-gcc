@@ -1,3 +1,4 @@
+/* APPLE LOCAL file 4221664 mainline candidate */
 double d = 1024.0 - 1.0 / 32768.0;
 extern double floor(double);
 extern float floorf(float);

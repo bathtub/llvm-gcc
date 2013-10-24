@@ -1,6 +1,6 @@
 /* Definitions of target machine for GCC for IA-32.
    Copyright (C) 1988, 1992, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
+   2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* The purpose of this file is to define the characteristics of the i386,
    independent of assembler syntax or operating system.
@@ -88,33 +88,134 @@ struct processor_costs {
 
 extern const struct processor_costs *ix86_cost;
 
+/* Run-time compilation parameters selecting different hardware subsets.  */
+
+extern int target_flags;
+
 /* Macros used in the machine description to test the flags.  */
 
 /* configure can arrange to make this 2, to force a 486.  */
 
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
 #ifndef TARGET_CPU_DEFAULT
 #define TARGET_CPU_DEFAULT TARGET_CPU_DEFAULT_generic
 #endif
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
 
+/* APPLE LOCAL begin mainline 2005-04-11 4010614 */
 #ifndef TARGET_FPMATH_DEFAULT
 #define TARGET_FPMATH_DEFAULT \
   (TARGET_64BIT && TARGET_SSE ? FPMATH_SSE : FPMATH_387)
 #endif
+/* APPLE LOCAL end mainline 2005-04-11 4010614 */
 
-#define TARGET_FLOAT_RETURNS_IN_80387 TARGET_FLOAT_RETURNS
+/* Masks for the -m switches */
+#define MASK_80387		0x00000001	/* Hardware floating point */
+#define MASK_RTD		0x00000002	/* Use ret that pops args */
+#define MASK_ALIGN_DOUBLE	0x00000004	/* align doubles to 2 word boundary */
+#define MASK_SVR3_SHLIB		0x00000008	/* Uninit locals into bss */
+#define MASK_IEEE_FP		0x00000010	/* IEEE fp comparisons */
+#define MASK_FLOAT_RETURNS	0x00000020	/* Return float in st(0) */
+#define MASK_NO_FANCY_MATH_387	0x00000040	/* Disable sin, cos, sqrt */
+#define MASK_OMIT_LEAF_FRAME_POINTER 0x080      /* omit leaf frame pointers */
+#define MASK_STACK_PROBE	0x00000100	/* Enable stack probing */
+#define MASK_NO_ALIGN_STROPS	0x00000200	/* Enable aligning of string ops.  */
+#define MASK_INLINE_ALL_STROPS	0x00000400	/* Inline stringops in all cases */
+#define MASK_NO_PUSH_ARGS	0x00000800	/* Use push instructions */
+#define MASK_ACCUMULATE_OUTGOING_ARGS 0x00001000/* Accumulate outgoing args */
+#define MASK_MMX		0x00002000	/* Support MMX regs/builtins */
+#define MASK_SSE		0x00004000	/* Support SSE regs/builtins */
+#define MASK_SSE2		0x00008000	/* Support SSE2 regs/builtins */
+#define MASK_SSE3		0x00010000	/* Support SSE3 regs/builtins */
+#define MASK_3DNOW		0x00020000	/* Support 3Dnow builtins */
+#define MASK_3DNOW_A		0x00040000	/* Support Athlon 3Dnow builtins */
+#define MASK_128BIT_LONG_DOUBLE 0x00080000	/* long double size is 128bit */
+#define MASK_64BIT		0x00100000	/* Produce 64bit code */
+#define MASK_MS_BITFIELD_LAYOUT 0x00200000	/* Use native (MS) bitfield layout */
+#define MASK_TLS_DIRECT_SEG_REFS 0x00400000	/* Avoid adding %gs:0  */
+/* APPLE LOCAL begin regparmandstackparm; delete at 4.1 merge (when i386.opt file appears) */
+#define MASK_SSEREGPARM		0x01000000	/* Pass float & double in SSE regs */
+#define TARGET_SSEREGPARM (target_flags & MASK_SSEREGPARM)
+/* APPLE LOCAL end regparmandstackparm; delete at 4.1 merge (when i386.opt file appears) */
+/* APPLE LOCAL ssse3 */
+#define MASK_SSSE3		0x02000000
+/* Unused:			0x03e0000	*/
+
+/* APPLE LOCAL begin AT&T-style stub 4164563 */
+#define MACHOPIC_NL_SYMBOL_PTR_SECTION ".section __IMPORT,__pointers,non_lazy_symbol_pointers"
+/* APPLE LOCAL end AT&T-style stub 4164563 */
+
+/* ... overlap with subtarget options starts by 0x04000000.  */
+#define MASK_NO_RED_ZONE	0x04000000	/* Do not use red zone */
+
+/* Use the floating point instructions */
+#define TARGET_80387 (target_flags & MASK_80387)
+
+/* Compile using ret insn that pops args.
+   This will not work unless you use prototypes at least
+   for all functions that can take varying numbers of args.  */
+#define TARGET_RTD (target_flags & MASK_RTD)
+
+/* Align doubles to a two word boundary.  This breaks compatibility with
+   the published ABI's for structures containing doubles, but produces
+   faster code on the pentium.  */
+#define TARGET_ALIGN_DOUBLE (target_flags & MASK_ALIGN_DOUBLE)
+
+/* Use push instructions to save outgoing args.  */
+#define TARGET_PUSH_ARGS (!(target_flags & MASK_NO_PUSH_ARGS))
+
+/* Accumulate stack adjustments to prologue/epilogue.  */
+#define TARGET_ACCUMULATE_OUTGOING_ARGS \
+ (target_flags & MASK_ACCUMULATE_OUTGOING_ARGS)
+
+/* Put uninitialized locals into bss, not data.
+   Meaningful only on svr3.  */
+#define TARGET_SVR3_SHLIB (target_flags & MASK_SVR3_SHLIB)
+
+/* Use IEEE floating point comparisons.  These handle correctly the cases
+   where the result of a comparison is unordered.  Normally SIGFPE is
+   generated in such cases, in which case this isn't needed.  */
+#define TARGET_IEEE_FP (target_flags & MASK_IEEE_FP)
+
+/* Functions that return a floating point value may return that value
+   in the 387 FPU or in 386 integer registers.  If set, this flag causes
+   the 387 to be used, which is compatible with most calling conventions.  */
+#define TARGET_FLOAT_RETURNS_IN_80387 (target_flags & MASK_FLOAT_RETURNS)
+
+/* Long double is 128bit instead of 96bit, even when only 80bits are used.
+   This mode wastes cache, but avoid misaligned data accesses and simplifies
+   address calculations.  */
+#define TARGET_128BIT_LONG_DOUBLE (target_flags & MASK_128BIT_LONG_DOUBLE)
+
+/* Disable generation of FP sin, cos and sqrt operations for 387.
+   This is because FreeBSD lacks these in the math-emulator-code */
+#define TARGET_NO_FANCY_MATH_387 (target_flags & MASK_NO_FANCY_MATH_387)
+
+/* Generate 387 floating point intrinsics for the current target.  */
+#define TARGET_USE_FANCY_MATH_387 (! TARGET_NO_FANCY_MATH_387)
+
+/* Don't create frame pointers for leaf functions */
+#define TARGET_OMIT_LEAF_FRAME_POINTER \
+  (target_flags & MASK_OMIT_LEAF_FRAME_POINTER)
+
+/* Debug GO_IF_LEGITIMATE_ADDRESS */
+#define TARGET_DEBUG_ADDR (ix86_debug_addr_string != 0)
+
+/* Debug FUNCTION_ARG macros */
+#define TARGET_DEBUG_ARG (ix86_debug_arg_string != 0)
 
 /* 64bit Sledgehammer mode.  For libgcc2 we make sure this is a
    compile-time constant.  */
 #ifdef IN_LIBGCC2
-#undef TARGET_64BIT
 #ifdef __x86_64__
 #define TARGET_64BIT 1
 #else
 #define TARGET_64BIT 0
 #endif
 #else
-#ifndef TARGET_BI_ARCH
-#undef TARGET_64BIT
+#ifdef TARGET_BI_ARCH
+#define TARGET_64BIT (target_flags & MASK_64BIT)
+#else
 #if TARGET_64BIT_DEFAULT
 #define TARGET_64BIT 1
 #else
@@ -126,6 +227,9 @@ extern const struct processor_costs *ix86_cost;
 #define HAS_LONG_COND_BRANCH 1
 #define HAS_LONG_UNCOND_BRANCH 1
 
+/* Avoid adding %gs:0 in TLS references; use %gs:address directly.  */
+#define TARGET_TLS_DIRECT_SEG_REFS (target_flags & MASK_TLS_DIRECT_SEG_REFS)
+
 #define TARGET_386 (ix86_tune == PROCESSOR_I386)
 #define TARGET_486 (ix86_tune == PROCESSOR_I486)
 #define TARGET_PENTIUM (ix86_tune == PROCESSOR_PENTIUM)
@@ -136,17 +240,19 @@ extern const struct processor_costs *ix86_cost;
 #define TARGET_K8 (ix86_tune == PROCESSOR_K8)
 #define TARGET_ATHLON_K8 (TARGET_K8 || TARGET_ATHLON)
 #define TARGET_NOCONA (ix86_tune == PROCESSOR_NOCONA)
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
 #define TARGET_GENERIC32 (ix86_tune == PROCESSOR_GENERIC32)
 #define TARGET_GENERIC64 (ix86_tune == PROCESSOR_GENERIC64)
 #define TARGET_GENERIC (TARGET_GENERIC32 || TARGET_GENERIC64)
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
 
 #define TUNEMASK (1 << ix86_tune)
 extern const int x86_use_leave, x86_push_memory, x86_zero_extend_with_and;
 extern const int x86_use_bit_test, x86_cmove, x86_deep_branch;
 extern const int x86_branch_hints, x86_unroll_strlen;
 extern const int x86_double_with_add, x86_partial_reg_stall, x86_movx;
-extern const int x86_use_himode_fiop, x86_use_simode_fiop;
-extern const int x86_use_mov0, x86_use_cltd, x86_read_modify_write;
+extern const int x86_use_loop, x86_use_fiop, x86_use_mov0;
+extern const int x86_use_cltd, x86_read_modify_write;
 extern const int x86_read_modify, x86_split_long_moves;
 extern const int x86_promote_QImode, x86_single_stringop, x86_fast_prefix;
 extern const int x86_himode_math, x86_qimode_math, x86_promote_qi_regs;
@@ -161,10 +267,10 @@ extern const int x86_sse_typeless_stores, x86_sse_load0_by_pxor;
 extern const int x86_use_ffreep;
 extern const int x86_inter_unit_moves, x86_schedule;
 extern const int x86_use_bt;
-extern const int x86_cmpxchg, x86_cmpxchg8b, x86_cmpxchg16b, x86_xadd;
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
 extern const int x86_use_incdec;
 extern const int x86_pad_returns;
-extern const int x86_partial_flag_reg_stall;
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
 extern int x86_prefetch_sse;
 
 #define TARGET_USE_LEAVE (x86_use_leave & TUNEMASK)
@@ -175,6 +281,7 @@ extern int x86_prefetch_sse;
 /* For sane SSE instruction set generation we need fcomi instruction.  It is
    safe to enable all CMOVE instructions.  */
 #define TARGET_CMOVE ((x86_cmove & (1 << ix86_arch)) || TARGET_SSE)
+/* APPLE LOCAL mainline 4196991 4632262 */
 #define TARGET_FISTTP (TARGET_SSE3 && TARGET_80387)
 #define TARGET_DEEP_BRANCH_PREDICTION (x86_deep_branch & TUNEMASK)
 #define TARGET_BRANCH_PREDICTION_HINTS (x86_branch_hints & TUNEMASK)
@@ -182,9 +289,8 @@ extern int x86_prefetch_sse;
 #define TARGET_USE_SAHF ((x86_use_sahf & TUNEMASK) && !TARGET_64BIT)
 #define TARGET_MOVX (x86_movx & TUNEMASK)
 #define TARGET_PARTIAL_REG_STALL (x86_partial_reg_stall & TUNEMASK)
-#define TARGET_PARTIAL_FLAG_REG_STALL (x86_partial_flag_reg_stall & TUNEMASK)
-#define TARGET_USE_HIMODE_FIOP (x86_use_himode_fiop & TUNEMASK)
-#define TARGET_USE_SIMODE_FIOP (x86_use_simode_fiop & TUNEMASK)
+#define TARGET_USE_LOOP (x86_use_loop & TUNEMASK)
+#define TARGET_USE_FIOP (x86_use_fiop & TUNEMASK)
 #define TARGET_USE_MOV0 (x86_use_mov0 & TUNEMASK)
 #define TARGET_USE_CLTD (x86_use_cltd & TUNEMASK)
 #define TARGET_SPLIT_LONG_MOVES (x86_split_long_moves & TUNEMASK)
@@ -211,6 +317,8 @@ extern int x86_prefetch_sse;
 #define TARGET_MEMORY_MISMATCH_STALL (x86_memory_mismatch_stall & TUNEMASK)
 #define TARGET_PROLOGUE_USING_MOVE (x86_prologue_using_move & TUNEMASK)
 #define TARGET_EPILOGUE_USING_MOVE (x86_epilogue_using_move & TUNEMASK)
+/* APPLE LOCAL mainline 2006-04-19 4434601 */
+/* TARGET_DECOMPOSE_LEA removed */
 #define TARGET_PREFETCH_SSE (x86_prefetch_sse)
 #define TARGET_SHIFT1 (x86_shift1 & TUNEMASK)
 #define TARGET_USE_FFREEP (x86_use_ffreep & TUNEMASK)
@@ -219,24 +327,152 @@ extern int x86_prefetch_sse;
 #define TARGET_FOUR_JUMP_LIMIT (x86_four_jump_limit & TUNEMASK)
 #define TARGET_SCHEDULE (x86_schedule & TUNEMASK)
 #define TARGET_USE_BT (x86_use_bt & TUNEMASK)
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
 #define TARGET_USE_INCDEC (x86_use_incdec & TUNEMASK)
 #define TARGET_PAD_RETURNS (x86_pad_returns & TUNEMASK)
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
+
+#define TARGET_STACK_PROBE (target_flags & MASK_STACK_PROBE)
+
+#define TARGET_ALIGN_STRINGOPS (!(target_flags & MASK_NO_ALIGN_STROPS))
+#define TARGET_INLINE_ALL_STRINGOPS (target_flags & MASK_INLINE_ALL_STROPS)
 
 #define ASSEMBLER_DIALECT (ix86_asm_dialect)
 
+#define TARGET_SSE ((target_flags & MASK_SSE) != 0)
+#define TARGET_SSE2 ((target_flags & MASK_SSE2) != 0)
+#define TARGET_SSE3 ((target_flags & MASK_SSE3) != 0)
 #define TARGET_SSE_MATH ((ix86_fpmath & FPMATH_SSE) != 0)
 #define TARGET_MIX_SSE_I387 ((ix86_fpmath & FPMATH_SSE) \
 			     && (ix86_fpmath & FPMATH_387))
+#define TARGET_MMX ((target_flags & MASK_MMX) != 0)
+#define TARGET_3DNOW ((target_flags & MASK_3DNOW) != 0)
+#define TARGET_3DNOW_A ((target_flags & MASK_3DNOW_A) != 0)
+/* APPLE LOCAL ssse3 */
+#define TARGET_SSSE3 ((target_flags & MASK_SSSE3) != 0)
+
+#define TARGET_RED_ZONE (!(target_flags & MASK_NO_RED_ZONE))
+
+#define TARGET_USE_MS_BITFIELD_LAYOUT  (target_flags & MASK_MS_BITFIELD_LAYOUT)
 
 #define TARGET_GNU_TLS (ix86_tls_dialect == TLS_DIALECT_GNU)
-#define TARGET_GNU2_TLS (ix86_tls_dialect == TLS_DIALECT_GNU2)
-#define TARGET_ANY_GNU_TLS (TARGET_GNU_TLS || TARGET_GNU2_TLS)
 #define TARGET_SUN_TLS (ix86_tls_dialect == TLS_DIALECT_SUN)
 
-#define TARGET_CMPXCHG (x86_cmpxchg & (1 << ix86_arch))
-#define TARGET_CMPXCHG8B (x86_cmpxchg8b & (1 << ix86_arch))
-#define TARGET_CMPXCHG16B (x86_cmpxchg16b & (1 << ix86_arch))
-#define TARGET_XADD (x86_xadd & (1 << ix86_arch))
+/* WARNING: Do not mark empty strings for translation, as calling
+            gettext on an empty string does NOT return an empty
+            string.  */
+
+
+#define TARGET_SWITCHES							      \
+{ { "80387",			 MASK_80387, N_("Use hardware fp") },	      \
+  { "no-80387",			-MASK_80387, N_("Do not use hardware fp") },  \
+  { "hard-float",		 MASK_80387, N_("Use hardware fp") },	      \
+  { "soft-float",		-MASK_80387, N_("Do not use hardware fp") },  \
+  { "no-soft-float",		 MASK_80387, N_("Use hardware fp") },	      \
+  { "386",			 0, "" /*Deprecated.*/},		      \
+  { "486",			 0, "" /*Deprecated.*/},		      \
+  { "pentium",			 0, "" /*Deprecated.*/},		      \
+  { "pentiumpro",		 0, "" /*Deprecated.*/},		      \
+  { "intel-syntax",		 0, "" /*Deprecated.*/},	 	      \
+  { "no-intel-syntax",		 0, "" /*Deprecated.*/},	 	      \
+  { "rtd",			 MASK_RTD,				      \
+    N_("Alternate calling convention") },				      \
+  { "no-rtd",			-MASK_RTD,				      \
+    N_("Use normal calling convention") },				      \
+  { "align-double",		 MASK_ALIGN_DOUBLE,			      \
+    N_("Align some doubles on dword boundary") },			      \
+  { "no-align-double",		-MASK_ALIGN_DOUBLE,			      \
+    N_("Align doubles on word boundary") },				      \
+  { "svr3-shlib",		 MASK_SVR3_SHLIB,			      \
+    N_("Uninitialized locals in .bss")  },				      \
+  { "no-svr3-shlib",		-MASK_SVR3_SHLIB,			      \
+    N_("Uninitialized locals in .data") },				      \
+  { "ieee-fp",			 MASK_IEEE_FP,				      \
+    N_("Use IEEE math for fp comparisons") },				      \
+  { "no-ieee-fp",		-MASK_IEEE_FP,				      \
+    N_("Do not use IEEE math for fp comparisons") },			      \
+  { "fp-ret-in-387",		 MASK_FLOAT_RETURNS,			      \
+    N_("Return values of functions in FPU registers") },		      \
+  { "no-fp-ret-in-387",		-MASK_FLOAT_RETURNS ,			      \
+    N_("Do not return values of functions in FPU registers")},		      \
+  { "no-fancy-math-387",	 MASK_NO_FANCY_MATH_387,		      \
+    N_("Do not generate sin, cos, sqrt for FPU") },			      \
+  { "fancy-math-387",		-MASK_NO_FANCY_MATH_387,		      \
+     N_("Generate sin, cos, sqrt for FPU")},				      \
+  { "omit-leaf-frame-pointer",	 MASK_OMIT_LEAF_FRAME_POINTER,		      \
+    N_("Omit the frame pointer in leaf functions") },			      \
+  { "no-omit-leaf-frame-pointer",-MASK_OMIT_LEAF_FRAME_POINTER, "" },	      \
+  { "stack-arg-probe",		 MASK_STACK_PROBE,			      \
+    N_("Enable stack probing") },					      \
+  { "no-stack-arg-probe",	-MASK_STACK_PROBE, "" },		      \
+  { "windows",			0, 0 /* undocumented */ },		      \
+  { "dll",			0,  0 /* undocumented */ },		      \
+  { "align-stringops",		-MASK_NO_ALIGN_STROPS,			      \
+    N_("Align destination of the string operations") },			      \
+  { "no-align-stringops",	 MASK_NO_ALIGN_STROPS,			      \
+    N_("Do not align destination of the string operations") },		      \
+  { "inline-all-stringops",	 MASK_INLINE_ALL_STROPS,		      \
+    N_("Inline all known string operations") },				      \
+  { "no-inline-all-stringops",	-MASK_INLINE_ALL_STROPS,		      \
+    N_("Do not inline all known string operations") },			      \
+  { "push-args",		-MASK_NO_PUSH_ARGS,			      \
+    N_("Use push instructions to save outgoing arguments") },		      \
+  { "no-push-args",		MASK_NO_PUSH_ARGS,			      \
+    N_("Do not use push instructions to save outgoing arguments") },	      \
+  { "accumulate-outgoing-args",	MASK_ACCUMULATE_OUTGOING_ARGS,		      \
+    N_("Use push instructions to save outgoing arguments") },		      \
+  { "no-accumulate-outgoing-args",-MASK_ACCUMULATE_OUTGOING_ARGS,	      \
+    N_("Do not use push instructions to save outgoing arguments") },	      \
+  { "mmx",			 MASK_MMX,				      \
+    N_("Support MMX built-in functions") },				      \
+  { "no-mmx",			 -(MASK_MMX|MASK_3DNOW|MASK_3DNOW_A),	      \
+    N_("Do not support MMX built-in functions") },			      \
+  { "3dnow",                     MASK_3DNOW,				      \
+    N_("Support 3DNow! built-in functions") },				      \
+  { "no-3dnow",                  -(MASK_3DNOW|MASK_3DNOW_A),		      \
+    N_("Do not support 3DNow! built-in functions") },			      \
+  { "sse",			 MASK_SSE,				      \
+    N_("Support MMX and SSE built-in functions and code generation") },	      \
+  { "no-sse",			 -(MASK_SSE|MASK_SSE2|MASK_SSE3),	      \
+    N_("Do not support MMX and SSE built-in functions and code generation") },\
+  { "sse2",			 MASK_SSE2,				      \
+    N_("Support MMX, SSE and SSE2 built-in functions and code generation") }, \
+  { "no-sse2",			 -(MASK_SSE2|MASK_SSE3),		      \
+    N_("Do not support MMX, SSE and SSE2 built-in functions and code generation") },    \
+  { "sse3",			 MASK_SSE3,				      \
+    N_("Support MMX, SSE, SSE2 and SSE3 built-in functions and code generation") },\
+  { "no-sse3",			 -MASK_SSE3,				      \
+    N_("Do not support MMX, SSE, SSE2 and SSE3 built-in functions and code generation") },\
+    /* APPLE LOCAL begin ssse3 4424835 */						      \
+  { "ssse3",			 MASK_SSSE3,				      \
+    N_("Support SSSE3 built-in functions and code generation") },		      \
+  { "no-ssse3",			 -MASK_SSSE3,				      \
+    N_("Do not support SSSE3 built-in functions and code generation") },	      \
+  /* APPLE LOCAL end ssse3 */						      \
+  { "128bit-long-double",	 MASK_128BIT_LONG_DOUBLE,		      \
+    N_("sizeof(long double) is 16") },					      \
+  { "96bit-long-double",	-MASK_128BIT_LONG_DOUBLE,		      \
+    N_("sizeof(long double) is 12") },					      \
+  { "64",			MASK_64BIT,				      \
+    N_("Generate 64bit x86-64 code") },					      \
+  { "32",			-MASK_64BIT,				      \
+    N_("Generate 32bit i386 code") },					      \
+  { "ms-bitfields",		MASK_MS_BITFIELD_LAYOUT,		      \
+    N_("Use native (MS) bitfield layout") },				      \
+  { "no-ms-bitfields",		-MASK_MS_BITFIELD_LAYOUT,		      \
+    N_("Use gcc default bitfield layout") },				      \
+  { "red-zone",			-MASK_NO_RED_ZONE,			      \
+    N_("Use red-zone in the x86-64 code") },				      \
+  { "no-red-zone",		MASK_NO_RED_ZONE,			      \
+    N_("Do not use red-zone in the x86-64 code") },			      \
+  { "tls-direct-seg-refs",	MASK_TLS_DIRECT_SEG_REFS,		      \
+    N_("Use direct references against %gs when accessing tls data") },	      \
+  { "no-tls-direct-seg-refs",	-MASK_TLS_DIRECT_SEG_REFS,		      \
+    N_("Do not use direct references against %gs when accessing tls data") }, \
+  SUBTARGET_SWITCHES							      \
+  { "",									      \
+    TARGET_DEFAULT | TARGET_64BIT_DEFAULT | TARGET_SUBTARGET_DEFAULT	      \
+    | TARGET_TLS_DIRECT_SEG_REFS_DEFAULT, 0 }}
 
 #ifndef TARGET_64BIT_DEFAULT
 #define TARGET_64BIT_DEFAULT 0
@@ -254,10 +490,61 @@ extern int x86_prefetch_sse;
    it's analogous to similar code for Mach-O on PowerPC.  darwin.h
    redefines this to 1.  */
 #define TARGET_MACHO 0
+/* APPLE LOCAL begin mach-o cleanup */
+#define MACHOPIC_INDIRECT 0
+#define MACHOPIC_PURE 0
+/* APPLE LOCAL end mach-o cleanup */
 
 /* Subtargets may reset this to 1 in order to enable 96-bit long double
    with the rounding mode forced to 53 bits.  */
 #define TARGET_96_ROUND_53_LONG_DOUBLE 0
+
+/* This macro is similar to `TARGET_SWITCHES' but defines names of
+   command options that have values.  Its definition is an
+   initializer with a subgrouping for each command option.
+
+   Each subgrouping contains a string constant, that defines the
+   fixed part of the option name, and the address of a variable.  The
+   variable, type `char *', is set to the variable part of the given
+   option if the fixed part matches.  The actual option name is made
+   by appending `-m' to the specified name.  */
+#define TARGET_OPTIONS						\
+{ { "tune=",		&ix86_tune_string,			\
+    N_("Schedule code for given CPU"), 0},			\
+  { "fpmath=",		&ix86_fpmath_string,			\
+    N_("Generate floating point mathematics using given instruction set"), 0},\
+  { "arch=",		&ix86_arch_string,			\
+    N_("Generate code for given CPU"), 0},			\
+  { "regparm=",		&ix86_regparm_string,			\
+    N_("Number of registers used to pass integer arguments"), 0},\
+  { "align-loops=",	&ix86_align_loops_string,		\
+    N_("Loop code aligned to this power of 2"), 0},		\
+  { "align-jumps=",	&ix86_align_jumps_string,		\
+    N_("Jump targets are aligned to this power of 2"), 0},	\
+  { "align-functions=",	&ix86_align_funcs_string,		\
+    N_("Function starts are aligned to this power of 2"), 0},	\
+  { "preferred-stack-boundary=",				\
+    &ix86_preferred_stack_boundary_string,			\
+    N_("Attempt to keep stack aligned to this power of 2"), 0},	\
+  { "branch-cost=",	&ix86_branch_cost_string,		\
+    N_("Branches are this expensive (1-5, arbitrary units)"), 0},\
+  { "cmodel=", &ix86_cmodel_string,				\
+    N_("Use given x86-64 code model"), 0},			\
+  { "debug-arg", &ix86_debug_arg_string,			\
+    "" /* Undocumented.  */, 0},				\
+  { "debug-addr", &ix86_debug_addr_string,			\
+    "" /* Undocumented.  */, 0},				\
+  { "asm=", &ix86_asm_string,					\
+    N_("Use given assembler dialect"), 0},			\
+  { "tls-dialect=", &ix86_tls_dialect_string,			\
+    N_("Use given thread-local storage dialect"), 0},		\
+  /* APPLE LOCAL begin 4356747 stack realign */			\
+  { "stackrealign",						\
+    &ix86_force_align_arg_pointer,				\
+    N_("Realign stack in prologue"), 0},			\
+  /* APPLE LOCAL end 4356747 stack realign */			\
+  SUBTARGET_OPTIONS						\
+}
 
 /* Sometimes certain combinations of command options do not make
    sense on a particular target machine.  You can define a macro
@@ -270,33 +557,28 @@ extern int x86_prefetch_sse;
 
 #define OVERRIDE_OPTIONS override_options ()
 
+/* These are meant to be redefined in the host dependent files */
+#define SUBTARGET_SWITCHES
+#define SUBTARGET_OPTIONS
+
 /* Define this to change the optimizations performed by default.  */
 #define OPTIMIZATION_OPTIONS(LEVEL, SIZE) \
   optimization_options ((LEVEL), (SIZE))
 
-/* -march=native handling only makes sense with compiler running on
-   an x86 or x86_64 chip.  If changing this condition, also change
-   the condition in driver-i386.c.  */
-#if defined(__i386__) || defined(__x86_64__)
-/* In driver-i386.c.  */
-extern const char *host_detect_local_cpu (int argc, const char **argv);
-#define EXTRA_SPEC_FUNCTIONS \
-  { "local_cpu_detect", host_detect_local_cpu },
-#define HAVE_LOCAL_CPU_DETECT
-#endif
-
+/* APPLE LOCAL begin mainline */
 /* Support for configure-time defaults of some command line options.
-   The order here is important so that -march doesn't squash the
-   tune or cpu values.  */
+   The order here is important so that -march doesn't squash the tune
+   or cpu values.  */
 #define OPTION_DEFAULT_SPECS \
   {"tune", "%{!mtune=*:%{!mcpu=*:%{!march=*:-mtune=%(VALUE)}}}" }, \
   {"cpu", "%{!mtune=*:%{!mcpu=*:%{!march=*:-mtune=%(VALUE)}}}" }, \
   {"arch", "%{!march=*:-march=%(VALUE)}"}
+/* APPLE LOCAL end mainline */
 
 /* Specs for the compiler proper */
 
 #ifndef CC1_CPU_SPEC
-#define CC1_CPU_SPEC_1 "\
+#define CC1_CPU_SPEC "\
 %{!mtune*: \
 %{m386:mtune=i386 \
 %n`-m386' is deprecated. Use `-march=i386' or `-mtune=i386' instead.\n} \
@@ -313,15 +595,6 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 %n`-mintel-syntax' is deprecated. Use `-masm=intel' instead.\n} \
 %{mno-intel-syntax:-masm=att \
 %n`-mno-intel-syntax' is deprecated. Use `-masm=att' instead.\n}"
-
-#ifndef HAVE_LOCAL_CPU_DETECT
-#define CC1_CPU_SPEC CC1_CPU_SPEC_1
-#else
-#define CC1_CPU_SPEC CC1_CPU_SPEC_1 \
-"%{march=native:%<march=native %:local_cpu_detect(arch) \
-  %{!mtune=*:%<mtune=native %:local_cpu_detect(tune)}} \
-%{mtune=native:%<mtune=native %:local_cpu_detect(tune)}"
-#endif
 #endif
 
 /* Target CPU builtins.  */
@@ -410,6 +683,10 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 	builtin_define ("__SSE2__");				\
       if (TARGET_SSE3)						\
 	builtin_define ("__SSE3__");				\
+      /* APPLE LOCAL begin ssse3 4424835 */			\
+      if (TARGET_SSSE3)						\
+	builtin_define ("__SSSE3__");				\
+      /* APPLE LOCAL end ssse3 */				\
       if (TARGET_SSE_MATH && TARGET_SSE)			\
 	builtin_define ("__SSE_MATH__");			\
       if (TARGET_SSE_MATH && TARGET_SSE2)			\
@@ -490,14 +767,19 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define TARGET_CPU_DEFAULT_pentium_m 14
 #define TARGET_CPU_DEFAULT_prescott 15
 #define TARGET_CPU_DEFAULT_nocona 16
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
 #define TARGET_CPU_DEFAULT_generic 17
+/* APPLE LOCAL begin apple cpu */
+#define TARGET_CPU_DEFAULT_apple 18
 
 #define TARGET_CPU_DEFAULT_NAMES {"i386", "i486", "pentium", "pentium-mmx",\
 				  "pentiumpro", "pentium2", "pentium3", \
 				  "pentium4", "k6", "k6-2", "k6-3",\
 				  "athlon", "athlon-4", "k8", \
 				  "pentium-m", "prescott", "nocona", \
-				  "generic"}
+				  "generic", "apple"}
+/* APPLE LOCAL end apple cpu */
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
 
 #ifndef CC1_SPEC
 #define CC1_SPEC "%(cc1_cpu) "
@@ -572,13 +854,21 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define PARM_BOUNDARY BITS_PER_WORD
 
 /* Boundary (in *bits*) on which stack pointer should be aligned.  */
-#define STACK_BOUNDARY BITS_PER_WORD
+/* APPLE LOCAL begin compiler should obey -mpreferred-stack-boundary (radar 3232990) */
+/* prefer * #define STACK_BOUNDARY ((ix86_preferred_stack_boundary > 128) ? 128 : ix86_preferred_stack_boundary) */
+/*  We're going to extremes to yield a result of indeterminite
+    signedness here; this macro will be expanded in signed and
+    unsigned contexts, and mixed signedness induces fatal
+    warnings.  Radar 3941684.  */
+#define STACK_BOUNDARY ((ix86_preferred_stack_boundary >=  128) ? 128 : \
+			(ix86_preferred_stack_boundary == 64) ? 64 : 32)
+/* APPLE LOCAL end compiler should obey -mpreferred-stack-boundary (radar 3232990) */
 
 /* Boundary (in *bits*) on which the stack pointer prefers to be
    aligned; the compiler cannot rely on having this alignment.  */
 #define PREFERRED_STACK_BOUNDARY ix86_preferred_stack_boundary
 
-/* As of July 2001, many runtimes do not align the stack properly when
+/* As of July 2001, many runtimes to not align the stack properly when
    entering main.  This causes expand_main_function to forcibly align
    the stack, which results in aligned frames for functions called from
    main, though it does nothing for the alignment of main itself.  */
@@ -607,7 +897,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 
 /* Decide whether a variable of mode MODE should be 128 bit aligned.  */
 #define ALIGN_MODE_128(MODE) \
- ((MODE) == XFmode || SSE_REG_MODE_P (MODE))
+ ((MODE) == XFmode || (MODE) == TFmode || SSE_REG_MODE_P (MODE))
 
 /* The published ABIs say that doubles should be aligned on word
    boundaries, so lower the alignment for structure fields unless
@@ -623,7 +913,8 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define BIGGEST_FIELD_ALIGNMENT 32
 #endif
 #else
-#define ADJUST_FIELD_ALIGN(FIELD, COMPUTED) \
+/* APPLE LOCAL Macintosh alignment */
+#define ADJUST_FIELD_ALIGN(FIELD, COMPUTED, FIRST_FIELD_P) \
    x86_field_alignment (FIELD, COMPUTED)
 #endif
 
@@ -689,10 +980,12 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
    for details.  */
 
 #define STACK_REGS
+/* APPLE LOCAL begin mainline */
 #define IS_STACK_MODE(MODE)					\
   (((MODE) == SFmode && (!TARGET_SSE || !TARGET_SSE_MATH))	\
    || ((MODE) == DFmode && (!TARGET_SSE2 || !TARGET_SSE_MATH))  \
    || (MODE) == XFmode)
+/* APPLE LOCAL end mainline */
 
 /* Number of actual hardware registers.
    The hardware registers are assigned numbers for the compiler
@@ -860,15 +1153,6 @@ do {									\
       ? (TARGET_64BIT ? 4 : 6)						\
       : ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)))
 
-#define HARD_REGNO_NREGS_HAS_PADDING(REGNO, MODE)			\
-  ((TARGET_128BIT_LONG_DOUBLE && !TARGET_64BIT)				\
-   ? (FP_REGNO_P (REGNO) || SSE_REGNO_P (REGNO) || MMX_REGNO_P (REGNO)	\
-      ? 0								\
-      : ((MODE) == XFmode || (MODE) == XCmode))				\
-   : 0)
-
-#define HARD_REGNO_NREGS_WITH_PADDING(REGNO, MODE) ((MODE) == XFmode ? 4 : 8)
-
 #define VALID_SSE2_REG_MODE(MODE) \
     ((MODE) == V16QImode || (MODE) == V8HImode || (MODE) == V2DFmode    \
      || (MODE) == V2DImode || (MODE) == DFmode)
@@ -882,11 +1166,12 @@ do {									\
 
 #define VALID_MMX_REG_MODE(MODE)					\
     ((MODE) == DImode || (MODE) == V8QImode || (MODE) == V4HImode	\
-     || (MODE) == V2SImode || (MODE) == SImode)
+/* APPLE LOCAL 4656532 use V1DImode for _m64 */				\
+     || (MODE) == V2SImode || (MODE) == SImode || (MODE) == V1DImode)
 
 /* ??? No autovectorization into MMX or 3DNOW until we can reliably
    place emms and femms instructions.  */
-#define UNITS_PER_SIMD_WORD (TARGET_SSE ? 16 : UNITS_PER_WORD)
+#define UNITS_PER_SIMD_WORD (TARGET_SSE ? 16 : 0)
 
 #define VALID_FP_MODE_P(MODE)						\
     ((MODE) == SFmode || (MODE) == DFmode || (MODE) == XFmode		\
@@ -975,7 +1260,7 @@ do {									\
    This is computed in `reload', in reload1.c.  */
 #define FRAME_POINTER_REQUIRED  ix86_frame_pointer_required ()
 
-/* Override this in other tm.h files to cope with various OS lossage
+/* Override this in other tm.h files to cope with various OS losage
    requiring a frame pointer.  */
 #ifndef SUBTARGET_FRAME_POINTER_REQUIRED
 #define SUBTARGET_FRAME_POINTER_REQUIRED 0
@@ -1004,8 +1289,7 @@ do {									\
 #define REAL_PIC_OFFSET_TABLE_REGNUM  3
 
 #define PIC_OFFSET_TABLE_REGNUM				\
-  ((TARGET_64BIT && ix86_cmodel == CM_SMALL_PIC)	\
-   || !flag_pic ? INVALID_REGNUM			\
+  (TARGET_64BIT || !flag_pic ? INVALID_REGNUM		\
    : reload_completed ? REGNO (pic_offset_table_rtx)	\
    : REAL_PIC_OFFSET_TABLE_REGNUM)
 
@@ -1030,6 +1314,11 @@ do {									\
 
 #define RETURN_IN_MEMORY(TYPE) \
   ix86_return_in_memory (TYPE)
+
+/* APPLE LOCAL begin radar 4781080 */
+#define OBJC_FPRETURN_MSGCALL(TYPE,WHICH) \
+  ix86_objc_fpreturn_msgcall (TYPE, WHICH)
+/* APPLE LOCAL end radar 4781080 */
 
 /* This is overridden by <cygwin.h>.  */
 #define MS_AGGREGATE_RETURN 0
@@ -1228,6 +1517,90 @@ enum reg_class
 #define INDEX_REG_CLASS INDEX_REGS
 #define BASE_REG_CLASS GENERAL_REGS
 
+/* Unused letters:
+    B                 TU W   
+          h jk          vw  z
+*/
+
+/* Get reg_class from a letter such as appears in the machine description.  */
+
+#define REG_CLASS_FROM_LETTER(C)	\
+  ((C) == 'r' ? GENERAL_REGS :					\
+   (C) == 'R' ? LEGACY_REGS :					\
+   (C) == 'q' ? TARGET_64BIT ? GENERAL_REGS : Q_REGS :		\
+   (C) == 'Q' ? Q_REGS :					\
+   (C) == 'f' ? (TARGET_80387 || TARGET_FLOAT_RETURNS_IN_80387	\
+		 ? FLOAT_REGS					\
+		 : NO_REGS) :					\
+   (C) == 't' ? (TARGET_80387 || TARGET_FLOAT_RETURNS_IN_80387	\
+		 ? FP_TOP_REG					\
+		 : NO_REGS) :					\
+   (C) == 'u' ? (TARGET_80387 || TARGET_FLOAT_RETURNS_IN_80387	\
+		 ? FP_SECOND_REG				\
+		 : NO_REGS) :					\
+   (C) == 'a' ? AREG :						\
+   (C) == 'b' ? BREG :						\
+   (C) == 'c' ? CREG :						\
+   (C) == 'd' ? DREG :						\
+   (C) == 'x' ? TARGET_SSE ? SSE_REGS : NO_REGS :		\
+   (C) == 'Y' ? TARGET_SSE2? SSE_REGS : NO_REGS :		\
+   (C) == 'y' ? TARGET_MMX ? MMX_REGS : NO_REGS :		\
+   (C) == 'A' ? AD_REGS :					\
+   (C) == 'D' ? DIREG :						\
+   (C) == 'S' ? SIREG :						\
+   (C) == 'l' ? INDEX_REGS :					\
+   NO_REGS)
+
+/* The letters I, J, K, L and M in a register constraint string
+   can be used to stand for particular ranges of immediate operands.
+   This macro defines what the ranges are.
+   C is the letter, and VALUE is a constant value.
+   Return 1 if VALUE is in the range specified by C.
+
+   I is for non-DImode shifts.
+   J is for DImode shifts.
+   K is for signed imm8 operands.
+   L is for andsi as zero-extending move.
+   M is for shifts that can be executed by the "lea" opcode.
+   N is for immediate operands for out/in instructions (0-255)
+   */
+
+#define CONST_OK_FOR_LETTER_P(VALUE, C)				\
+  ((C) == 'I' ? (VALUE) >= 0 && (VALUE) <= 31			\
+   : (C) == 'J' ? (VALUE) >= 0 && (VALUE) <= 63			\
+   : (C) == 'K' ? (VALUE) >= -128 && (VALUE) <= 127		\
+   : (C) == 'L' ? (VALUE) == 0xff || (VALUE) == 0xffff		\
+   : (C) == 'M' ? (VALUE) >= 0 && (VALUE) <= 3			\
+   : (C) == 'N' ? (VALUE) >= 0 && (VALUE) <= 255		\
+   : 0)
+
+/* Similar, but for floating constants, and defining letters G and H.
+   Here VALUE is the CONST_DOUBLE rtx itself.  We allow constants even if
+   TARGET_387 isn't set, because the stack register converter may need to
+   load 0.0 into the function value register.  */
+
+#define CONST_DOUBLE_OK_FOR_LETTER_P(VALUE, C)  \
+  ((C) == 'G' ? standard_80387_constant_p (VALUE) \
+   : 0)
+
+/* A C expression that defines the optional machine-dependent
+   constraint letters that can be used to segregate specific types of
+   operands, usually memory references, for the target machine.  Any
+   letter that is not elsewhere defined and not matched by
+   `REG_CLASS_FROM_LETTER' may be used.  Normally this macro will not
+   be defined.
+
+   If it is required for a particular target machine, it should
+   return 1 if VALUE corresponds to the operand type represented by
+   the constraint letter C.  If C is not defined as an extra
+   constraint, the value returned should be 0 regardless of VALUE.  */
+
+#define EXTRA_CONSTRAINT(VALUE, D)					\
+  ((D) == 'e' ? x86_64_immediate_operand (VALUE, VOIDmode)		\
+   : (D) == 'Z' ? x86_64_zext_immediate_operand (VALUE, VOIDmode)	\
+   : (D) == 'C' ? standard_sse_constant_p (VALUE)			\
+   : 0)
+
 /* Place additional restrictions on the register class to use when it
    is necessary to be able to hold a value of mode MODE in a reload
    register for which class CLASS would ordinarily be used.  */
@@ -1254,11 +1627,13 @@ enum reg_class
 #define PREFERRED_RELOAD_CLASS(X, CLASS) \
    ix86_preferred_reload_class ((X), (CLASS))
 
+/* APPLE LOCAL begin 3501055 mainline candidate */
 /* Discourage putting floating-point values in SSE registers unless
    SSE math is being used, and likewise for the 387 registers.  */
 
 #define PREFERRED_OUTPUT_RELOAD_CLASS(X, CLASS) \
    ix86_preferred_output_reload_class ((X), (CLASS))
+/* APPLE LOCAL end 3501055 mainline candidate */
 
 /* If we are copying between general and FP registers, we need a memory
    location. The same is true for SSE and MMX registers.  */
@@ -1322,10 +1697,11 @@ enum reg_class
    makes the stack pointer a smaller address.  */
 #define STACK_GROWS_DOWNWARD
 
-/* Define this to nonzero if the nominal address of the stack frame
+/* Define this if the nominal address of the stack frame
    is at the high-address end of the local variables;
    that is, each additional local variable allocated
    goes at a more negative offset in the frame.  */
+/* APPLE LOCAL mainline */
 #define FRAME_GROWS_DOWNWARD 1
 
 /* Offset within stack frame to start allocating local variables at.
@@ -1336,10 +1712,9 @@ enum reg_class
 
 /* If we generate an insn to push BYTES bytes,
    this says how many the stack pointer really advances by.
-   On 386, we have pushw instruction that decrements by exactly 2 no
-   matter what the position was, there is no pushb.
-   But as CIE data alignment factor on this arch is -4, we need to make
-   sure all stack pointer adjustments are in multiple of 4.
+   On 386 pushw decrements by exactly 2 no matter what the position was.
+   On the 386 there is no pushb; we use pushw instead, and this
+   has the effect of rounding up to 2.
 
    For 64bit ABI we round up to 8 bytes.
  */
@@ -1347,7 +1722,7 @@ enum reg_class
 #define PUSH_ROUNDING(BYTES) \
   (TARGET_64BIT		     \
    ? (((BYTES) + 7) & (-8))  \
-   : (((BYTES) + 3) & (-4)))
+   : (((BYTES) + 1) & (-2)))
 
 /* If defined, the maximum amount of space required for outgoing arguments will
    be computed and placed into the variable
@@ -1400,6 +1775,15 @@ enum reg_class
 #define RETURN_POPS_ARGS(FUNDECL, FUNTYPE, SIZE) \
   ix86_return_pops_args ((FUNDECL), (FUNTYPE), (SIZE))
 
+/* Define how to find the value returned by a function.
+   VALTYPE is the data type of the value (as a tree).
+   If the precise function being called is known, FUNC is its FUNCTION_DECL;
+   otherwise, FUNC is 0.  */
+/* APPLE LOCAL begin mainline 2005-09-20 */
+#define FUNCTION_VALUE(VALTYPE, FUNC)  \
+   ix86_function_value (VALTYPE, FUNC, 0)
+/* APPLE LOCAL end mainline 2005-09-20 */
+
 #define FUNCTION_VALUE_REGNO_P(N) \
   ix86_function_value_regno_p (N)
 
@@ -1438,8 +1822,10 @@ typedef struct ix86_args {
   int mmx_nregs;		/* # mmx registers available for passing */
   int mmx_regno;		/* next available mmx register number */
   int maybe_vaarg;		/* true for calls to possibly vardic fncts.  */
+  /* APPLE LOCAL begin mainline 2005-09-20 */
   int float_in_sse;		/* 1 if in 32-bit mode SFmode (2 for DFmode) should
 				   be passed in SSE registers.  Otherwise 0.  */
+  /* APPLE LOCAL end mainline 2005-09-20 */
 } CUMULATIVE_ARGS;
 
 /* Initialize a variable CUM of type CUMULATIVE_ARGS
@@ -1733,7 +2119,8 @@ do {							\
 
 #define REGPARM_MAX (TARGET_64BIT ? 6 : 3)
 
-#define SSE_REGPARM_MAX (TARGET_64BIT ? 8 : (TARGET_SSE ? 3 : 0))
+/* APPLE LOCAL regparmandstackparm */
+#define SSE_REGPARM_MAX (TARGET_64BIT ? 8 : (TARGET_MACHO ? 4 : (TARGET_SSE ? 3 : 0)))
 
 #define MMX_REGPARM_MAX (TARGET_64BIT ? 0 : (TARGET_MMX ? 3 : 0))
 
@@ -1853,7 +2240,11 @@ do {							\
    subsequent accesses occur to other fields in the same word of the
    structure, but to different bytes.  */
 
-#define SLOW_BYTE_ACCESS 0
+/* APPLE LOCAL begin radar 4287182 */
+/* Temporarily set it to two targets. Please sync it with main line
+   when its patch is approved. */
+#define SLOW_BYTE_ACCESS (TARGET_GENERIC | TARGET_NOCONA)
+/* APPLE LOCAL end radar 4287182 */
 
 /* Nonzero if access to memory by shorts is slow and undesirable.  */
 #define SLOW_SHORT_ACCESS 0
@@ -1953,9 +2344,11 @@ number as al, and ax.
 #define DBX_REGISTER_NUMBER(N) \
   (TARGET_64BIT ? dbx64_register_map[(N)] : dbx_register_map[(N)])
 
-extern int const dbx_register_map[FIRST_PSEUDO_REGISTER];
-extern int const dbx64_register_map[FIRST_PSEUDO_REGISTER];
-extern int const svr4_dbx_register_map[FIRST_PSEUDO_REGISTER];
+/* APPLE LOCAL begin mainline 2006-02-17 4356747 stack realign */
+extern int const dbx_register_map[FIRST_PSEUDO_REGISTER+1];
+extern int const dbx64_register_map[FIRST_PSEUDO_REGISTER+1];
+extern int const svr4_dbx_register_map[FIRST_PSEUDO_REGISTER+1];
+/* APPLE LOCAL end mainline 2006-02-17 4356747 stack realign */
 
 /* Before the prologue, RA is at 0(%esp).  */
 #define INCOMING_RETURN_ADDR_RTX \
@@ -1987,7 +2380,9 @@ extern int const svr4_dbx_register_map[FIRST_PSEUDO_REGISTER];
    Whether or not a particular assembler allows us to enter such, I
    guess we'll have to see.  */
 #define ASM_PREFERRED_EH_DATA_FORMAT(CODE, GLOBAL)       		\
-  asm_preferred_eh_data_format ((CODE), (GLOBAL))
+  (flag_pic								\
+    ? ((GLOBAL) ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | DW_EH_PE_sdata4\
+   : DW_EH_PE_absptr)
 
 /* This is how to output an insn to push a register on the stack.
    It need not be very fast code.  */
@@ -2023,13 +2418,24 @@ do {									\
 #define ASM_OUTPUT_ADDR_DIFF_ELT(FILE, BODY, VALUE, REL) \
   ix86_output_addr_diff_elt ((FILE), (VALUE), (REL))
 
+/* APPLE LOCAL begin x86_64 support 2006-02-02 */
+
 /* Under some conditions we need jump tables in the text section,
    because the assembler cannot handle label differences between
-   sections.  This is the case for x86_64 on Mach-O for example.  */
+   sections.  This is the case for x86_64 on Mach-O for example. */
 
 #define JUMP_TABLES_IN_TEXT_SECTION \
   (flag_pic && ((TARGET_MACHO && TARGET_64BIT) \
    || (!TARGET_64BIT && !HAVE_AS_GOTOFF_IN_DATA)))
+
+/* APPLE LOCAL end x86_64 support 2006-02-02 */
+
+/* Emit a dtp-relative reference to a TLS variable.  */
+
+#ifdef HAVE_AS_TLS
+#define ASM_OUTPUT_DWARF_DTPREL(FILE, SIZE, X) \
+  i386_output_dwarf_dtprel (FILE, SIZE, X)
+#endif
 
 /* Switch to init or fini section via SECTION_OP, emit a call to FUNC,
    and switch back.  For x86 we do this only to save a few bytes that
@@ -2080,13 +2486,20 @@ enum processor_type
   PROCESSOR_PENTIUM4,
   PROCESSOR_K8,
   PROCESSOR_NOCONA,
+/* APPLE LOCAL begin mainline 2006-04-19 4434601 */
   PROCESSOR_GENERIC32,
   PROCESSOR_GENERIC64,
+/* APPLE LOCAL end mainline 2006-04-19 4434601 */
+/* APPLE LOCAL apple cpu */
+  PROCESSOR_APPLE,
   PROCESSOR_max
 };
 
 extern enum processor_type ix86_tune;
+extern const char *ix86_tune_string;
+
 extern enum processor_type ix86_arch;
+extern const char *ix86_arch_string;
 
 enum fpmath_unit
 {
@@ -2095,15 +2508,16 @@ enum fpmath_unit
 };
 
 extern enum fpmath_unit ix86_fpmath;
+extern const char *ix86_fpmath_string;
 
 enum tls_dialect
 {
   TLS_DIALECT_GNU,
-  TLS_DIALECT_GNU2,
   TLS_DIALECT_SUN
 };
 
 extern enum tls_dialect ix86_tls_dialect;
+extern const char *ix86_tls_dialect_string;
 
 enum cmodel {
   CM_32,	/* The traditional 32-bit ABI.  */
@@ -2111,11 +2525,11 @@ enum cmodel {
   CM_KERNEL,	/* Assumes all code and data fits in the high 31 bits.  */
   CM_MEDIUM,	/* Assumes code fits in the low 31 bits; data unlimited.  */
   CM_LARGE,	/* No assumptions.  */
-  CM_SMALL_PIC,	/* Assumes code+data+got/plt fits in a 31 bit region.  */
-  CM_MEDIUM_PIC	/* Assumes code+got/plt fits in a 31 bit region.  */
+  CM_SMALL_PIC	/* Assumes code+data+got/plt fits in a 31 bit region.  */
 };
 
 extern enum cmodel ix86_cmodel;
+extern const char *ix86_cmodel_string;
 
 /* Size of the RED_ZONE area.  */
 #define RED_ZONE_SIZE 128
@@ -2127,15 +2541,37 @@ enum asm_dialect {
   ASM_INTEL
 };
 
+extern const char *ix86_asm_string;
 extern enum asm_dialect ix86_asm_dialect;
+
+extern int ix86_regparm;
+extern const char *ix86_regparm_string;
+
+/* APPLE LOCAL begin regparmandstackparm */
+extern void ix86_darwin_handle_regparmandstackparm (tree fndecl);
+extern void ix86_darwin_redirect_calls(void);
+/* APPLE LOCAL end regparmandstackparm */
+
 extern unsigned int ix86_preferred_stack_boundary;
-extern int ix86_branch_cost, ix86_section_threshold;
+extern const char *ix86_preferred_stack_boundary_string;
+
+extern int ix86_branch_cost;
+extern const char *ix86_branch_cost_string;
+
+extern const char *ix86_debug_arg_string;
+extern const char *ix86_debug_addr_string;
+
+/* Obsoleted by -f options.  Remove before 3.2 ships.  */
+extern const char *ix86_align_loops_string;
+extern const char *ix86_align_jumps_string;
+extern const char *ix86_align_funcs_string;
 
 /* Smallest class containing REGNO.  */
 extern enum reg_class const regclass_map[FIRST_PSEUDO_REGISTER];
 
 extern rtx ix86_compare_op0;	/* operand 0 for comparisons */
 extern rtx ix86_compare_op1;	/* operand 1 for comparisons */
+/* APPLE LOCAL mainline */
 extern rtx ix86_compare_emitted;
 
 /* To properly truncate FP values into integers, we need to set i387 control
@@ -2153,32 +2589,11 @@ extern rtx ix86_compare_emitted;
    Post-reload pass may be later used to eliminate the redundant fildcw if
    needed.  */
 
-enum ix86_entity
-{
-  I387_TRUNC = 0,
-  I387_FLOOR,
-  I387_CEIL,
-  I387_MASK_PM,
-  MAX_386_ENTITIES
-};
-
-enum ix86_stack_slot
-{
-  SLOT_VIRTUAL = 0,
-  SLOT_TEMP,
-  SLOT_CW_STORED,
-  SLOT_CW_TRUNC,
-  SLOT_CW_FLOOR,
-  SLOT_CW_CEIL,
-  SLOT_CW_MASK_PM,
-  MAX_386_STACK_LOCALS
-};
 
 /* Define this macro if the port needs extra instructions inserted
    for mode switching in an optimizing compilation.  */
 
-#define OPTIMIZE_MODE_SWITCHING(ENTITY) \
-   ix86_optimize_mode_switching[(ENTITY)]
+#define OPTIMIZE_MODE_SWITCHING(ENTITY) ix86_optimize_mode_switching
 
 /* If you define `OPTIMIZE_MODE_SWITCHING', you have to define this as
    initializer for an array of integers.  Each initializer element N
@@ -2188,16 +2603,27 @@ enum ix86_stack_slot
    starting counting at zero - determines the integer that is used to
    refer to the mode-switched entity in question.  */
 
-#define NUM_MODES_FOR_MODE_SWITCHING \
-   { I387_CW_ANY, I387_CW_ANY, I387_CW_ANY, I387_CW_ANY }
+#define NUM_MODES_FOR_MODE_SWITCHING { I387_CW_ANY }
 
 /* ENTITY is an integer specifying a mode-switched entity.  If
    `OPTIMIZE_MODE_SWITCHING' is defined, you must define this macro to
    return an integer value not larger than the corresponding element
    in `NUM_MODES_FOR_MODE_SWITCHING', to denote the mode that ENTITY
-   must be switched into prior to the execution of INSN. */
+   must be switched into prior to the execution of INSN. 
+   
+   The mode UNINITIALIZED is used to force re-load of possibly previously
+   stored control word after function call.  The mode ANY specify that
+   function has no requirements on the control word and make no changes
+   in the bits we are interested in.  */
 
-#define MODE_NEEDED(ENTITY, I) ix86_mode_needed ((ENTITY), (I))
+#define MODE_NEEDED(ENTITY, I)						\
+  (GET_CODE (I) == CALL_INSN						\
+   || (GET_CODE (I) == INSN && (asm_noperands (PATTERN (I)) >= 0 	\
+				|| GET_CODE (PATTERN (I)) == ASM_INPUT))\
+   ? I387_CW_UNINITIALIZED						\
+   : recog_memoized (I) < 0						\
+   ? I387_CW_ANY 							\
+   : get_attr_i387_cw (I))
 
 /* This macro specifies the order in which modes for ENTITY are
    processed.  0 is the highest priority.  */
@@ -2210,9 +2636,10 @@ enum ix86_stack_slot
 
 #define EMIT_MODE_SET(ENTITY, MODE, HARD_REGS_LIVE) 			\
   ((MODE) != I387_CW_ANY && (MODE) != I387_CW_UNINITIALIZED		\
-   ? emit_i387_cw_initialization (MODE), 0				\
+   ? emit_i387_cw_initialization (assign_386_stack_local (HImode, 1),	\
+				  assign_386_stack_local (HImode, 2),   \
+				  MODE), 0				\
    : 0)
-
 
 /* Avoid renaming of stack registers, as doing so in combination with
    scheduling just increases amount of live registers at time and in
@@ -2232,49 +2659,886 @@ struct machine_function GTY(())
 {
   struct stack_local_entry *stack_locals;
   const char *some_ld_name;
+  /* APPLE LOCAL mainline 2006-02-17 4356747 stack realign */
   rtx force_align_arg_pointer;
   int save_varrargs_registers;
   int accesses_prev_frame;
-  int optimize_mode_switching[MAX_386_ENTITIES];
+  int optimize_mode_switching;
   /* Set by ix86_compute_frame_layout and used by prologue/epilogue expander to
      determine the style used.  */
   int use_fast_prologue_epilogue;
   /* Number of saved registers USE_FAST_PROLOGUE_EPILOGUE has been computed
      for.  */
   int use_fast_prologue_epilogue_nregs;
-  /* If true, the current function needs the default PIC register, not
-     an alternate register (on x86) and must not use the red zone (on
-     x86_64), even if it's a leaf function.  We don't want the
-     function to be regarded as non-leaf because TLS calls need not
-     affect register allocation.  This flag is set when a TLS call
-     instruction is expanded within a function, and never reset, even
-     if all such instructions are optimized away.  Use the
-     ix86_current_function_calls_tls_descriptor macro for a better
-     approximation.  */
-  int tls_descriptor_call_expanded_p;
 };
 
 #define ix86_stack_locals (cfun->machine->stack_locals)
 #define ix86_save_varrargs_registers (cfun->machine->save_varrargs_registers)
 #define ix86_optimize_mode_switching (cfun->machine->optimize_mode_switching)
-#define ix86_tls_descriptor_calls_expanded_in_cfun \
-  (cfun->machine->tls_descriptor_call_expanded_p)
-/* Since tls_descriptor_call_expanded is not cleared, even if all TLS
-   calls are optimized away, we try to detect cases in which it was
-   optimized away.  Since such instructions (use (reg REG_SP)), we can
-   verify whether there's any such instruction live by testing that
-   REG_SP is live.  */
-#define ix86_current_function_calls_tls_descriptor \
-  (ix86_tls_descriptor_calls_expanded_in_cfun && regs_ever_live[SP_REG])
 
 /* Control behavior of x86_file_start.  */
 #define X86_FILE_START_VERSION_DIRECTIVE false
 #define X86_FILE_START_FLTUSED false
 
-/* Flag to mark data that is in the large address area.  */
-#define SYMBOL_FLAG_FAR_ADDR		(SYMBOL_FLAG_MACH_DEP << 0)
-#define SYMBOL_REF_FAR_ADDR_P(X)	\
-	((SYMBOL_REF_FLAGS (X) & SYMBOL_FLAG_FAR_ADDR) != 0)
+/* APPLE LOCAL begin CW asm blocks */
+#undef TARGET_IASM_EXTRA_INFO
+#define TARGET_IASM_EXTRA_INFO			\
+  char mod[3];					\
+  bool as_immediate;				\
+  bool as_offset;				\
+  bool pseudo;
+
+#define TARGET_IASM_REORDER_ARG(OPCODE, NEWARGNUM, NUM_ARGS, ARGNUM)	\
+  do {									\
+    /* If we are outputting AT&T style assembly language, the argument	\
+       numbering is reversed.  */					\
+    if (iasm_x86_needs_swapping (opcode))					\
+      NEWARGNUM = NUM_ARGS - ARGNUM + 1;				\
+  } while (0)
+
+#define IASM_SYNTH_CONSTRAINTS(R, ARGNUM, NUM_ARGS, DB)					\
+  do {											\
+    /* On x86, operand 2 or 3 can be left out and the assembler will deal with it.	\
+											\
+       Take for example an opcode:							\
+											\
+	   opcode r m i									\
+											\
+       We allow:									\
+											\
+	   opcode r mi									\
+											\
+       when we have only 2 operands.  */						\
+    if (R										\
+	&& ARGNUM == 2									\
+	&& NUM_ARGS == 2								\
+	&& R < &DB[sizeof(DB) / sizeof (DB[0]) - 1]					\
+	&& strcmp (R[1].opcode, R->opcode) == 0						\
+	&& R[1].argnum == 3)								\
+      {											\
+	tree t;										\
+	size_t len = strlen (r->constraint) + strlen (r[1].constraint) + 1;		\
+	char *p = alloca (len);								\
+											\
+	sprintf(p, "%s%s", r->constraint, r[1].constraint);				\
+	t = build_string (len, p);							\
+	return TREE_STRING_POINTER (t);							\
+      }											\
+  } while (0)
+
+#define TARGET_IASM_PRINT_OP(BUF, ARG, ARGNUM, USES, MUST_BE_REG, MUST_NOT_BE_REG, E) \
+ iasm_print_op (BUF, ARG, ARGNUM, USES, MUST_BE_REG, MUST_NOT_BE_REG, E)
+
+extern tree iasm_x86_canonicalize_operands (const char **, tree, void *);
+/* On x86, we can rewrite opcodes, change argument ordering and so no... */
+#define IASM_CANONICALIZE_OPERANDS(OPCODE, NEW_OPCODE, IARGS, E)		\
+  do {								\
+    NEW_OPCODE = OPCODE;					\
+    IARGS = iasm_x86_canonicalize_operands (&NEW_OPCODE, IARGS, E);	\
+  } while (0)
+
+#define IASM_SEE_OPCODE(YYCHAR, T)					\
+    /* If we see an int, arrange to see it as an identifier (opcode),	\
+       not as a type.  */						\
+    ((YYCHAR == TYPESPEC						\
+      && C_RID_CODE (T) == RID_INT)					\
+     ? IDENTIFIER : YYCHAR)
+
+/* Return true iff the ID is a prefix for an instruction.  */
+
+#define IASM_IS_PREFIX(ID)				\
+  do {							\
+    const char *myname = IDENTIFIER_POINTER (ID);	\
+    if (strcasecmp (myname, "lock") == 0		\
+	|| strcasecmp (myname, "rep") == 0		\
+	|| strcasecmp (myname, "repe") == 0		\
+	|| strcasecmp (myname, "repz") == 0		\
+        || strcasecmp (myname, "repne") == 0		\
+	|| strcasecmp (myname, "repnz") == 0)		\
+      return true;					\
+  } while (0)
+
+#define IASM_PRINT_PREFIX(BUF, PREFIX_LIST) iasm_x86_print_prefix(BUF, PREFIX_LIST)
+
+#define IASM_IMMED_PREFIX(E, BUF)		\
+  do {						\
+    if (!E->pseudo && ! E->as_immediate)	\
+      sprintf (BUF + strlen (BUF), "$");	\
+  } while (0)
+
+#define IASM_OFFSET_PREFIX(E, BUF)		\
+  do {						\
+    if (E->as_offset)				\
+      sprintf (BUF + strlen (BUF), "$");	\
+  } while (0)
+
+/* We can't yet expose ST(x) to reg-stack.c, don't try.  */
+#define IASM_HIDE_REG(R) FP_REGNO_P (R)
+
+#define IASM_SEE_IMMEDIATE(E)			\
+  E->as_immediate = true
+
+#define IASM_SEE_NO_IMMEDIATE(E)			\
+  E->as_immediate = false
+
+/* Table of instructions that need extra constraints.  Keep this table sorted.  */
+#undef TARGET_IASM_OP_CONSTRAINT
+#define TARGET_IASM_OP_CONSTRAINT \
+  { "adc", 1, "+rm,r" },	\
+  { "adc", 2, "ir,m" },		\
+  { "add", 1, "+rm,r" },	\
+  { "add", 2, "ir,m" },		\
+  { "addps", 1, "+x"},		\
+  { "addps", 2, "xm"},		\
+  { "addsd", 1, "+x"},		\
+  { "addsd", 2, "xm"},		\
+  { "addss", 1, "+x"},		\
+  { "addss", 2, "xm"},		\
+  { "addsubpd", 1, "+x"},      	\
+  { "addsubpd", 2, "xm"},	\
+  { "addsubps", 1, "+x"},	\
+  { "addsubps", 2, "xm"},      	\
+  { "and", 1, "+rm,r"},		\
+  { "and", 2, "ir,m"},		\
+  { "andnpd", 1, "+x"},		\
+  { "andnpd", 2, "xm"},		\
+  { "andnps", 1, "+x"},		\
+  { "andnps", 2, "xm"},		\
+  { "andpd", 1, "+x"},		\
+  { "andpd", 2, "xm"},		\
+  { "andps", 1, "+x"},		\
+  { "andps", 2, "xm"},		\
+  { "arpl", 1, "+" rm16},	\
+  { "arpl", 2, r16},		\
+  { "bound", 1, U("r")},	\
+  { "bound", 2, U("m")},	\
+  { "bsf", 1, "=r"},		\
+  { "bsf", 2, "rm"},		\
+  { "bsr", 1, "=r"},		\
+  { "bsr", 2, "rm"},		\
+  { "bt", 1, "rm"},		\
+  { "bt", 2, "ri"},		\
+  { "btc", 1, "rm"},		\
+  { "btc", 2, "ri"},		\
+  { "btr", 1, "rm"},		\
+  { "btr", 2, "ri"},		\
+  { "bts", 1, "rm"},		\
+  { "bts", 2, "ri"},		\
+  { "call", 1, "rsm"},		\
+  { "clflush", 1, "=m"},       	\
+  { "cmova", 2, "rm"},		\
+  { "cmovae", 2, "rm"},		\
+  { "cmovb", 2, "rm"},		\
+  { "cmovbe", 2, "rm"},		\
+  { "cmovc", 2, "rm"},		\
+  { "cmove", 2, "rm"},		\
+  { "cmovg", 2, "rm"},		\
+  { "cmovge", 2, "rm"},		\
+  { "cmovl", 2, "rm"},		\
+  { "cmovle", 2, "rm"},		\
+  { "cmovna", 2, "rm"},		\
+  { "cmovnae", 2, "rm"},	\
+  { "cmovnb", 2, "rm"},		\
+  { "cmovnbe", 2, "rm"},	\
+  { "cmovnc", 2, "rm"},		\
+  { "cmovne", 2, "rm"},		\
+  { "cmovng", 2, "rm"},		\
+  { "cmovnge", 2, "rm"},	\
+  { "cmovnl", 2, "rm"},		\
+  { "cmovnle", 2, "rm"},	\
+  { "cmovno", 2, "rm"},		\
+  { "cmovnp", 2, "rm"},		\
+  { "cmovns", 2, "rm"},		\
+  { "cmovnz", 2, "rm"},		\
+  { "cmovo", 2, "rm"},		\
+  { "cmovp", 2, "rm"},		\
+  { "cmovpe", 2, U("rm")},	\
+  { "cmovpo", 2, U("rm")},	\
+  { "cmovs", 2, "rm"},		\
+  { "cmovz", 2, U("rm")},	\
+  { "cmp", 1, "rm,r"},    	\
+  { "cmp", 2, "ir,m"},    	\
+  { "cmpeqpd", 1, "=x"},	\
+  { "cmpeqpd", 2, "xm"},	\
+  { "cmpeqps", 1, "=x"},	\
+  { "cmpeqps", 2, "xm"},	\
+  { "cmpeqsd", 1, "=x"},	\
+  { "cmpeqsd", 2, "xm"},	\
+  { "cmpeqss", 1, "=x"},	\
+  { "cmpeqss", 2, "xm"},	\
+  { "cmplepd", 1, "=x"},	\
+  { "cmplepd", 2, "xm"},	\
+  { "cmpleps", 1, "=x"},	\
+  { "cmpleps", 2, "xm"},	\
+  { "cmplesd", 1, "=x"},	\
+  { "cmplesd", 2, "xm"},	\
+  { "cmpless", 1, "=x"},	\
+  { "cmpless", 2, "xm"},	\
+  { "cmpltpd", 1, "=x"},	\
+  { "cmpltpd", 2, "xm"},	\
+  { "cmpltps", 1, "=x"},	\
+  { "cmpltps", 2, "xm"},	\
+  { "cmpltsd", 1, "=x"},	\
+  { "cmpltsd", 2, "xm"},	\
+  { "cmpltss", 1, "=x"},	\
+  { "cmpltss", 2, "xm"},	\
+  { "cmpneqpd", 1, "=x"},	\
+  { "cmpneqpd", 2, "xm"},	\
+  { "cmpneqps", 1, "=x"},	\
+  { "cmpneqps", 2, "xm"},	\
+  { "cmpneqsd", 1, "=x"},	\
+  { "cmpneqsd", 2, "xm"},	\
+  { "cmpneqss", 1, "=x"},	\
+  { "cmpneqss", 2, "xm"},	\
+  { "cmpnlepd", 1, "=x"},	\
+  { "cmpnlepd", 2, "xm"},	\
+  { "cmpnleps", 1, "=x"},	\
+  { "cmpnleps", 2, "xm"},	\
+  { "cmpnlesd", 1, "=x"},	\
+  { "cmpnlesd", 2, "xm"},	\
+  { "cmpnless", 1, "=x"},	\
+  { "cmpnless", 2, "xm"},	\
+  { "cmpnltpd", 1, "=x"},	\
+  { "cmpnltpd", 2, "xm"},	\
+  { "cmpnltps", 1, "=x"},	\
+  { "cmpnltps", 2, "xm"},	\
+  { "cmpnltsd", 1, "=x"},	\
+  { "cmpnltsd", 2, "xm"},	\
+  { "cmpnltss", 1, "=x"},	\
+  { "cmpnltss", 2, "xm"},	\
+  { "cmpordpd", 1, "=x"},	\
+  { "cmpordpd", 2, "xm"},	\
+  { "cmpordps", 1, "=x"},	\
+  { "cmpordps", 2, "xm"},	\
+  { "cmpordsd", 1, "=x"},	\
+  { "cmpordsd", 2, "xm"},	\
+  { "cmpordss", 1, "=x"},	\
+  { "cmpordss", 2, "xm"},	\
+  { "cmppd", 1, "=x"},		\
+  { "cmppd", 2, "xm"},		\
+  { "cmppd", 3, "i"},		\
+  { "cmpps", 1, "=x"},		\
+  { "cmpps", 2, "xm"},		\
+  { "cmpps", 3, "i"},		\
+  { "cmpsd", 1, "=x"},		\
+  { "cmpsd", 2, "xm"},		\
+  { "cmpsd", 3, "i"},		\
+  { "cmpss", 1, "=x"},		\
+  { "cmpss", 2, "xm"},		\
+  { "cmpss", 3, "i"},		\
+  { "cmpunordpd", 1, "=x"},	\
+  { "cmpunordpd", 2, "xm"},	\
+  { "cmpunordps", 1, "=x"},	\
+  { "cmpunordps", 2, "xm"},	\
+  { "cmpunordsd", 1, "=x"},	\
+  { "cmpunordsd", 2, "xm"},	\
+  { "cmpunordss", 1, "=x"},	\
+  { "cmpunordss", 2, "xm"},	\
+  { "cmpxchg", 1, "+mr"},      	\
+  { "cmpxchg", 2, "r"},      	\
+  { "comisd", 1, "x"},		\
+  { "comisd", 2, "xm"},		\
+  { "comiss", 1, "x"},		\
+  { "comiss", 2, "xm"},		\
+  { "cvtdq2pd", 1, "=x"},	\
+  { "cvtdq2pd", 2, "xm"},	\
+  { "cvtdq2ps", 1, "=x"},	\
+  { "cvtdq2ps", 2, "xm"},	\
+  { "cvtpd2dq", 1, "=x"},	\
+  { "cvtpd2dq", 2, "xm"},	\
+  { "cvtpd2pi", 1, "=y"},	\
+  { "cvtpd2pi", 2, "xm"},	\
+  { "cvtpd2ps", 1, "=x"},	\
+  { "cvtpd2ps", 2, "xm"},	\
+  { "cvtpi2pd", 1, "=x"},	\
+  { "cvtpi2pd", 2, "ym"},	\
+  { "cvtpi2ps", 1, "=x"},	\
+  { "cvtpi2ps", 2, "ym"},	\
+  { "cvtps2dq", 1, "=x"},	\
+  { "cvtps2dq", 2, "xm"},	\
+  { "cvtps2pd", 1, "=x"},	\
+  { "cvtps2pd", 2, "xm"},	\
+  { "cvtps2pi", 1, "=y"},	\
+  { "cvtps2pi", 2, "xm"},	\
+  { "cvtsd2si", 1, "=r"},	\
+  { "cvtsd2si", 2, "xm"},	\
+  { "cvtsd2ss", 1, "=x"},	\
+  { "cvtsd2ss", 2, "xm"},	\
+  { "cvtsi2sd", 1, "=x"},	\
+  { "cvtsi2sd", 2, U("r") "m"},	\
+  { "cvtsi2ss", 1, "=x"},	\
+  { "cvtsi2ss", 2, U("r") "m"},	\
+  { "cvtss2sd", 1, "=x"},	\
+  { "cvtss2sd", 2, "xm"},	\
+  { "cvtss2si", 1, "=r"},	\
+  { "cvtss2si", 2, "xm"},	\
+  { "cvttpd2dq", 1, "=x"},	\
+  { "cvttpd2dq", 2, "xm"},	\
+  { "cvttpd2pi", 1, "=y"},	\
+  { "cvttpd2pi", 2, "xm"},	\
+  { "cvttps2dq", 1, "=x"},	\
+  { "cvttps2dq", 2, "xm"},	\
+  { "cvttps2pi", 1, "=y"},	\
+  { "cvttps2pi", 2, "xm"},	\
+  { "cvttsd2si", 1, "=r"},	\
+  { "cvttsd2si", 2, "xm"},	\
+  { "cvttss2si", 1, "=r"},	\
+  { "cvttss2si", 2, "xm"},	\
+  { "dec", 1, "+" rm8rm16rm32},	\
+  { "div", 1, rm8rm16rm32},	\
+  { "divpd", 1, "+x"},		\
+  { "divpd", 2, "xm"},		\
+  { "divps", 1, "+x"},		\
+  { "divps", 2, "xm"},		\
+  { "divsd", 1, "+x"},		\
+  { "divsd", 2, "xm"},		\
+  { "divss", 1, "+x"},		\
+  { "divss", 2, "xm"},		\
+  { "enter", 1, "i"},		\
+  { "enter", 2, "i"},		\
+  { "fadd", 1, "+t,f,@"},	\
+  { "fadd", 2, "f,t," m32fpm64fp},\
+  { "faddp", 1, "+f"},		\
+  { "faddp", 2, "t"},		\
+  { "fbld", 1, "m"},		\
+  { "fbstp", 1, "m"},		\
+  { "fcmovb", 1, "=t"},		\
+  { "fcmovb", 2, "f"},		\
+  { "fcmovbe", 1, "=t"},       	\
+  { "fcmovbe", 2, "f"},		\
+  { "fcmove", 1, "=t"},		\
+  { "fcmove", 2, "f"},		\
+  { "fcmovnb", 1, "=t"},       	\
+  { "fcmovnb", 2, "f"},		\
+  { "fcmovnbe", 1, "=t"},	\
+  { "fcmovnbe", 2, "f"},	\
+  { "fcmovne", 1, "=t"},       	\
+  { "fcmovne", 2, "f"},		\
+  { "fcmovnu", 1, "=t"},       	\
+  { "fcmovnu", 2, "f"},		\
+  { "fcmovu", 1, "=t"},		\
+  { "fcmovu", 2, "f"},		\
+  { "fcom", 1, "f" m32fpm64fp},	\
+  { "fcomi", 1, "t"},		\
+  { "fcomi", 2, "f"},		\
+  { "fcomip", 1, "t"},		\
+  { "fcomip", 2, "f"},		\
+  { "fcomp", 1, "f" m32fpm64fp},\
+  { "fdiv", 1, "+t,f,@"},	\
+  { "fdiv", 2, "f,t," m32fpm64fp},\
+  { "fdivp", 1, "+f"},		\
+  { "fdivp", 2, "t"},		\
+  { "fdivr", 1, "+t,@"},	\
+  { "fdivr", 2, "f," m32fpm64fp},\
+  { "fdivrp", 1, "+f"},		\
+  { "fdivrp", 2, "t"},		\
+  { "ffree", 1, "f"},		\
+  { "fiadd", 1, m16m32},	\
+  { "ficom", 1, m16m32},	\
+  { "ficomp", 1, m16m32},	\
+  { "fidiv", 1, m16m32},	\
+  { "fidivr", 1, m16m32},	\
+  { "fild", 1, m16m32m64},	\
+  { "fimul", 1, m16m32},	\
+  { "fist", 1, "=" m16m32},	\
+  { "fistp", 1, "=" m16m32m64},	\
+  { "fisttp", 1, "=" m16m32m64},\
+  { "fisub", 1, m16m32},	\
+  { "fisubr", 1, m16m32},	\
+  { "fld", 1, "f" m32fpm64fpm80fp},\
+  { "fldcw", 1, m16},		\
+  { "fldenv", 1, "m"},		\
+  { "fldt", 1, "m"},		\
+  { "fmul", 1, "=f,t,@"},	\
+  { "fmul", 2, "t,f," m32fpm64fp},\
+  { "fmulp", 1, "=f"},		\
+  { "fmulp", 2, "t"},		\
+  { "fnsave", 1, "=m"},		\
+  { "fnstcw", 1, "m"},		\
+  { "fnstenv", 1, "m"},		\
+  { "fnstsw", 1, "ma"},		\
+  { "frstor", 1, "m"},		\
+  { "fsave", 1, "=m"},		\
+  { "fst", 1, "=f" m32fpm64fp},	\
+  { "fstcw", 1, "=m"},		\
+  { "fstenv", 1, "=m"},		\
+  { "fstp", 1, "=f" m32fpm64fpm80fp},\
+  { "fstsw", 1, "=ma"},       	\
+  { "fsub", 1, "=f,t,@"},	\
+  { "fsub", 2, "t,f," m32fpm64fp},\
+  { "fsubr", 1, "=f,t," m32fpm64fp},\
+  { "fsubr", 2, "t,f,@"},	\
+  { "fucom", 1, "f"},		\
+  { "fucomi", 1, "t"},		\
+  { "fucomi", 2, "f"},		\
+  { "fucomip", 1, "t"},		\
+  { "fucomip", 2, "f"},		\
+  { "fucomp", 1, "f"},		\
+  { "fxch", 1, "+f" },		\
+  { "fxrstor", 1, "m"},		\
+  { "fxsave", 1, "=m"},		\
+  { "haddpd", 1, "+x"},		\
+  { "haddpd", 2, "xm"},		\
+  { "haddps", 1, "+x"},		\
+  { "haddps", 2, "xm"},		\
+  { "hsubpd", 1, "+x"},		\
+  { "hsubpd", 2, "xm"},		\
+  { "hsubps", 1, "+x"},		\
+  { "hsubps", 2, "xm"},		\
+  { "idiv", 1, rm8rm16rm32 U(rm64)},\
+  { "imul", 1, "+r"},		\
+  { "imul", 2, "rm"},		\
+  { "imul", 3, "i"},		\
+  { "in", 1, "=a"},		\
+  { "in", 2, "i"},		\
+  { "inc", 1, "+" rm8rm16rm32 U(rm64)},\
+  { "ins", 1, U("=m")},		\
+  { "ins", 2, U("d")},		\
+  { "int", 1, "i"},		\
+  { "invlpg", 1, "m"},		\
+  { "ja", 1, "s"},		\
+  { "jae", 1, "s"},		\
+  { "jb", 1, "s"},		\
+  { "jbe", 1, "s"},		\
+  { "jc", 1, "s"},		\
+  { "jcxz", 1, rel8},		\
+  { "je", 1, "s"},		\
+  { "jecxz", 1, rel8},		\
+  { "jg", 1, "s"},		\
+  { "jge", 1, "s"},		\
+  { "jl", 1, "s"},		\
+  { "jle", 1, "s"},		\
+  { "jmp", 1, "s" rm32},	\
+  { "jna", 1, "s"},		\
+  { "jnae", 1, "s"},		\
+  { "jnb", 1, "s"},		\
+  { "jnc", 1, "s"},		\
+  { "jne", 1, "s"},		\
+  { "jng", 1, "s"},		\
+  { "jnge", 1, "s"},		\
+  { "jnl", 1, "s"},		\
+  { "jnle", 1, "s"},		\
+  { "jno", 1, "s"},		\
+  { "jnp", 1, "s"},		\
+  { "jns", 1, "s"},		\
+  { "jnz", 1, "s"},		\
+  { "jo", 1, "s"},		\
+  { "jp", 1, "s"},		\
+  { "jpe", 1, "s"},		\
+  { "jpo", 1, "s"},		\
+  { "js", 1, "s"},		\
+  { "jz", 1, "s"},		\
+  { "lar", 1, "=r"},		\
+  { "lar", 2, "rm"},		\
+  { "lddqu", 1, "=x"},		\
+  { "lddqu", 2, "m"},		\
+  { "ldmxcsr", 1, "m"},		\
+  { "lds", 1, "=" U(r16 ",") r32},\
+  { "lds", 2, U(m16 ",") m32},	\
+  { "lea", 1, "=r"},		\
+  { "lea", 2, "m"},		\
+  { "les", 1, "=" U(r16 ",") r32},\
+  { "les", 2, U(m16 ",") m32},	\
+  { "lfs", 1, "=" U(r16 ",") r32 U("," r64)},\
+  { "lfs", 2, U(m16 ",") m32 U("," m64)},\
+  { "lgdt", 1, "m"},		\
+  { "lgs", 1, "=" U(r16 ",") r32 U("," r64)},\
+  { "lgs", 2, U(m16 ",") m32 U("," m64)},\
+  { "lidt", 1, "m"},		\
+  { "lldt", 1, rm16},		\
+  { "lmsw", 1, "m"},		\
+  { "lods", 1, U("m")},		\
+  { "loop", 1, rel8},		\
+  { "loope", 1, rel8},		\
+  { "loopne", 1, rel8},		\
+  { "loopnz", 1, rel8},		\
+  { "loopz", 1, rel8},		\
+  { "lsl", 1, "=" r16 "," r32},	\
+  { "lsl", 2, rm16 "," rm32},	\
+  { "lss", 1, "=" U(r16 ",") r32 U("," r64)},\
+  { "lss", 2, U(m16 ",") m32 U("," m64)},\
+  { "ltr", 1, rm16},		\
+  { "maskmovdqu", 1, "x"},	\
+  { "maskmovdqu", 2, "x"},	\
+  { "maskmovq", 1, "y"},	\
+  { "maskmovq", 2, "y"},	\
+  { "maxpd", 1, "+x"},		\
+  { "maxpd", 2, "xm"},		\
+  { "maxps", 1, "+x"},		\
+  { "maxps", 2, "xm"},		\
+  { "maxsd", 1, "+x"},		\
+  { "maxsd", 2, "xm"},		\
+  { "maxss", 1, "+x"},		\
+  { "maxss", 2, "xm"},		\
+  { "minpd", 1, "+x"},		\
+  { "minpd", 2, "xm"},		\
+  { "minps", 1, "+x"},		\
+  { "minps", 2, "xm"},		\
+  { "minsd", 1, "+x"},		\
+  { "minsd", 2, "xm"},		\
+  { "minss", 1, "+x"},		\
+  { "minss", 2, "xm"},		\
+  { "mov", 1, "=rm" S("4") ",r"},\
+  { "mov", 2, "ri,rmi"},	\
+  { "movapd", 1, "=x,xm"},	\
+  { "movapd", 2, "xm,x"},      	\
+  { "movaps", 1, "=x,xm"},	\
+  { "movaps", 2, "xm,x"},	\
+  { "movd", 1, "=rm,x,y,rm"},	\
+  { "movd", 2, "x,rm,rm,y"},	\
+  { "movddup", 1, "=x"},	\
+  { "movddup", 2, "xm"},	\
+  { "movdq2q", 1, "=y"},	\
+  { "movdq2q", 2, "x"},		\
+  { "movdqa", 1, "=x"},		\
+  { "movdqa", 2, "xm"},		\
+  { "movdqu", 1, "=x"},		\
+  { "movdqu", 2, "xm"},		\
+  { "movhlps", 1, "=x"},	\
+  { "movhlps", 2, "x"},		\
+  { "movhpd", 1, "=x,m"},	\
+  { "movhpd", 2, "m,x"},	\
+  { "movhps", 1, "=x,m"},	\
+  { "movhps", 2, "m,x"},	\
+  { "movlhps", 1, "=x"},	\
+  { "movlhps", 2, "x"},		\
+  { "movlpd", 1, "=x,m"},	\
+  { "movlpd", 2, "m,x"},	\
+  { "movlps", 1, "=x,m"},	\
+  { "movlps", 2, "m,x"},	\
+  { "movmskpd", 1, "=r"},	\
+  { "movmskpd", 2, "x"},	\
+  { "movmskps", 1, "=r"},	\
+  { "movmskps", 2, "x"},	\
+  { "movntdq", 1, "=m"},	\
+  { "movntdq", 2, "x"},		\
+  { "movnti", 1, "=m"},		\
+  { "movnti", 2, "r"},		\
+  { "movntpd", 1, "=m"},	\
+  { "movntpd", 2, "x"},		\
+  { "movntps", 1, "=m"},	\
+  { "movntps", 2, "x"},		\
+  { "movntq", 1, "=m"},		\
+  { "movntq", 2, "y"},		\
+  { "movq", 1, "=x,m,y,m"},	\
+  { "movq", 2, "xm,x,ym,y"},	\
+  { "movq2dq", 1, "=x"},	\
+  { "movq2dq", 2, "y"},		\
+  { "movs", 1, U("=m")},	\
+  { "movs", 2, U("m")},		\
+  { "movsd", 1, "=xm,x"},	\
+  { "movsd", 2, "x,xm"},	\
+  { "movshdup", 1, "=x"},	\
+  { "movshdup", 2, "xm"},	\
+  { "movsldup", 1, "=x"},	\
+  { "movsldup", 2, "xm"},	\
+  { "movss", 1, "=xm,x"},	\
+  { "movss", 2, "x,xm"},	\
+  { "movsx", 1, "=" r16 "," r32},\
+  { "movsx", 2, rm8 "," rm8rm16},\
+  { "movupd", 1, "=x,xm"},	\
+  { "movupd", 2, "xm,x"},	\
+  { "movups", 1, "=x,xm"},	\
+  { "movups", 2, "xm,x"},	\
+  { "movzx", 1, "=" r16 "," r32},\
+  { "movzx", 2, rm8 "," rm8rm16},\
+  { "mul", 1, rm8rm16rm32},	\
+  { "mulpd", 1, "=x"},		\
+  { "mulpd", 2, "xm"},		\
+  { "mulps", 1, "=x"},		\
+  { "mulps", 2, "xm"},		\
+  { "mulsd", 1, "=x"},		\
+  { "mulsd", 2, "xm"},		\
+  { "mulss", 1, "=x"},		\
+  { "mulss", 2, "xm"},		\
+  { "neg", 1, "+" rm8rm16rm32},	\
+  { "not", 1, "+" rm8rm16rm32},	\
+  { "or", 1, "+" rm8 "," rm16 "," rm32 "," r8 "," r16 "," r32},\
+  { "or", 2, r8  "i," r16 "i," r32 "i," m8 "," m16 "," m32},\
+  { "orpd", 1, "+x"},		\
+  { "orpd", 2, "xm"},		\
+  { "orps", 1, "+x"},		\
+  { "orps", 2, "xm"},		\
+  { "out", 1, "id"},		\
+  { "out", 2, a8 a16 a32},	\
+  { "outs", 1, U("d")},		\
+  { "outs", 2, U("m")},		\
+  { "packssdw", 1, "+x,y"},	\
+  { "packssdw", 2, "xm,ym"},	\
+  { "packsswb", 1, "+x,y"},	\
+  { "packsswb", 2, "xm,ym"},	\
+  { "packuswb", 1, "+x,y"},	\
+  { "packuswb", 2, "xm,ym"},	\
+  { "paddb", 1, "+x,y"},	\
+  { "paddb", 2, "xm,ym"},	\
+  { "paddd", 1, "+x,y"},	\
+  { "paddd", 2, "xm,ym"},	\
+  { "paddq", 1, "+x,y"},	\
+  { "paddq", 2, "xm,ym"},	\
+  { "paddsb", 1, "+x,y"},       \
+  { "paddsb", 2, "xm,ym"},      \
+  { "paddsw", 1, "+x,y"},       \
+  { "paddsw", 2, "xm,ym"},      \
+  { "paddusb", 1, "+x,y"},	\
+  { "paddusb", 2, "xm,ym"},	\
+  { "paddusw", 1, "+x,y"},	\
+  { "paddusw", 2, "xm,ym"},	\
+  { "paddw", 1, "+x,y"},	\
+  { "paddw", 2, "xm,ym"},	\
+  { "pand", 1, "+x,y"},		\
+  { "pand", 2, "xm,ym"},	\
+  { "pandn", 1, "+x,y"},	\
+  { "pandn", 2, "xm,ym"},	\
+  { "pavgb", 1, "+x,y"},	\
+  { "pavgb", 2, "xm,ym"},	\
+  { "pavgw", 1, "+x,y"},		\
+  { "pavgw", 2, "xm,ym"},		\
+  { "pcmpeqb", 1, "+x,y"},	\
+  { "pcmpeqb", 2, "xm,ym"},	\
+  { "pcmpeqd", 1, "+x,y"},	\
+  { "pcmpeqd", 2, "xm,ym"},	\
+  { "pcmpeqw", 1, "+x,y"},	\
+  { "pcmpeqw", 2, "xm,ym"},	\
+  { "pcmpgtb", 1, "+x,y"},	\
+  { "pcmpgtb", 2, "xm,ym"},	\
+  { "pcmpgtd", 1, "+x,y"},	\
+  { "pcmpgtd", 2, "xm,ym"},	\
+  { "pcmpgtw", 1, "+x,y"},	\
+  { "pcmpgtw", 2, "xm,ym"},	\
+  { "pextrw", 1, "=" r32r64},	\
+  { "pextrw", 2, "xy"},		\
+  { "pextrw", 3, "i"},		\
+  { "pinsrw", 1, "=xy"},	\
+  { "pinsrw", 2, r32r64 "m"},	\
+  { "pinsrw", 3, "i"},		\
+  { "pmaddwd", 1, "+x,y"},	\
+  { "pmaddwd", 2, "xm,ym"},	\
+  { "pmaxsw", 1, "+x,y"},	\
+  { "pmaxsw", 2, "xm,ym"},	\
+  { "pmaxub", 1, "+x,y"},	\
+  { "pmaxub", 2, "xm,ym"},	\
+  { "pminsw", 1, "+x,y"},	\
+  { "pminsw", 2, "xm,ym"},	\
+  { "pminub", 1, "+x,y"},	\
+  { "pminub", 2, "xm,ym"},	\
+  { "pmovmskb", 1, "+" r32r64},	\
+  { "pmovmskb", 2, "xy"},	\
+  { "pmulhuw", 1, "+x,y"},	\
+  { "pmulhuw", 2, "xm,ym"},	\
+  { "pmulhw", 1, "+x,y"},	\
+  { "pmulhw", 2, "xm,ym"},	\
+  { "pmullw", 1, "+x,y"},	\
+  { "pmullw", 2, "xm,ym"},	\
+  { "pmuludq", 1, "+x,y"},	\
+  { "pmuludq", 2, "xm,ym"},	\
+  { "pop", 1, "rm"},		\
+  { "por", 1, "+x,y"},		\
+  { "por", 2, "xm,ym"},		\
+  { "prefetchnta", 1, "m"},	\
+  { "prefetcht0", 1, "m"},	\
+  { "prefetcht1", 1, "m"},	\
+  { "prefetcht2", 1, "m"},	\
+  { "psadbw", 1, "+x,y"},	\
+  { "psadbw", 2, "xm,ym"},	\
+  { "pshufd", 1, "=x"},		\
+  { "pshufd", 2, "xm"},		\
+  { "pshufd", 3, "i"},		\
+  { "pshufhw", 1, "=x"},	\
+  { "pshufhw", 2, "xm"},	\
+  { "pshufhw", 3, "i"},		\
+  { "pshuflw", 1, "=x"},	\
+  { "pshuflw", 2, "xm"},	\
+  { "pshuflw", 3, "i"},		\
+  { "pshufw", 1, "=y"},		\
+  { "pshufw", 2, "ym"},		\
+  { "pshufw", 3, "i"},		\
+  { "pslld", 1, "+x,y"},	\
+  { "pslld", 2, "xmi,ymi"},     \
+  { "pslldq", 1, "+x"},		\
+  { "pslldq", 2, "i"},		\
+  { "psllq", 1, "+x,y"},	\
+  { "psllq", 2, "xmi,ymi"},     \
+  { "psllw", 1, "+x,y"},	\
+  { "psllw", 2, "xmi,ymi"},     \
+  { "psrad", 1, "+x,y"},	\
+  { "psrad", 2, "xmi,ymi"},     \
+  { "psraw", 1, "+x,y"},	\
+  { "psraw", 2, "xmi,ymi"},	\
+  { "psrld", 1, "+x,y"},	\
+  { "psrld", 2, "xmi,ymi"},	\
+  { "psrldq", 1, "+x"},		\
+  { "psrldq", 2, "i"},		\
+  { "psrlq", 1, "+x,y"},	\
+  { "psrlq", 2, "xmi,ymi"},	\
+  { "psrlw", 1, "+x,y"},	\
+  { "psrlw", 2, "xmi,ymi"},	\
+  { "psubb", 1, "+x,y"},	\
+  { "psubb", 2, "xm,ym"},	\
+  { "psubd", 1, "+x,y"},	\
+  { "psubd", 2, "xm,ym"},	\
+  { "psubq", 1, "+x,y"},	\
+  { "psubq", 2, "xm,ym"},		\
+  { "psubsb", 1, "+x,y"},       	\
+  { "psubsb", 2, "xm,ym"},       	\
+  { "psubsw", 1, "+x,y"},       	\
+  { "psubsw", 2, "xm,ym"},       	\
+  { "psubusb", 1, "+x,y"},	\
+  { "psubusb", 2, "xm,ym"},	\
+  { "psubusw", 1, "+x,y"},	\
+  { "psubusw", 2, "xm,ym"},	\
+  { "psubw", 1, "+x,y"},		\
+  { "psubw", 2, "xm,ym"},		\
+  { "punpckhbw", 1, "+x,y"},	\
+  { "punpckhbw", 2, "xm,ym"},	\
+  { "punpckhdq", 1, "+x,y"},	\
+  { "punpckhdq", 2, "xm,ym"},	\
+  { "punpckhqdq", 1, "+x"},	\
+  { "punpckhqdq", 2, "xm"},	\
+  { "punpckhwd", 1, "+x,y"},	\
+  { "punpckhwd", 2, "xm,ym"},	\
+  { "punpcklbw", 1, "+x,y"},	\
+  { "punpcklbw", 2, "xm,ym"},	\
+  { "punpckldq", 1, "+x,y"},	\
+  { "punpckldq", 2, "xm,ym"},	\
+  { "punpcklqdq", 1, "+x"},	\
+  { "punpcklqdq", 2, "xm"},	\
+  { "punpcklwd", 1, "+x,y"},	\
+  { "punpcklwd", 2, "xm,ym"},	\
+  { "push", 1, "rmi"},		\
+  { "pxor", 1, "+x,y"},		\
+  { "pxor", 2, "xm,ym"},	\
+  { "rcl", 1, "+" rm8rm16rm32},	\
+  { "rcl", 2, "ic"},		\
+  { "rcpps", 1, "+x"},		\
+  { "rcpps", 2, "xm"},		\
+  { "rcpss", 1, "+x"},		\
+  { "rcpss", 2, "xm"},		\
+  { "rcr", 1, "+" rm8rm16rm32},	\
+  { "rcr", 2, "ic"},		\
+  { "ret", 1, "i"},		\
+  { "rol", 1, "+" rm8rm16rm32},	\
+  { "rol", 2, "ic"},		\
+  { "ror", 1, "+" rm8rm16rm32},	\
+  { "ror", 2, "ic"},		\
+  { "rsqrtps", 1, "=x"},	\
+  { "rsqrtps", 2, "xm"},	\
+  { "rsqrtss", 1, "=x"},	\
+  { "rsqrtss", 2, "xm"},	\
+  { "sal", 1, "+" rm8rm16rm32},	\
+  { "sal", 2, "ic"},		\
+  { "sar", 1, "+" rm8rm16rm32},	\
+  { "sar", 2, "ic"},		\
+  { "sbb", 1, "+" rm8 "," rm16 "," rm32 "," r8 "," r16 "," r32},\
+  { "sbb", 2, ri8 "," ri16 "," ri32 "," m8 "," m16 "," m32},\
+  { "scas", 1, U("m")},		\
+  { "seta", 1, "=qm"},		\
+  { "setae", 1, "=qm"},		\
+  { "setb", 1, "=qm"},		\
+  { "setbe", 1, "=qm"},		\
+  { "setc", 1, "=qm"},		\
+  { "sete", 1, "=qm"},		\
+  { "setg", 1, "=qm"},		\
+  { "setge", 1, "=qm"},		\
+  { "setl", 1, "=qm"},		\
+  { "setle", 1, "=qm"},		\
+  { "setna", 1, "=qm"},		\
+  { "setnae", 1, "=qm"},       	\
+  { "setnb", 1, "=qm"},		\
+  { "setnbe", 1, "=qm"},       	\
+  { "setnc", 1, "=qm"},		\
+  { "setne", 1, "=qm"},		\
+  { "setng", 1, "=qm"},		\
+  { "setnge", 1, "=qm"},       	\
+  { "setnl", 1, "=qm"},		\
+  { "setnle", 1, "=qm"},	\
+  { "setno", 1, "=qm"},		\
+  { "setnp", 1, "=qm"},		\
+  { "setns", 1, "=qm"},		\
+  { "setnz", 1, "=qm"},		\
+  { "seto", 1, "=qm"},		\
+  { "setp", 1, "=qm"},		\
+  { "setpe", 1, "=qm"},		\
+  { "setpo", 1, "=qm"},		\
+  { "sets", 1, "=qm"},		\
+  { "setz", 1, "=qm"},		\
+  { "sgdt", 1, "=m"},		\
+  { "shl", 1, "+" rm8rm16rm32},	\
+  { "shl", 2, "ic"},		\
+  { "shld", 1, "+" rm16 "," rm32 "," rm64},\
+  { "shld", 2, r16 "," r32 "," r64},\
+  { "shld", 3, "ic,ic,ic"},	\
+  { "shr", 1, "+" rm8rm16rm32},	\
+  { "shr", 2, "ic"},		\
+  { "shrd", 1, "+" rm16 "," rm32 "," rm64},\
+  { "shrd", 2, r16 "," r32 "," r64},\
+  { "shrd", 3, "ic,ic,ic"},	\
+  { "shufpd", 1, "+x"},		\
+  { "shufpd", 2, "xm"},		\
+  { "shufpd", 3, "i"},		\
+  { "shufps", 1, "+x"},		\
+  { "shufps", 2, "xm"},		\
+  { "shufps", 3, "i"},		\
+  { "sidt", 1, "=m"},		\
+  { "sldt", 1, "=q" S("2") "m"},\
+  { "smsw", 1, "=q" S("2") "m"},\
+  { "sqrtpd", 1, "=x"},		\
+  { "sqrtpd", 2, "xm"},		\
+  { "sqrtps", 1, "=x"},		\
+  { "sqrtps", 2, "xm"},		\
+  { "sqrtsd", 1, "=x"},		\
+  { "sqrtsd", 2, "xm"},		\
+  { "sqrtss", 1, "=x"},		\
+  { "sqrtss", 2, "xm"},		\
+  { "stmxcsr", 1, "m"},		\
+  { "stos", 1, U("=m")},	\
+  { "str", 1, "=q" S("2") "m"},\
+  { "sub", 1, "=rm,r"},		\
+  { "sub", 2, "ir,m"},		\
+  { "subpd", 1, "+x"},		\
+  { "subpd", 2, "xm"},		\
+  { "subps", 1, "+x"},		\
+  { "subps", 2, "xm"},		\
+  { "subsd", 1, "+x"},		\
+  { "subsd", 2, "xm"},		\
+  { "subss", 1, "+x"},		\
+  { "subss", 2, "xm"},		\
+  { "test", 1, "+r," rm8rm16rm32},\
+  { "test", 2, "r,i"},		\
+  { "ucomisd", 1, "+x"},	\
+  { "ucomisd", 2, "xm"},	\
+  { "ucomiss", 1, "+x"},	\
+  { "ucomiss", 2, "xm"},	\
+  { "unpckhpd", 1, "+x"},	\
+  { "unpckhpd", 2, "xm"},	\
+  { "unpckhps", 1, "+x"},	\
+  { "unpckhps", 2, "xm"},	\
+  { "unpcklpd", 1, "+x"},	\
+  { "unpcklpd", 2, "xm"},	\
+  { "unpcklps", 1, "+x"},	\
+  { "unpcklps", 2, "xm"},	\
+  { "verr", 1, rm16},		\
+  { "verw", 1, rm16},		\
+  { "xadd", 1, "+" rm8 "," rm16 "," rm32},\
+  { "xadd", 2, r8 "," r16 "," r32},\
+  { "xchg", 1, "+rm,r"},	\
+  { "xchg", 2, "+r,m"},		\
+  { "xlat", 1, U("m")},		\
+  { "xor", 1, "+rm,r"},		\
+  { "xor", 2, "ri,m"},		\
+  { "xorpd", 1, "+x"},		\
+  { "xorpd", 2, "xm"},		\
+  { "xorps", 1, "+x"},		\
+  { "xorps", 2, "xm"},
+
+#define TARGET_IASM_EXTRA_CLOBBERS \
+  { "rdtsc", { "edx", "eax"} }
+
+#define IASM_FUNCTION_MODIFIER "P"
+
+#define IASM_REGISTER_NAME(STR, BUF) i386_iasm_register_name (STR, BUF)
+
+/* APPLE LOCAL end CW asm blocks */
+
 /*
 Local variables:
 version-control: t

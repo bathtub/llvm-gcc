@@ -1,10 +1,5 @@
-class __attribute__((unused)) C;
-struct __attribute__((unused)) S;
-union __attribute__((unused)) U;
+class __attribute__((unused)) C;	//  { dg-warning "type attributes" }
+struct __attribute__((unused)) S;	//  { dg-warning "type attributes" }
+union __attribute__((unused)) U;	//  { dg-warning "type attributes" }
 enum e {};
-enum __attribute__((unused)) e;	// { dg-warning "already defined" }
-
-struct __attribute((unused)) B *p;	//  { dg-warning "attributes" }
-
-template <class T> struct A { };
-struct __attribute((unused)) A<int>;	//  { dg-warning "attributes" }
+enum __attribute__((unused)) e;		//  { dg-warning "type attributes" }

@@ -1,4 +1,4 @@
-// HP-UX libunwind.so doesn't provide _UA_END_OF_STACK.
+// HP-UX libunwind.so doesn't provide _Unwind_ForcedUnwind.
 // { dg-do run { xfail "ia64-hp-hpux11.*" } }
 
 // Test that forced unwinding runs all cleanups.  Also tests that
@@ -6,7 +6,6 @@
 
 #include <unwind.h>
 #include <stdlib.h>
-#include <string.h>
 
 static int test = 0;
 
@@ -36,8 +35,7 @@ force_unwind_cleanup (_Unwind_Reason_Code, struct _Unwind_Exception *)
 static void force_unwind ()
 {
   _Unwind_Exception *exc = new _Unwind_Exception;
-  // exception_class might not be a scalar.
-  memset (&exc->exception_class, 0, sizeof (exc->exception_class));
+  exc->exception_class = 0;
   exc->exception_cleanup = force_unwind_cleanup;
 
 #ifndef __USING_SJLJ_EXCEPTIONS__
@@ -56,7 +54,7 @@ struct S
   ~S() { test |= bit; }
 };
   
-static __attribute__ ((noinline)) void doit ()
+static void doit ()
 {
   try {
     S four(4);
@@ -64,6 +62,7 @@ static __attribute__ ((noinline)) void doit ()
     try {
       S one(1);
       force_unwind ();
+  
     } catch(...) { 
       test |= 2;
       throw;

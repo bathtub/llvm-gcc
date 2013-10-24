@@ -1,7 +1,6 @@
-// { dg-do run { target i?86-*-* x86_64-*-* } }
+// { dg-do run { target i?86-*-* } }
 // { dg-options "-fabi-version=0" }
-// { dg-require-effective-target ilp32 }
-
+// { dg-skip-if "" { i?86-*-* } { "-m64" } { "" } }
 
 struct A { 
   virtual void f() {}

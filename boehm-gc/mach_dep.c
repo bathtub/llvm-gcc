@@ -27,10 +27,6 @@
 #   endif
 # endif
 
-#if defined(RS6000) || defined(POWERPC)
-# include <ucontext.h>
-#endif
-
 #if defined(__MWERKS__) && !defined(POWERPC)
 
 asm static void PushMacRegisters()
@@ -417,13 +413,6 @@ ptr_t arg;
         /* the stack.						*/
         __builtin_unwind_init();
 #     else /* !HAVE_BUILTIN_UNWIND_INIT */
-#      if defined(RS6000) || defined(POWERPC)
-	/* FIXME: RS6000 means AIX.				*/
-        /* This should probably be used in all Posix/non-gcc	*/
-        /* settings.  We defer that change to minimize risk.	*/
-        ucontext_t ctxt;
-        getcontext(&ctxt);
-#      else
         /* Generic code                          */
         /* The idea is due to Parag Patel at HP. */
         /* We're not sure whether he would like  */
@@ -437,7 +426,7 @@ ptr_t arg;
   	for (; (char *)i < lim; i++) {
   	    *i = 0;
   	}
-#       if defined(MSWIN32) || defined(MSWINCE) \
+#       if defined(POWERPC) || defined(MSWIN32) || defined(MSWINCE) \
                   || defined(UTS4) || defined(LINUX) || defined(EWS4800)
   	  (void) setjmp(regs);
 #       else
@@ -446,16 +435,15 @@ ptr_t arg;
   	  /* SUSV3, setjmp() may or may not save signal mask.	*/
   	  /* _setjmp won't, but is less portable.		*/
 #       endif
-#      endif /* !AIX ... */
 #     endif /* !HAVE_BUILTIN_UNWIND_INIT */
-#   else
-#     if defined(PTHREADS) && !defined(MSWIN32) /* !USE_GENERIC_PUSH_REGS */
-        /* We may still need this to save thread contexts.	*/
-        ucontext_t ctxt;
-        getcontext(&ctxt);
-#     else  /* Shouldn't be needed */
-        ABORT("Unexpected call to GC_with_callee_saves_pushed");
-#     endif
+#   elif defined(PTHREADS) && !defined(MSWIN32) /* !USE_GENERIC_PUSH_REGS */
+      /* We may still need this to save thread contexts.	*/
+      /* This should probably be used in all Posix/non-gcc	*/
+      /* settings.  We defer that change to minimize risk.	*/
+      ucontext_t ctxt;
+      getcontext(&ctxt);
+#   else  /* Shouldn't be needed */
+      ABORT("Unexpected call to GC_with_callee_saves_pushed");
 #   endif
 #   if (defined(SPARC) && !defined(HAVE_BUILTIN_UNWIND_INIT)) \
 	|| defined(IA64)
@@ -492,7 +480,7 @@ ptr_t cold_gc_frame;
 /* the stack.	Return sp.						*/
 # ifdef SPARC
     asm("	.seg 	\"text\"");
-#   if defined(SVR4) || defined(NETBSD) || defined(FREEBSD)
+#   if defined(SVR4) || defined(NETBSD)
       asm("	.globl	GC_save_regs_in_stack");
       asm("GC_save_regs_in_stack:");
       asm("	.type GC_save_regs_in_stack,#function");

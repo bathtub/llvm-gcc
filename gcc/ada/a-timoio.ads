@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --               A D A . T E X T _ I O . M O D U L A R _ I O                --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1993-2006, Free Software Foundation, Inc.         --
+--          Copyright (C) 1993-2000 Free Software Foundation, Inc.          --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -20,8 +20,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -50,34 +50,34 @@ package Ada.Text_IO.Modular_IO is
    Default_Base  : Number_Base := 10;
 
    procedure Get
-     (File  : File_Type;
+     (File  : in File_Type;
       Item  : out Num;
-      Width : Field := 0);
+      Width : in Field := 0);
 
    procedure Get
      (Item  : out Num;
-      Width : Field := 0);
+      Width : in Field := 0);
 
    procedure Put
-     (File  : File_Type;
-      Item  : Num;
-      Width : Field := Default_Width;
-      Base  : Number_Base := Default_Base);
+     (File  : in File_Type;
+      Item  : in Num;
+      Width : in Field := Default_Width;
+      Base  : in Number_Base := Default_Base);
 
    procedure Put
-     (Item  : Num;
-      Width : Field := Default_Width;
-      Base  : Number_Base := Default_Base);
+     (Item  : in Num;
+      Width : in Field := Default_Width;
+      Base  : in Number_Base := Default_Base);
 
    procedure Get
-     (From : String;
+     (From : in String;
       Item : out Num;
       Last : out Positive);
 
    procedure Put
      (To   : out String;
-      Item : Num;
-      Base : Number_Base := Default_Base);
+      Item : in Num;
+      Base : in Number_Base := Default_Base);
 
 private
    pragma Inline (Get);

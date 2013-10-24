@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU CC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 (define_insn "adddi3_high"
   [(set (match_operand:DI 0 "gpc_reg_operand" "=b")
@@ -31,7 +31,7 @@ Boston, MA 02110-1301, USA.  */
   [(set (match_operand:DF 0 "gpc_reg_operand" "=f,!r")
         (mem:DF (lo_sum:SI (match_operand:SI 1 "gpc_reg_operand" "b,b")
                            (match_operand 2 "" ""))))]
-  "TARGET_MACHO && TARGET_HARD_FLOAT && TARGET_FPRS && !TARGET_64BIT"
+  "TARGET_MACHO && TARGET_HARD_FLOAT && TARGET_FPRS && ! TARGET_64BIT"
   "*
 {
   switch (which_alternative)
@@ -40,18 +40,20 @@ Boston, MA 02110-1301, USA.  */
 	return \"lfd %0,lo16(%2)(%1)\";
       case 1:
 	{
+	  /* APPLE LOCAL begin mainline 4506977 */
 	  if (TARGET_POWERPC64 && TARGET_32BIT)
 	    /* Note, old assemblers didn't support relocation here.  */
 	    return \"ld %0,lo16(%2)(%1)\";
 	  else
-	    {
+	  {
 	      output_asm_insn (\"{cal|la} %0,lo16(%2)(%1)\", operands);
 	      output_asm_insn (\"{l|lwz} %L0,4(%0)\", operands);
 	      return (\"{l|lwz} %0,0(%0)\");
-	    }
+	  }
+	  /* APPLE LOCAL end mainline 4506977 */
 	}
       default:
-	gcc_unreachable ();
+	abort();
     }
 }"
   [(set_attr "type" "load")
@@ -72,7 +74,7 @@ Boston, MA 02110-1301, USA.  */
       case 1:
 	return \"ld %0,lo16(%2)(%1)\";
       default:
-	gcc_unreachable ();
+	abort();
     }
 }"
   [(set_attr "type" "load")
@@ -254,8 +256,8 @@ Boston, MA 02110-1301, USA.  */
 
 (define_insn "load_macho_picbase_si"
   [(set (match_operand:SI 0 "register_operand" "=l")
-	(unspec:SI [(match_operand:SI 1 "immediate_operand" "s")
-		    (pc)] UNSPEC_LD_MPIC))]
+	(unspec:SI [(match_operand:SI 1 "immediate_operand" "s")]
+		   UNSPEC_LD_MPIC))]
   "(DEFAULT_ABI == ABI_DARWIN) && flag_pic"
   "bcl 20,31,%1\\n%1:"
   [(set_attr "type" "branch")
@@ -263,12 +265,45 @@ Boston, MA 02110-1301, USA.  */
 
 (define_insn "load_macho_picbase_di"
   [(set (match_operand:DI 0 "register_operand" "=l")
-	(unspec:DI [(match_operand:DI 1 "immediate_operand" "s")
-		    (pc)] UNSPEC_LD_MPIC))]
+	(unspec:DI [(match_operand:DI 1 "immediate_operand" "s")] UNSPEC_LD_MPIC))]
   "(DEFAULT_ABI == ABI_DARWIN) && flag_pic && TARGET_64BIT"
   "bcl 20,31,%1\\n%1:"
   [(set_attr "type" "branch")
    (set_attr "length" "4")])
+
+;; APPLE LOCAL begin special ObjC method use of R12
+
+(define_expand "load_macho_picbase_label"
+  [(set (match_operand 0 "" "")
+        (unspec [(match_operand 1 "" "")]
+                   UNSPEC_LD_MPIC_L))]
+  "(DEFAULT_ABI == ABI_DARWIN) && flag_pic"
+{
+  if (TARGET_32BIT)
+    emit_insn (gen_load_macho_picbase_label_si (operands[0], operands[1]));
+  else
+    emit_insn (gen_load_macho_picbase_label_di (operands[0], operands[1]));
+
+  DONE;
+})
+
+(define_insn "load_macho_picbase_label_si"
+  [(set (match_operand:SI 0 "register_operand" "=l")
+	(unspec_volatile:SI [(match_operand:SI 1 "immediate_operand" "s")]
+		   UNSPEC_LD_MPIC_L))]
+  "(DEFAULT_ABI == ABI_DARWIN) && flag_pic"
+  ";bcl 20,31,%1\\n%1:"
+   [(set_attr "length" "0")])
+
+(define_insn "load_macho_picbase_label_di"
+  [(set (match_operand:DI 0 "register_operand" "=l")
+	(unspec_volatile:DI [(match_operand:DI 1 "immediate_operand" "s")]
+		   UNSPEC_LD_MPIC_L))]
+  "(DEFAULT_ABI == ABI_DARWIN) && flag_pic && TARGET_64BIT"
+  ";bcl 20,31,%1\\n%1:"
+  [(set_attr "length" "0")])
+
+;; APPLE LOCAL end special ObjC method use of R12
 
 (define_expand "macho_correct_pic"
   [(set (match_operand 0 "" "")
@@ -331,7 +366,7 @@ Boston, MA 02110-1301, USA.  */
 #if TARGET_MACHO
   return output_call(insn, operands, 0, 2);
 #else
-  gcc_unreachable ();
+  abort();
 #endif
 }
   [(set_attr "type" "branch,branch")
@@ -362,7 +397,7 @@ Boston, MA 02110-1301, USA.  */
 #if TARGET_MACHO
   return output_call(insn, operands, 1, 3);
 #else
-  gcc_unreachable ();
+  abort();
 #endif
 }
   [(set_attr "type" "branch,branch")
@@ -412,7 +447,7 @@ Boston, MA 02110-1301, USA.  */
     {
       case 0:  return \"b %z0\";
       case 1:  return \"b%T0\";
-      default:  gcc_unreachable ();
+      default:  abort();
     }
 }"
   [(set_attr "type" "branch")
@@ -432,9 +467,67 @@ Boston, MA 02110-1301, USA.  */
     {
       case 0:  return \"b %z1\";
       case 1:  return \"b%T1\";
-      default:  gcc_unreachable ();
+      default:  abort();
     }
 }"
   [(set_attr "type" "branch")
    (set_attr "length" "4")])
 
+/* APPLE LOCAL begin 64-bit */
+(define_insn "*save_fpregs_with_label_di"
+ [(match_parallel 0 "any_parallel_operand"
+                  [(clobber (match_operand:DI 1 "register_operand" "=l"))
+		   (use (match_operand:DI 2 "call_operand" "s"))
+		   (use (match_operand:DI 3 "" ""))
+		   (set (match_operand:DF 4 "memory_operand" "=m")
+			(match_operand:DF 5 "gpc_reg_operand" "f"))])]
+ "TARGET_64BIT"
+ "*
+#if TARGET_MACHO
+  const char *picbase = machopic_function_base_name ();
+  operands[3] = gen_rtx_SYMBOL_REF (Pmode, ggc_alloc_string (picbase, -1));
+#endif
+  return \"bl %z2\\n%3:\";
+"
+  [(set_attr "type" "branch")
+   (set_attr "length" "4")])
+
+(define_insn "*save_vregs_di"
+ [(match_parallel 0 "any_parallel_operand"
+                  [(clobber (match_operand:DI 1 "register_operand" "=l"))
+		   (use (match_operand:DI 2 "call_operand" "s"))
+		   (set (match_operand:V4SI 3 "any_operand" "=m")
+			(match_operand:V4SI 4 "register_operand" "v"))])]
+ "TARGET_64BIT"
+ "bl %z2"
+  [(set_attr "type" "branch")
+   (set_attr "length" "4")])
+
+(define_insn "*restore_vregs_di"
+ [(match_parallel 0 "any_parallel_operand"
+                  [(clobber (match_operand:DI 1 "register_operand" "=l"))
+		   (use (match_operand:DI 2 "call_operand" "s"))
+		   (clobber (match_operand:DI 3 "gpc_reg_operand" "=r"))
+		   (set (match_operand:V4SI 4 "register_operand" "=v")
+			(match_operand:V4SI 5 "any_operand" "m"))])]
+ "TARGET_64BIT"
+ "bl %z2")
+
+(define_insn "*save_vregs_with_label_di"
+ [(match_parallel 0 "any_parallel_operand"
+                  [(clobber (match_operand:DI 1 "register_operand" "=l"))
+		   (use (match_operand:DI 2 "call_operand" "s"))
+		   (use (match_operand:DI 3 "" ""))
+		   (set (match_operand:V4SI 4 "any_operand" "=m")
+			(match_operand:V4SI 5 "register_operand" "v"))])]
+ "TARGET_64BIT"
+ "*
+#if TARGET_MACHO
+  const char *picbase = machopic_function_base_name ();
+  operands[3] = gen_rtx_SYMBOL_REF (Pmode, ggc_alloc_string (picbase, -1));
+#endif
+  return \"bl %z2\\n%3:\";
+"
+  [(set_attr "type" "branch")
+   (set_attr "length" "4")])
+/* APPLE LOCAL end 64-bit */

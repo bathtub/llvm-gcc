@@ -1,6 +1,6 @@
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 /* { dg-do run } */
-/* { dg-xfail-if "" { "powerpc-ibm-aix*" } { "*" } { "" } } */
-/* { dg-options "-std=c99 -fdollars-in-identifiers -fextended-identifiers" } */
+/* { dg-options "-std=c99 -fdollars-in-identifiers" } */
 void abort (void);
 
 int a$b(void) { return 1; }
@@ -13,3 +13,4 @@ int main (void)
   
   return 0;
 }
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */

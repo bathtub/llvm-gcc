@@ -62,7 +62,7 @@ included in the section entitled ``GNU Free Documentation License''.
      funds for GNU development.
 @end copying
 @ifnottex
-@dircategory Software development
+@dircategory Programming
 @direntry
 * gcc: (gcc).                  The GNU Compiler Collection.
 @end direntry
@@ -73,12 +73,15 @@ This file documents the use of the GNU compilers.
 @end ifnottex
 
 @setchapternewpage odd
+@shorttitlepage Using the GNU Compiler Collection (GCC)
 @titlepage
-@title Using the GNU Compiler Collection
-@versionsubtitle
-@author Richard M. Stallman and the @sc{GCC} Developer Community
+@center @titlefont{Using the GNU Compiler Collection}
+@sp 2
+@center by Richard M. Stallman and the GCC Developer Community
 @page
 @vskip 0pt plus 1filll
+For GCC Version @value{version-GCC}@*
+@sp 1
 Published by:
 @multitable @columnfractions 0.5 0.5
 @item GNU Press
@@ -87,9 +90,9 @@ Published by:
 @tab General: @tex press@@gnu.org @end tex
 @item Free Software Foundation
 @tab Orders:  @tex sales@@gnu.org @end tex
-@item 51 Franklin Street, Fifth Floor
+@item 59 Temple Place Suite 330
 @tab Tel 617-542-5942
-@item Boston, MA 02110-1301 USA
+@item Boston, MA 02111-1307 USA
 @tab Fax 617-542-2652
 @end multitable
 @sp 2
@@ -142,6 +145,8 @@ Introduction, gccint, GNU Compiler Collection (GCC) Internals}.
 
 * Copying::         GNU General Public License says
                      how you can copy and share GCC.
+@c APPLE LOCAL GPL compliance
+* Source Code::     How to get the source code for this compiler.
 * GNU Free Documentation License:: How you can copy and share this manual.
 * Contributors::    People who have contributed to GCC.
 
@@ -164,6 +169,8 @@ Introduction, gccint, GNU Compiler Collection (GCC) Internals}.
 
 @include funding.texi
 @include gnu.texi
+@c APPLE LOCAL GPL compliance
+@include sourcecode.texi
 @include gpl.texi
 
 @c ---------------------------------------------------------------------

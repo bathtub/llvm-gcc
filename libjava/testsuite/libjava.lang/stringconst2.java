@@ -14,9 +14,8 @@ public class stringconst2
 	Field f = k.getField ("q");
 	System.out.println (f.get (null));
       }
-    catch (Throwable t)
+    catch (Throwable _)
       {
-	t.printStackTrace();
       }
   }
 }

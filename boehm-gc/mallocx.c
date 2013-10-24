@@ -172,8 +172,7 @@ int obj_kind;
 # endif /* REDIRECT_REALLOC */
 
 
-/* Allocate memory such that only pointers to near the 		*/
-/* beginning of the object are considered.			*/
+/* The same thing, except caller does not hold allocation lock.	*/
 /* We avoid holding allocation lock while we clear memory.	*/
 ptr_t GC_generic_malloc_ignore_off_page(lb, k)
 register size_t lb;

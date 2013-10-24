@@ -50,5 +50,3 @@ readonly_fields_p (type)
 /* There should be one load of ->common.code.  We currently fail this
    because we load from ->common.code using different types.  */
 /* { dg-final { scan-tree-dump-times "common\.code" 1 "dom3"} } */
-
-/* { dg-final { cleanup-tree-dump "dom3" } } */

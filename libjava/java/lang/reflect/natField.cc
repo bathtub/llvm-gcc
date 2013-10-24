@@ -1,6 +1,6 @@
 // natField.cc - Implementation of java.lang.reflect.Field native methods.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -13,7 +13,6 @@ details.  */
 #include <stdlib.h>
 
 #include <jvm.h>
-#include <java-stack.h>
 #include <java/lang/reflect/Field.h>
 #include <java/lang/reflect/Modifier.h>
 #include <java/lang/ArrayIndexOutOfBoundsException.h>
@@ -30,9 +29,9 @@ details.  */
 #include <java/lang/Character.h>
 
 jint
-java::lang::reflect::Field::getModifiersInternal ()
+java::lang::reflect::Field::getModifiers ()
 {
-  return _Jv_FromReflectedField (this)->flags;
+  return _Jv_FromReflectedField (this)->getModifiers ();
 }
 
 jstring
@@ -72,18 +71,25 @@ getAddr (java::lang::reflect::Field* field, jclass caller, jobject obj,
 
   // Setting a final field is usually not allowed.
   if (checkFinal
-      // As of 1.5, you can set a non-static final field if it is
-      // accessible.
-      && (! field->isAccessible()
-	  || (field->getModifiers() & java::lang::reflect::Modifier::STATIC))
-      && (field->getModifiers() & java::lang::reflect::Modifier::FINAL))
+      && field->getModifiers() & java::lang::reflect::Modifier::FINAL)
     throw new java::lang::IllegalAccessException(JvNewStringUTF 
       ("Field is final"));
   
   // Check accessibility, if required.
   if (! (Modifier::isPublic (flags) || field->isAccessible()))
     {
-      caller = _Jv_StackTrace::GetCallingClass (&Field::class$);
+      gnu::gcj::runtime::StackTrace *t 
+	= new gnu::gcj::runtime::StackTrace(7);
+      try
+	{
+	  // We want to skip all the frames on the stack from this class.
+	  for (int i = 1; !caller || caller == &Field::class$; i++)
+	    caller = t->classAt (i);
+	}
+      catch (::java::lang::ArrayIndexOutOfBoundsException *e)
+	{
+	}
+
       if (! _Jv_CheckAccess (caller, field->getDeclaringClass(), flags))
 	throw new java::lang::IllegalAccessException;
     }

@@ -5,17 +5,18 @@
 // Origin: Andrew Pinski <pinskia@gcc.gnu.org>
 //         Nathan Sidwell <nathan@gcc.gnu.org>
 
-template <typename T> class srp;
-template <typename T> struct ptr
+template <typename T>
+int operator+ (T const &, int); // { dg-error "T = Foo" "" }
+
+struct Foo 
 {
-  template <typename U> ptr(const srp<U> &other); // { dg-error "ptr<T>::ptr" }
+  template <typename T>
+  int operator+ (T) const; // { dg-error "T = int" "" }
 };
-template <typename T> struct srp
+
+int main ()
 {
-  template <typename U> operator ptr<U>(void) const; // { dg-error "srp<T>::operator" }
-};
-ptr<int> parent_get()
-{
-  srp<int> parent;
-  return parent; // { dg-error "is ambiguous" }
+  Foo f;
+
+  return f + 0; // { dg-error "ambiguous overload" "" }
 }

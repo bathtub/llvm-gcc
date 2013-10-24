@@ -1,6 +1,6 @@
 /* Move registers around to reduce number of move instructions needed.
    Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -16,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 
 /* This module looks for cases where matching constraints would force
@@ -43,8 +43,6 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "except.h"
 #include "toplev.h"
 #include "reload.h"
-#include "timevar.h"
-#include "tree-pass.h"
 
 
 /* Turn STACK_GROWS_DOWNWARD into a boolean.  */
@@ -76,11 +74,12 @@ static void flags_set_1 (rtx, rtx, void *);
 static int try_auto_increment (rtx, rtx, rtx, rtx, HOST_WIDE_INT, int);
 static int find_matches (rtx, struct match *);
 static void replace_in_call_usage (rtx *, unsigned int, rtx, rtx);
-static int fixup_match_1 (rtx, rtx, rtx, rtx, rtx, int, int, int);
+static int fixup_match_1 (rtx, rtx, rtx, rtx, rtx, int, int, int, FILE *);
+static int reg_is_remote_constant_p (rtx, rtx, rtx);
 static int stable_and_no_regs_but_for_p (rtx, rtx, rtx);
 static int regclass_compatible_p (int, int);
 static int replacement_quality (rtx);
-static int fixup_match_2 (rtx, rtx, rtx, rtx);
+static int fixup_match_2 (rtx, rtx, rtx, rtx, FILE *);
 
 /* Return nonzero if registers with CLASS1 and CLASS2 can be merged without
    causing too much register allocation problems.  */
@@ -136,7 +135,7 @@ try_auto_increment (rtx insn, rtx inc_insn, rtx inc_insn_set, rtx reg,
 		  /* If there is a REG_DEAD note on this insn, we must
 		     change this not to REG_UNUSED meaning that the register
 		     is set, but the value is dead.  Failure to do so will
-		     result in a sched1 dieing -- when it recomputes lifetime
+		     result in a sched1 abort -- when it recomputes lifetime
 		     information, the number of REG_DEAD notes will have
 		     changed.  */
 		  rtx note = find_reg_note (insn, REG_DEAD, reg);
@@ -267,7 +266,7 @@ mark_flags_life_zones (rtx flags)
       {
 	int i;
 	for (i = 0; i < flags_nregs; ++i)
-	  live |= REGNO_REG_SET_P (block->il.rtl->global_live_at_start,
+	  live |= REGNO_REG_SET_P (block->global_live_at_start,
 				   flags_regno + i);
       }
 #endif
@@ -838,14 +837,6 @@ copy_src_to_dest (rtx insn, rtx src, rtx dest, int old_max_uid)
     }
 }
 
-/* reg_set_in_bb[REGNO] points to basic block iff the register is set
-   only once in the given block and has REG_EQUAL note.  */
-
-basic_block *reg_set_in_bb;
-
-/* Size of reg_set_in_bb array.  */
-static unsigned int max_reg_computed;
-
 
 /* Return whether REG is set in only one location, and is set to a
    constant, but is set in a different basic block from INSN (an
@@ -857,57 +848,51 @@ static unsigned int max_reg_computed;
    is used in a different basic block as well as this one?).  FIRST is
    the first insn in the function.  */
 
-static bool
-reg_is_remote_constant_p (rtx reg, rtx insn)
+static int
+reg_is_remote_constant_p (rtx reg, rtx insn, rtx first)
 {
-  basic_block bb;
   rtx p;
-  int max;
 
-  if (!reg_set_in_bb)
-    {
-      max_reg_computed = max = max_reg_num ();
-      reg_set_in_bb = xcalloc (max, sizeof (*reg_set_in_bb));
+  if (REG_N_SETS (REGNO (reg)) != 1)
+    return 0;
 
-      FOR_EACH_BB (bb)
-	for (p = BB_HEAD (bb); p != NEXT_INSN (BB_END (bb));
-	     p = NEXT_INSN (p))
-	{
-	  rtx s;
-
-	  if (!INSN_P (p))
-	    continue;
-	  s = single_set (p);
-	  /* This is the instruction which sets REG.  If there is a
-	     REG_EQUAL note, then REG is equivalent to a constant.  */
-	  if (s != 0
-	      && REG_P (SET_DEST (s))
-	      && REG_N_SETS (REGNO (SET_DEST (s))) == 1
-	      && find_reg_note (p, REG_EQUAL, NULL_RTX))
-	    reg_set_in_bb[REGNO (SET_DEST (s))] = bb;
-	}
-    }
-  gcc_assert (REGNO (reg) < max_reg_computed);
-  if (reg_set_in_bb[REGNO (reg)] == NULL)
-    return false;
-  if (reg_set_in_bb[REGNO (reg)] != BLOCK_FOR_INSN (insn))
-    return true;
   /* Look for the set.  */
-  for (p = BB_HEAD (BLOCK_FOR_INSN (insn)); p != insn; p = NEXT_INSN (p))
+  for (p = LOG_LINKS (insn); p; p = XEXP (p, 1))
     {
       rtx s;
 
-      if (!INSN_P (p))
+      if (REG_NOTE_KIND (p) != 0)
+	continue;
+      s = single_set (XEXP (p, 0));
+      if (s != 0
+	  && REG_P (SET_DEST (s))
+	  && REGNO (SET_DEST (s)) == REGNO (reg))
+	{
+	  /* The register is set in the same basic block.  */
+	  return 0;
+	}
+    }
+
+  for (p = first; p && p != insn; p = NEXT_INSN (p))
+    {
+      rtx s;
+
+      if (! INSN_P (p))
 	continue;
       s = single_set (p);
       if (s != 0
-	  && REG_P (SET_DEST (s)) && REGNO (SET_DEST (s)) == REGNO (reg))
+	  && REG_P (SET_DEST (s))
+	  && REGNO (SET_DEST (s)) == REGNO (reg))
 	{
-	  /* The register is set in the same basic block.  */
-	  return false;
+	  /* This is the instruction which sets REG.  If there is a
+             REG_EQUAL note, then REG is equivalent to a constant.  */
+	  if (find_reg_note (p, REG_EQUAL, NULL_RTX))
+	    return 1;
+	  return 0;
 	}
     }
-  return true;
+
+  return 0;
 }
 
 /* INSN is adding a CONST_INT to a REG.  We search backwards looking for
@@ -929,7 +914,7 @@ reg_is_remote_constant_p (rtx reg, rtx insn)
    hard register as ultimate source, like the frame pointer.  */
 
 static int
-fixup_match_2 (rtx insn, rtx dst, rtx src, rtx offset)
+fixup_match_2 (rtx insn, rtx dst, rtx src, rtx offset, FILE *regmove_dump_file)
 {
   rtx p, dst_death = 0;
   int length, num_calls = 0;
@@ -978,8 +963,8 @@ fixup_match_2 (rtx insn, rtx dst, rtx src, rtx offset)
 		  REG_N_CALLS_CROSSED (REGNO (dst)) += num_calls;
 		}
 
-	      if (dump_file)
-		fprintf (dump_file,
+	      if (regmove_dump_file)
+		fprintf (regmove_dump_file,
 			 "Fixed operand of insn %d.\n",
 			  INSN_UID (insn));
 
@@ -1050,8 +1035,8 @@ fixup_match_2 (rtx insn, rtx dst, rtx src, rtx offset)
    REGMOVE_DUMP_FILE is a stream for output of a trace of actions taken
    (or 0 if none should be output).  */
 
-static void
-regmove_optimize (rtx f, int nregs)
+void
+regmove_optimize (rtx f, int nregs, FILE *regmove_dump_file)
 {
   int old_max_uid = get_max_uid ();
   rtx insn;
@@ -1070,10 +1055,10 @@ regmove_optimize (rtx f, int nregs)
      can suppress some optimizations in those zones.  */
   mark_flags_life_zones (discover_flags_reg ());
 
-  regno_src_regno = XNEWVEC (int, nregs);
+  regno_src_regno = xmalloc (sizeof *regno_src_regno * nregs);
   for (i = nregs; --i >= 0; ) regno_src_regno[i] = -1;
 
-  regmove_bb_head = XNEWVEC (int, old_max_uid + 1);
+  regmove_bb_head = xmalloc (sizeof (int) * (old_max_uid + 1));
   for (i = old_max_uid; i >= 0; i--) regmove_bb_head[i] = -1;
   FOR_EACH_BB (bb)
     regmove_bb_head[INSN_UID (BB_HEAD (bb))] = bb->index;
@@ -1085,8 +1070,8 @@ regmove_optimize (rtx f, int nregs)
       if (! flag_regmove && pass >= flag_expensive_optimizations)
 	goto done;
 
-      if (dump_file)
-	fprintf (dump_file, "Starting %s pass...\n",
+      if (regmove_dump_file)
+	fprintf (regmove_dump_file, "Starting %s pass...\n",
 		 pass ? "backward" : "forward");
 
       for (insn = pass ? get_last_insn () : f; insn;
@@ -1222,7 +1207,8 @@ regmove_optimize (rtx f, int nregs)
 		continue;
 
 	      if (fixup_match_1 (insn, set, src, src_subreg, dst, pass,
-				 op_no, match_no))
+				 op_no, match_no,
+				 regmove_dump_file))
 		break;
 	    }
 	}
@@ -1230,8 +1216,8 @@ regmove_optimize (rtx f, int nregs)
 
   /* A backward pass.  Replace input operands with output operands.  */
 
-  if (dump_file)
-    fprintf (dump_file, "Starting backward pass...\n");
+  if (regmove_dump_file)
+    fprintf (regmove_dump_file, "Starting backward pass...\n");
 
   for (insn = get_last_insn (); insn; insn = PREV_INSN (insn))
     {
@@ -1320,7 +1306,8 @@ regmove_optimize (rtx f, int nregs)
 		      && GET_CODE (XEXP (SET_SRC (set), 1)) == CONST_INT
 		      && XEXP (SET_SRC (set), 0) == src
 		      && fixup_match_2 (insn, dst, src,
-					XEXP (SET_SRC (set), 1)))
+					XEXP (SET_SRC (set), 1),
+					regmove_dump_file))
 		    break;
 		  continue;
 		}
@@ -1368,7 +1355,7 @@ regmove_optimize (rtx f, int nregs)
 		 it for this optimization, as this would make it
 		 no longer equivalent to a constant.  */
 
-	      if (reg_is_remote_constant_p (src, insn))
+	      if (reg_is_remote_constant_p (src, insn, f))
 		{
 		  if (!copy_src)
 		    {
@@ -1379,8 +1366,8 @@ regmove_optimize (rtx f, int nregs)
 		}
 
 
-	      if (dump_file)
-		fprintf (dump_file,
+	      if (regmove_dump_file)
+		fprintf (regmove_dump_file,
 			 "Could fix operand %d of insn %d matching operand %d.\n",
 			 op_no, INSN_UID (insn), match_no);
 
@@ -1483,8 +1470,8 @@ regmove_optimize (rtx f, int nregs)
 			REG_LIVE_LENGTH (srcno) = 2;
 		    }
 
-		  if (dump_file)
-		    fprintf (dump_file,
+		  if (regmove_dump_file)
+		    fprintf (regmove_dump_file,
 			     "Fixed operand %d of insn %d matching operand %d.\n",
 			     op_no, INSN_UID (insn), match_no);
 
@@ -1517,11 +1504,6 @@ regmove_optimize (rtx f, int nregs)
   /* Clean up.  */
   free (regno_src_regno);
   free (regmove_bb_head);
-  if (reg_set_in_bb)
-    {
-      free (reg_set_in_bb);
-      reg_set_in_bb = NULL;
-    }
 }
 
 /* Returns nonzero if INSN's pattern has matching constraints for any operand.
@@ -1659,7 +1641,8 @@ replace_in_call_usage (rtx *loc, unsigned int dst_reg, rtx src, rtx insn)
 
 static int
 fixup_match_1 (rtx insn, rtx set, rtx src, rtx src_subreg, rtx dst,
-	       int backward, int operand_number, int match_number)
+	       int backward, int operand_number, int match_number,
+	       FILE *regmove_dump_file)
 {
   rtx p;
   rtx post_inc = 0, post_inc_set = 0, search_end = 0;
@@ -1694,8 +1677,8 @@ fixup_match_1 (rtx insn, rtx set, rtx src, rtx src_subreg, rtx dst,
 	code = NOTE;
     }
 
-  if (dump_file)
-    fprintf (dump_file,
+  if (regmove_dump_file)
+    fprintf (regmove_dump_file,
 	     "Could fix operand %d of insn %d matching operand %d.\n",
 	     operand_number, INSN_UID (insn), match_number);
 
@@ -1703,7 +1686,7 @@ fixup_match_1 (rtx insn, rtx set, rtx src, rtx src_subreg, rtx dst,
      then do not use it for this optimization.  We want the equivalence
      so that if we have to reload this register, we can reload the
      constant, rather than extending the lifespan of the register.  */
-  if (reg_is_remote_constant_p (src, insn))
+  if (reg_is_remote_constant_p (src, insn, get_insns ()))
     return 0;
 
   /* Scan forward to find the next instruction that
@@ -2035,8 +2018,8 @@ fixup_match_1 (rtx insn, rtx set, rtx src, rtx src_subreg, rtx dst,
       if (REG_LIVE_LENGTH (REGNO (dst)) < 2)
 	REG_LIVE_LENGTH (REGNO (dst)) = 2;
     }
-  if (dump_file)
-    fprintf (dump_file,
+  if (regmove_dump_file)
+    fprintf (regmove_dump_file,
 	     "Fixed operand %d of insn %d matching operand %d.\n",
 	     operand_number, INSN_UID (insn), match_number);
   return 1;
@@ -2128,7 +2111,7 @@ static int record_stack_memrefs (rtx *, void *);
 
 /* Main entry point for stack adjustment combination.  */
 
-static void
+void
 combine_stack_adjustments (void)
 {
   basic_block bb;
@@ -2212,7 +2195,7 @@ record_one_stack_memref (rtx insn, rtx *mem, struct csa_memlist *next_memlist)
 {
   struct csa_memlist *ml;
 
-  ml = XNEW (struct csa_memlist);
+  ml = xmalloc (sizeof (*ml));
 
   if (XEXP (*mem, 0) == stack_pointer_rtx)
     ml->sp_offset = 0;
@@ -2478,82 +2461,3 @@ combine_stack_adjustments_for_block (basic_block bb)
   if (memlist)
     free_csa_memlist (memlist);
 }
-
-static bool
-gate_handle_regmove (void)
-{
-  return (optimize > 0 && flag_regmove);
-}
-
-
-/* Register allocation pre-pass, to reduce number of moves necessary
-   for two-address machines.  */
-static unsigned int
-rest_of_handle_regmove (void)
-{
-  regmove_optimize (get_insns (), max_reg_num ());
-  cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_UPDATE_LIFE);
-  return 0;
-}
-
-struct tree_opt_pass pass_regmove =
-{
-  "regmove",                            /* name */
-  gate_handle_regmove,                  /* gate */
-  rest_of_handle_regmove,               /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_REGMOVE,                           /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  TODO_dump_func |
-  TODO_ggc_collect,                     /* todo_flags_finish */
-  'N'                                   /* letter */
-};
-
-
-static bool
-gate_handle_stack_adjustments (void)
-{
-  return (optimize > 0);
-}
-
-static unsigned int
-rest_of_handle_stack_adjustments (void)
-{
-  life_analysis (PROP_POSTRELOAD);
-  cleanup_cfg (CLEANUP_EXPENSIVE | CLEANUP_UPDATE_LIFE
-               | (flag_crossjumping ? CLEANUP_CROSSJUMP : 0));
-
-  /* This is kind of a heuristic.  We need to run combine_stack_adjustments
-     even for machines with possibly nonzero RETURN_POPS_ARGS
-     and ACCUMULATE_OUTGOING_ARGS.  We expect that only ports having
-     push instructions will have popping returns.  */
-#ifndef PUSH_ROUNDING
-  if (!ACCUMULATE_OUTGOING_ARGS)
-#endif
-    combine_stack_adjustments ();
-  return 0;
-}
-
-struct tree_opt_pass pass_stack_adjustments =
-{
-  "csa",                                /* name */
-  gate_handle_stack_adjustments,        /* gate */
-  rest_of_handle_stack_adjustments,     /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  0,                                    /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  TODO_dump_func |
-  TODO_ggc_collect,                     /* todo_flags_finish */
-  0                                     /* letter */
-};
-

@@ -13,10 +13,16 @@ Compares the first @var{n} bytes of two strings, returning a value as
 */
 
 #include <ansidecl.h>
+#ifdef ANSI_PROTOTYPES
 #include <stddef.h>
+#else
+#define size_t unsigned long
+#endif
 
 int
-strncmp(const char *s1, const char *s2, register size_t n)
+strncmp(s1, s2, n)
+     const char *s1, *s2;
+     register size_t n;
 {
   register unsigned char u1, u2;
 

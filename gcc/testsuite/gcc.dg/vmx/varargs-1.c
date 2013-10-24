@@ -25,7 +25,6 @@ void f1(int a, ...)
   va_start (ap, a);
   while (a-- > 0)
     printx(va_arg(ap, T));
-  va_end (ap);
 }
 
 void f2(int a, T b, ...)
@@ -36,7 +35,6 @@ void f2(int a, T b, ...)
   va_start (ap, b);
   while (a-- > 0)
     printx(va_arg(ap, T));
-  va_end (ap);
 }
 
 void f3(int a, T b, T c, ...)
@@ -49,7 +47,6 @@ void f3(int a, T b, T c, ...)
   va_start (ap, c);
   while (a-- > 0)
     printx(va_arg(ap, T));
-  va_end (ap);
 }
 
 void f4(int a, T b, T c,

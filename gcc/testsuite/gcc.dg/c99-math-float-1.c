@@ -10,10 +10,9 @@ int main(void)
   float inf = INFINITY;
   float huge = HUGE_VALF;
   float norm = __FLT_MIN__;
-  float sub = __FLT_MIN__ / 2;
   float zero = 0.0f;
 
-  C99_MATH_TESTS (nan, inf, huge, norm, sub, zero)
+  C99_MATH_TESTS (nan, inf, huge, norm, zero)
 
   return 0;
 }

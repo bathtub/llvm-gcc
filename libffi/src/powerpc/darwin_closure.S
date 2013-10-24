@@ -27,25 +27,13 @@
 #define LIBFFI_ASM
 #define L(x) x
 
-#if defined(__ppc64__)
-#define MODE_CHOICE(x, y) y
-#else
-#define MODE_CHOICE(x, y) x
-#endif
-
-#define lgu     MODE_CHOICE(lwzu, ldu)
-
-#define g_long  MODE_CHOICE(long, quad)         /* usage is ".g_long" */
-
-#define LOG2_GPR_BYTES  MODE_CHOICE(2,3)        /* log2(GPR_BYTES) */
-
 	.file	"darwin_closure.S"
 .text
-	.align LOG2_GPR_BYTES
+	.align 2
 .globl _ffi_closure_ASM
 
 .text
-	.align LOG2_GPR_BYTES
+	.align 2
 _ffi_closure_ASM:
 LFB1:
 	mflr	r0		/* extract return address  */
@@ -246,7 +234,7 @@ Lfinish:
 /* END(ffi_closure_ASM)  */
 
 .data
-.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms+live_support
+.section __TEXT,__eh_frame,coalesced,no_toc+strip_static_syms
 EH_frame1:
 	.set	L$set$0,LECIE1-LSCIE1
 	.long	L$set$0	; Length of Common Information Entry
@@ -262,7 +250,7 @@ LSCIE1:
 	.byte	0xc	; DW_CFA_def_cfa
 	.byte	0x1	; uleb128 0x1
 	.byte	0x0	; uleb128 0x0
-	.align	LOG2_GPR_BYTES
+	.align	2
 LECIE1:
 .globl _ffi_closure_ASM.eh
 _ffi_closure_ASM.eh:
@@ -272,9 +260,9 @@ LSFDE1:
 
 LASFDE1:
 	.long	LASFDE1-EH_frame1	; FDE CIE offset
-	.g_long	LLFB1$non_lazy_ptr-.	; FDE initial location
+	.long	LLFB1$non_lazy_ptr-.	; FDE initial location
 	.set	L$set$3,LFE1-LFB1
-	.g_long	L$set$3	; FDE address range
+	.long	L$set$3	; FDE address range
 	.byte   0x0     ; uleb128 0x0; Augmentation size
 	.byte	0x4	; DW_CFA_advance_loc4
 	.set	L$set$3,LCFI1-LCFI0
@@ -287,15 +275,14 @@ LASFDE1:
 	.byte   0x11    ; DW_CFA_offset_extended_sf
 	.byte	0x41	; uleb128 0x41
 	.byte   0x7e    ; sleb128 -2
-	.align	LOG2_GPR_BYTES
+	.align	2
 LEFDE1:
 .data
-	.align	LOG2_GPR_BYTES
+	.align	2
 LDFCM0:
 .section __TEXT,__picsymbolstub1,symbol_stubs,pure_instructions,32
-	.align	LOG2_GPR_BYTES
+	.align	2
 Lffi_closure_helper_DARWIN$stub:
-#if 1
 	.indirect_symbol _ffi_closure_helper_DARWIN
 	mflr	r0
 	bcl	20,31,LO$ffi_closure_helper_DARWIN
@@ -303,15 +290,15 @@ LO$ffi_closure_helper_DARWIN:
 	mflr	r11
 	addis	r11,r11,ha16(L_ffi_closure_helper_DARWIN$lazy_ptr - LO$ffi_closure_helper_DARWIN)
 	mtlr	r0
-	lgu	r12,lo16(L_ffi_closure_helper_DARWIN$lazy_ptr - LO$ffi_closure_helper_DARWIN)(r11)
+	lwzu	r12,lo16(L_ffi_closure_helper_DARWIN$lazy_ptr - LO$ffi_closure_helper_DARWIN)(r11)
 	mtctr	r12
 	bctr
+.data
 .lazy_symbol_pointer
 L_ffi_closure_helper_DARWIN$lazy_ptr:
 	.indirect_symbol _ffi_closure_helper_DARWIN
-	.g_long dyld_stub_binding_helper
-#endif
+	.long   dyld_stub_binding_helper
 .data
-	.align LOG2_GPR_BYTES
+	.align 2
 LLFB1$non_lazy_ptr:
-	.g_long LFB1
+	.long LFB1

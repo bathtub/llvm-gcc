@@ -1,10 +1,11 @@
+/* APPLE LOCAL file mainline */
 /* Test if ObjC++ can distinguish protocol qualifiers from
    template arguments.  */
 /* Author:  Ziemowit Laski <zlaski@apple.com>.  */
-
 /* { dg-do run } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 
 #define CHECK_IF(expr) if(!(expr)) abort()
@@ -54,15 +55,19 @@ template <typename T>
 int Holder<T>::counter = 0;
 
 int main (void) {
-  CHECK_IF(FooHolder::counter == 0);
-  {
-    FooHolder holder;
-    CHECK_IF(holder.obj->val == 1);
-    CHECK_IF(FooHolder::counter == 1);
-    FooHolder holder2;
-    CHECK_IF(holder2.obj->val == 2);
-    CHECK_IF(FooHolder::counter == 2);
-  }
-  CHECK_IF(FooHolder::counter == 0);
-  return 0;
+    CHECK_IF(FooHolder::counter == 0);
+    {
+      FooHolder holder;
+      CHECK_IF(holder.obj->val == 1);
+      CHECK_IF(FooHolder::counter == 1);
+      FooHolder holder2;
+      CHECK_IF(holder2.obj->val == 2);
+      CHECK_IF(FooHolder::counter == 2);
+    }
+    CHECK_IF(FooHolder::counter == 0);
+    return 0;
 }
+
+
+
+

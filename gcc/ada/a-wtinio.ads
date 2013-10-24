@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --           A D A . W I D E _ T E X T _ I O . I N T E G E R _ I O          --
 --                                                                          --
@@ -28,33 +28,33 @@ package Ada.Wide_Text_IO.Integer_IO is
    Default_Base  : Number_Base := 10;
 
    procedure Get
-     (File  : File_Type;
+     (File  : in File_Type;
       Item  : out Num;
-      Width : Field := 0);
+      Width : in Field := 0);
 
    procedure Get
      (Item  : out Num;
-      Width : Field := 0);
+      Width : in Field := 0);
 
    procedure Put
-     (File  : File_Type;
-      Item  : Num;
-      Width : Field := Default_Width;
-      Base  : Number_Base := Default_Base);
+     (File  : in File_Type;
+      Item  : in Num;
+      Width : in Field := Default_Width;
+      Base  : in Number_Base := Default_Base);
 
    procedure Put
-     (Item  : Num;
-      Width : Field := Default_Width;
-      Base  : Number_Base := Default_Base);
+     (Item  : in Num;
+      Width : in Field := Default_Width;
+      Base  : in Number_Base := Default_Base);
 
    procedure Get
-     (From : Wide_String;
+     (From : in Wide_String;
       Item : out Num;
       Last : out Positive);
 
    procedure Put
      (To   : out Wide_String;
-      Item : Num;
-      Base : Number_Base := Default_Base);
+      Item : in Num;
+      Base : in Number_Base := Default_Base);
 
 end Ada.Wide_Text_IO.Integer_IO;

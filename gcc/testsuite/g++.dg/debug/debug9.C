@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline 4.2 2006-01-02 4386366 */
 /* { dg-do assemble } */
 /* This testcase requires entries in the debug_range section in DWARF which
    refer to a vague linkage function.  */

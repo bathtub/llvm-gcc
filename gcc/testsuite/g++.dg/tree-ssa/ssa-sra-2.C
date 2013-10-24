@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O1 -fdump-tree-optimized" } */
+/* { dg-options "-O1 -fdump-tree-vars-details" } */
 
 void link_error();
 
@@ -48,5 +48,7 @@ void test()
 }
 
 /* We should have removed the casts from pointers to references and caused SRA to happen.  */
-/* { dg-final { scan-tree-dump-times "link_error" 0 "optimized"} } */
-/* { dg-final { cleanup-tree-dump "optimized" } } */
+/* APPLE LOCAL begin 4158356 change 0 to 1 temporarily */
+/* Revert when PR 22156/22157 is fixed and fix merged in */
+/* { dg-final { scan-tree-dump-times "link_error" 1 "vars"} } */
+/* APPLE LOCAL end 4158356 change 0 to 1 temporarily */

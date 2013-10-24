@@ -1,5 +1,5 @@
 `/* Implementation of the MATMUL intrinsic
-   Copyright 2002, 2005, 2006 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -35,44 +35,27 @@ Boston, MA 02110-1301, USA.  */
 #include "libgfortran.h"'
 include(iparm.m4)dnl
 
-`#if defined (HAVE_'rtype_name`)'
-
-/* The order of loops is different in the case of plain matrix
-   multiplication C=MATMUL(A,B), and in the frequent special case where
-   the argument A is the temporary result of a TRANSPOSE intrinsic:
-   C=MATMUL(TRANSPOSE(A),B).  Transposed temporaries are detected by
-   looking at their strides.
-
-   The equivalent Fortran pseudo-code is:
+/* This is a C version of the following fortran pseudo-code. The key
+   point is the loop order -- we access all arrays column-first, which
+   improves the performance enough to boost galgel spec score by 50%.
 
    DIMENSION A(M,COUNT), B(COUNT,N), C(M,N)
-   IF (.NOT.IS_TRANSPOSED(A)) THEN
-     C = 0
-     DO J=1,N
-       DO K=1,COUNT
-         DO I=1,M
-           C(I,J) = C(I,J)+A(I,K)*B(K,J)
-   ELSE
-     DO J=1,N
+   C = 0
+   DO J=1,N
+     DO K=1,COUNT
        DO I=1,M
-         S = 0
-         DO K=1,COUNT
-           S = S+A(I,K)+B(K,J)
-         C(I,J) = S
-   ENDIF
+         C(I,J) = C(I,J)+A(I,K)*B(K,J)
 */
 
-extern void matmul_`'rtype_code (rtype * const restrict retarray, 
-	rtype * const restrict a, rtype * const restrict b);
+extern void matmul_`'rtype_code (rtype * retarray, rtype * a, rtype * b);
 export_proto(matmul_`'rtype_code);
 
 void
-matmul_`'rtype_code (rtype * const restrict retarray, 
-	rtype * const restrict a, rtype * const restrict b)
+matmul_`'rtype_code (rtype * retarray, rtype * a, rtype * b)
 {
-  const rtype_name * restrict abase;
-  const rtype_name * restrict bbase;
-  rtype_name * restrict dest;
+  rtype_name *abase;
+  rtype_name *bbase;
+  rtype_name *dest;
 
   index_type rxstride, rystride, axstride, aystride, bxstride, bystride;
   index_type x, y, n, count, xcount, ycount;
@@ -110,16 +93,27 @@ matmul_`'rtype_code (rtype * const restrict retarray,
           retarray->dim[0].lbound = 0;
           retarray->dim[0].ubound = a->dim[0].ubound - a->dim[0].lbound;
           retarray->dim[0].stride = 1;
-
+          
           retarray->dim[1].lbound = 0;
           retarray->dim[1].ubound = b->dim[1].ubound - b->dim[1].lbound;
           retarray->dim[1].stride = retarray->dim[0].ubound+1;
         }
-
+          
       retarray->data
-	= internal_malloc_size (sizeof (rtype_name) * size0 ((array_t *) retarray));
-      retarray->offset = 0;
+	= internal_malloc_size (sizeof (rtype_name) * size0 (retarray));
+      retarray->base = 0;
     }
+
+  abase = a->data;
+  bbase = b->data;
+  dest = retarray->data;
+
+  if (retarray->dim[0].stride == 0)
+    retarray->dim[0].stride = 1;
+  if (a->dim[0].stride == 0)
+    a->dim[0].stride = 1;
+  if (b->dim[0].stride == 0)
+    b->dim[0].stride = 1;
 
 sinclude(`matmul_asm_'rtype_code`.m4')dnl
 
@@ -165,7 +159,7 @@ sinclude(`matmul_asm_'rtype_code`.m4')dnl
       /* bystride should never be used for 1-dimensional b.
 	 in case it is we want it to cause a segfault, rather than
 	 an incorrect result. */
-      bystride = 0xDEADBEEF;
+      bystride = 0xDEADBEEF; 
       ycount = 1;
     }
   else
@@ -175,25 +169,22 @@ sinclude(`matmul_asm_'rtype_code`.m4')dnl
       ycount = b->dim[1].ubound + 1 - b->dim[1].lbound;
     }
 
+  assert (a->base == 0);
+  assert (b->base == 0);
+  assert (retarray->base == 0);
+
   abase = a->data;
   bbase = b->data;
   dest = retarray->data;
 
   if (rxstride == 1 && axstride == 1 && bxstride == 1)
     {
-      const rtype_name * restrict bbase_y;
-      rtype_name * restrict dest_y;
-      const rtype_name * restrict abase_n;
+      rtype_name *bbase_y;
+      rtype_name *dest_y;
+      rtype_name *abase_n;
       rtype_name bbase_yn;
 
-      if (rystride == xcount)
-	memset (dest, 0, (sizeof (rtype_name) * xcount * ycount));
-      else
-	{
-	  for (y = 0; y < ycount; y++)
-	    for (x = 0; x < xcount; x++)
-	      dest[x + y*rystride] = (rtype_name)0;
-	}
+      memset (dest, 0, (sizeof (rtype_name) * size0(retarray)));
 
       for (y = 0; y < ycount; y++)
 	{
@@ -210,45 +201,7 @@ sinclude(`matmul_asm_'rtype_code`.m4')dnl
 	    }
 	}
     }
-  else if (rxstride == 1 && aystride == 1 && bxstride == 1)
-    {
-      if (GFC_DESCRIPTOR_RANK (a) != 1)
-	{
-	  const rtype_name *restrict abase_x;
-	  const rtype_name *restrict bbase_y;
-	  rtype_name *restrict dest_y;
-	  rtype_name s;
-
-	  for (y = 0; y < ycount; y++)
-	    {
-	      bbase_y = &bbase[y*bystride];
-	      dest_y = &dest[y*rystride];
-	      for (x = 0; x < xcount; x++)
-		{
-		  abase_x = &abase[x*axstride];
-		  s = (rtype_name) 0;
-		  for (n = 0; n < count; n++)
-		    s += abase_x[n] * bbase_y[n];
-		  dest_y[x] = s;
-		}
-	    }
-	}
-      else
-	{
-	  const rtype_name *restrict bbase_y;
-	  rtype_name s;
-
-	  for (y = 0; y < ycount; y++)
-	    {
-	      bbase_y = &bbase[y*bystride];
-	      s = (rtype_name) 0;
-	      for (n = 0; n < count; n++)
-		s += abase[n*axstride] * bbase_y[n];
-	      dest[y*rystride] = s;
-	    }
-	}
-    }
-  else if (axstride < aystride)
+  else
     {
       for (y = 0; y < ycount; y++)
 	for (x = 0; x < xcount; x++)
@@ -260,41 +213,4 @@ sinclude(`matmul_asm_'rtype_code`.m4')dnl
 	    /* dest[x,y] += a[x,n] * b[n,y] */
 	    dest[x*rxstride + y*rystride] += abase[x*axstride + n*aystride] * bbase[n*bxstride + y*bystride];
     }
-  else if (GFC_DESCRIPTOR_RANK (a) == 1)
-    {
-      const rtype_name *restrict bbase_y;
-      rtype_name s;
-
-      for (y = 0; y < ycount; y++)
-	{
-	  bbase_y = &bbase[y*bystride];
-	  s = (rtype_name) 0;
-	  for (n = 0; n < count; n++)
-	    s += abase[n*axstride] * bbase_y[n*bxstride];
-	  dest[y*rxstride] = s;
-	}
-    }
-  else
-    {
-      const rtype_name *restrict abase_x;
-      const rtype_name *restrict bbase_y;
-      rtype_name *restrict dest_y;
-      rtype_name s;
-
-      for (y = 0; y < ycount; y++)
-	{
-	  bbase_y = &bbase[y*bystride];
-	  dest_y = &dest[y*rystride];
-	  for (x = 0; x < xcount; x++)
-	    {
-	      abase_x = &abase[x*axstride];
-	      s = (rtype_name) 0;
-	      for (n = 0; n < count; n++)
-		s += abase_x[n*aystride] * bbase_y[n*bxstride];
-	      dest_y[x*rxstride] = s;
-	    }
-	}
-    }
 }
-
-#endif

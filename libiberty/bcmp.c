@@ -15,13 +15,22 @@ result mean @var{x} sorts before @var{y}).
 
 */
 
-#include <stddef.h>
-
-extern int memcmp(const void *, const void *, size_t);
 
 int
-bcmp (const void *s1, const void *s2, size_t count)
+bcmp (from, to, count)
+  char *from, *to;
+  int count;
 {
-  return memcmp (s1, s2, count);
+  int rtnval = 0;
+
+  while (count-- > 0)
+    {
+      if (*from++ != *to++)
+	{
+	  rtnval = 1;
+	  break;
+	}
+    }
+  return (rtnval);
 }
 

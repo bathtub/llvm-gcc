@@ -24,19 +24,10 @@
 !
 !You should have received a copy of the GNU General Public
 !License along with libgfortran; see the file COPYING.  If not,
-!write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-!Boston, MA 02110-1301, USA.
+!write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+!Boston, MA 02111-1307, USA.
 !
 !This file is machine generated.
-
-
-
-#include "config.h"
-#include "kinds.inc"
-#include "c99_protos.inc"
-
-#if defined (HAVE_GFC_INTEGER_4)
-
 
 
 elemental function specific__sign_i4 (p1, p2)
@@ -45,7 +36,3 @@ elemental function specific__sign_i4 (p1, p2)
 
    specific__sign_i4 = sign (p1, p2)
 end function
-
-
-
-#endif

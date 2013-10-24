@@ -1,6 +1,6 @@
 // -*- C++ -*- forwarding header.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,37 +28,34 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
+//
+// ISO C++ 14882: 20.4.6  C library
+//
+
 /** @file csignal
  *  This is a Standard C++ Library file.  You should @c #include this file
  *  in your programs, rather than any of the "*.h" implementation files.
  *
  *  This is the C++ version of the Standard C Library header @c signal.h,
  *  and its contents are (mostly) the same as that header, but are all
- *  contained in the namespace @c std (except for names which are defined
- *  as macros in C).
+ *  contained in the namespace @c std.
  */
-
-//
-// ISO C++ 14882: 20.4.6  C library
-//
 
 #ifndef _GLIBCXX_CSIGNAL
 #define _GLIBCXX_CSIGNAL 1
 
 #pragma GCC system_header
 
-#include <bits/c++config.h>
 #include <signal.h>
 
 // Get rid of those macros defined in <signal.h> in lieu of real functions.
 #undef raise
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   using ::sig_atomic_t;
   using ::signal;
   using ::raise;
-
-_GLIBCXX_END_NAMESPACE
+}
 
 #endif

@@ -43,7 +43,7 @@ extern PTR memset ();
 #  define MAX(a,b) ((a) > (b) ? (a) : (b))
 #endif
 
-static void init_error_tables (void);
+static void init_error_tables PARAMS ((void));
 
 /* Translation table for errno values.  See intro(2) in most UNIX systems
    Programmers Reference Manuals.
@@ -503,7 +503,7 @@ BUGS
 */
 
 static void
-init_error_tables (void)
+init_error_tables ()
 {
   const struct error_info *eip;
   int nbytes;
@@ -584,7 +584,7 @@ symbolic name or message.
 */
 
 int
-errno_max (void)
+errno_max ()
 {
   int maxsize;
 
@@ -623,7 +623,8 @@ next call to @code{strerror}.
 */
 
 char *
-strerror (int errnoval)
+strerror (errnoval)
+  int errnoval;
 {
   const char *msg;
   static char buf[32];
@@ -689,7 +690,8 @@ valid until the next call to @code{strerrno}.
 */
 
 const char *
-strerrno (int errnoval)
+strerrno (errnoval)
+  int errnoval;
 {
   const char *name;
   static char buf[32];
@@ -736,7 +738,8 @@ to an errno value.  If no translation is found, returns 0.
 */
 
 int
-strtoerrno (const char *name)
+strtoerrno (name)
+     const char *name;
 {
   int errnoval = 0;
 
@@ -776,7 +779,7 @@ strtoerrno (const char *name)
 #include <stdio.h>
 
 int
-main (void)
+main ()
 {
   int errn;
   int errnmax;

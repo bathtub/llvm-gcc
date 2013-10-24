@@ -1,4 +1,4 @@
-// { dg-do assemble }
+// { dg-do assemble { xfail *-*-* } }
 
 // Submitted by bjornw@fairplay.no
 

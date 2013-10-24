@@ -1,9 +1,11 @@
+/* APPLE LOCAL file mainline */
 /* Check if bitfield ivars are inherited correctly (i.e., without
    being "promoted" to ints).  */
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-do run } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 
 #define CHECK_IF(expr) if(!(expr)) abort();

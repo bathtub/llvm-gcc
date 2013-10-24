@@ -1,5 +1,5 @@
 /* Functions related to building resource files.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -42,7 +42,6 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "target.h"
 #include "expr.h"
 #include "tree-iterator.h"
-#include "cgraph.h"
 
 /* DOS brain-damage */
 #ifndef O_BINARY
@@ -93,7 +92,8 @@ compile_resource_data (const char *name, const char *buffer, int length)
   layout_decl (decl, 0);
   pushdecl (decl);
   rest_of_decl_compilation (decl, global_bindings_p (), 0);
-  cgraph_varpool_finalize_decl (decl);
+  make_decl_rtl (decl);
+  assemble_variable (decl, 1, 0, 0);
 
   resources = tree_cons (NULL_TREE, decl, resources);
 }
@@ -145,7 +145,7 @@ compile_resource_file (const char *name, const char *filename)
       perror ("Could not figure length of resource file");
       return;
     }
-  buffer = XNEWVEC (char, strlen (name) + stat_buf.st_size);
+  buffer = xmalloc (strlen (name) + stat_buf.st_size);
   strcpy (buffer, name);
   read (fd, buffer + strlen (name), stat_buf.st_size);
   close (fd);

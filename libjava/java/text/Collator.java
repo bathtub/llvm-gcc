@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -150,8 +150,8 @@ public abstract class Collator implements Comparator, Cloneable
    * <code>Collator</code> and the strength and decomposition rules in
    * effect.
    *
-   * @param source The first object to compare
-   * @param target The second object to compare
+   * @param str1 The first object to compare
+   * @param str2 The second object to compare
    *
    * @return A negative integer if str1 &lt; str2, 0 if str1 == str2, or
    * a positive integer if str1 &gt; str2. 
@@ -164,8 +164,8 @@ public abstract class Collator implements Comparator, Cloneable
    * equal to, or greater than the second argument.  These two objects
    * must be <code>String</code>'s or an exception will be thrown.
    *
-   * @param o1 The first object to compare
-   * @param o2 The second object to compare
+   * @param obj1 The first object to compare
+   * @param obj2 The second object to compare
    *
    * @return A negative integer if obj1 &lt; obj2, 0 if obj1 == obj2, or
    * a positive integer if obj1 &gt; obj2. 
@@ -208,8 +208,8 @@ public abstract class Collator implements Comparator, Cloneable
    * according to the collation rules for the locale of this object and
    * the current strength and decomposition settings.
    *
-   * @param source The first <code>String</code> to compare
-   * @param target The second <code>String</code> to compare
+   * @param str1 The first <code>String</code> to compare
+   * @param str2 The second <code>String</code> to compare
    *
    * @return <code>true</code> if the two strings are equal,
    * <code>false</code> otherwise. 
@@ -256,7 +256,7 @@ public abstract class Collator implements Comparator, Cloneable
    * comparisons against a string might be performed multiple times, such
    * as during a sort operation.
    *
-   * @param source The <code>String</code> to convert.
+   * @param str The <code>String</code> to convert.
    *
    * @return A <code>CollationKey</code> for the specified <code>String</code>.
    */
@@ -292,7 +292,7 @@ public abstract class Collator implements Comparator, Cloneable
    * specified locale.  If no <code>Collator</code> exists for the desired
    * locale, a <code>Collator</code> for the default locale will be returned.
    *
-   * @param loc The desired localed to load a <code>Collator</code> for.
+   * @param locale The desired localed to load a <code>Collator</code> for.
    *
    * @return A <code>Collator</code> for the requested locale
    */
@@ -308,8 +308,7 @@ public abstract class Collator implements Comparator, Cloneable
       }
     catch (MissingResourceException x)
       {
-	pattern = "<0<1<2<3<4<5<6<7<8<9<A,a<b,B<c,C<d,D<e,E<f,F<g,G<h,H<i,I<j,J<k,K" +
-		"<l,L<m,M<n,N<o,O<p,P<q,Q<r,R<s,S<t,T<u,U<v,V<w,W<x,X<y,Y<z,Z";
+	return null;
       }
     try
       {
@@ -317,7 +316,7 @@ public abstract class Collator implements Comparator, Cloneable
       }
     catch (ParseException x)
       {
-	throw (InternalError)new InternalError().initCause(x);
+	return null;
       }
   }
 
@@ -347,7 +346,7 @@ public abstract class Collator implements Comparator, Cloneable
    * exception will be thrown.  See the documentation for those
    * contants for an explanation of this setting.
    *
-   * @param mode The new decomposition setting.
+   * @param decmp The new decomposition setting.
    *
    * @exception IllegalArgumentException If the requested
    * decomposition setting is not valid.

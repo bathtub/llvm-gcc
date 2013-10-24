@@ -1,4 +1,4 @@
-// { dg-do assemble }
+// { dg-do assemble { xfail *-*-* } }
 // Origin: Jakub Jelinek <jakub@redhat.com>
 
 

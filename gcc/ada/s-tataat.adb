@@ -1,13 +1,13 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
+--                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
 --                                                                          --
 --         S Y S T E M . T A S K I N G . T A S K _ A T T R I B U T E S      --
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
 --             Copyright (C) 1991-1994, Florida State University            --
---                     Copyright (C) 1995-2006, AdaCore                     --
+--             Copyright (C) 1995-2004, Ada Core Technologies               --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -17,8 +17,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,6 +31,9 @@
 -- Extensive contributions were provided by Ada Core Technologies, Inc.     --
 --                                                                          --
 ------------------------------------------------------------------------------
+
+with System.Storage_Elements;
+--  used for To_Address
 
 with System.Task_Primitives.Operations;
 --  used for Write_Lock
@@ -58,10 +61,9 @@ package body System.Tasking.Task_Attributes is
 
    procedure Finalize (X : in out Instance) is
       Q, To_Be_Freed : Access_Node;
-      Self_Id        : constant Task_Id := Self;
 
    begin
-      Defer_Abort (Self_Id);
+      Defer_Abortion;
       Lock_RTS;
 
       --  Remove this instantiation from the list of all instantiations.
@@ -89,13 +91,13 @@ package body System.Tasking.Task_Attributes is
 
          In_Use := In_Use and not (2**Natural (X.Index));
 
-         --  There is no need for finalization in this case, since controlled
-         --  types are too big to fit in the TCB.
+         --  There is no need for finalization in this case,
+         --  since controlled types are too big to fit in the TCB.
 
       else
-         --  Remove nodes for this attribute from the lists of all tasks,
-         --  and deallocate the nodes. Deallocation does finalization, if
-         --  necessary.
+         --  Remove nodes for this attribute from the lists of
+         --  all tasks, and deallocate the nodes.
+         --  Deallocation does finalization, if necessary.
 
          declare
             C : System.Tasking.Task_Id := All_Tasks_List;
@@ -120,7 +122,7 @@ package body System.Tasking.Task_Attributes is
                      P.Next := Q.Next;
                   end if;
 
-                  --  Can't Deallocate now since we are holding RTS_Lock
+                  --  Can't Deallocate now since we are holding RTS_Lock.
 
                   Q.Next := To_Be_Freed;
                   To_Be_Freed := Q;
@@ -140,7 +142,7 @@ package body System.Tasking.Task_Attributes is
          X.Deallocate.all (Q);
       end loop;
 
-      Undefer_Abort (Self_Id);
+      Undefer_Abortion;
 
    exception
       when others =>
@@ -161,7 +163,7 @@ package body System.Tasking.Task_Attributes is
       Q : Access_Node := To_Access_Node (T.Indirect_Attributes);
 
    begin
-      --  Deallocate all the indirect attributes of this task
+      --  Deallocate all the indirect attributes of this task.
 
       while Q /= null loop
          P := Q;
@@ -181,17 +183,15 @@ package body System.Tasking.Task_Attributes is
    -- Initialize Attributes --
    ---------------------------
 
-   --  This is to be called by System.Tasking.Stages.Create_Task
+   --  This is to be called by System.Tasking.Stages.Create_Task.
 
    procedure Initialize_Attributes (T : Task_Id) is
-      P       : Access_Instance;
-      Self_Id : constant Task_Id := Self;
-
+      P : Access_Instance;
    begin
-      Defer_Abort (Self_Id);
+      Defer_Abortion;
       Lock_RTS;
 
-      --  Initialize all the direct-access attributes of this task
+      --  Initialize all the direct-access attributes of this task.
 
       P := All_Attributes;
 
@@ -206,7 +206,7 @@ package body System.Tasking.Task_Attributes is
       end loop;
 
       Unlock_RTS;
-      Undefer_Abort (Self_Id);
+      Undefer_Abortion;
 
    exception
       when others =>

@@ -1,5 +1,5 @@
 /* Handle the constant pool of the Java(TM) Virtual Machine.
-   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2006
+   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2003, 2004
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -15,8 +15,8 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA. 
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA. 
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -313,7 +313,8 @@ write_constant_pool (CPool *cpool, unsigned char *buffer, int length)
 	}
     }
 
-  gcc_assert (ptr == buffer + length);
+  if (ptr != buffer + length)
+    abort ();
 }
 
 static GTY(()) tree tag_nodes[13];
@@ -355,7 +356,7 @@ alloc_name_constant (int tag, tree name)
   return find_tree_constant (outgoing_cpool, tag, name);
 }
 
-/* Create a constant pool entry for a name_and_type.  This one has '.'
+/* Create a cinstant pool entry for a name_and_type.  This one has '.'
    rather than '/' because it isn't going into a class file, it's
    going into a compiled object.  We don't use the '/' separator in
    compiled objects.  */
@@ -445,6 +446,7 @@ build_constant_data_ref (void)
 
       decl = build_decl (VAR_DECL, decl_name, type);
       TREE_STATIC (decl) = 1;
+      make_decl_rtl (decl);
       TYPE_CPOOL_DATA_REF (output_class) = decl;
     }
 
@@ -458,29 +460,8 @@ build_ref_from_constant_pool (int index)
 {
   tree d = build_constant_data_ref ();
   tree i = build_int_cst (NULL_TREE, index);
-  if (flag_indirect_classes)
-    {
-      tree decl = build_class_ref (output_class);
-      tree klass = build1 (INDIRECT_REF, TREE_TYPE (TREE_TYPE (decl)),
-			   decl);
-      tree constants = build3 (COMPONENT_REF, 
-			       TREE_TYPE (constants_field_decl_node), klass,
-			       constants_field_decl_node,
-			       NULL_TREE);
-      tree data = build3 (COMPONENT_REF, 
-			  TREE_TYPE (constants_data_field_decl_node), 
-			  constants,
-			  constants_data_field_decl_node,
-			  NULL_TREE);
-      data = fold_convert (build_pointer_type (TREE_TYPE (d)), data);
-      d = build1 (INDIRECT_REF, TREE_TYPE (d), data);
-      /* FIXME: These should be cached.  */
-      TREE_INVARIANT (d) = 1;
-    }
-  d = build4 (ARRAY_REF, TREE_TYPE (TREE_TYPE (d)), d, i,
+  return build4 (ARRAY_REF, TREE_TYPE (TREE_TYPE (d)), d, i,
 		 NULL_TREE, NULL_TREE);
-  TREE_INVARIANT (d) = 1;
-  return d;
 }
 
 /* Build an initializer for the constants field of the current constant pool.
@@ -501,15 +482,7 @@ build_constants_constructor (void)
       case CONSTANT_Fieldref:
       case CONSTANT_NameAndType:
 	{
-	  unsigned HOST_WIDE_INT temp = outgoing_cpool->data[i].w;
-
-	  /* Make sure that on a 64-bit big-endian machine this
-	     32-bit jint appears in the first word.  
-	     FIXME: This is a kludge.  The field we're initializing is
-	     not a scalar but a union, and that's how we should
-	     represent it in the compiler.  We should fix this.  */
-	  if (BYTES_BIG_ENDIAN && BITS_PER_WORD > 32)
-	    temp <<= BITS_PER_WORD - 32;
+	  jword temp = outgoing_cpool->data[i].w;
 
 	  tags_list
 	    = tree_cons (NULL_TREE, 
@@ -543,8 +516,8 @@ build_constants_constructor (void)
   
       data_decl = build_constant_data_ref ();
       TREE_TYPE (data_decl) = build_array_type (ptr_type_node, index_type);
-      DECL_INITIAL (data_decl) = build_constructor_from_list
-				  (TREE_TYPE (data_decl), data_list);
+      DECL_INITIAL (data_decl) = build_constructor (TREE_TYPE (data_decl),
+						    data_list);
       DECL_SIZE (data_decl) = TYPE_SIZE (TREE_TYPE (data_decl));
       DECL_SIZE_UNIT (data_decl) = TYPE_SIZE_UNIT (TREE_TYPE (data_decl));
       rest_of_decl_compilation (data_decl, 1, 0);
@@ -555,8 +528,7 @@ build_constants_constructor (void)
 							   current_class),
 			      tags_type);
       TREE_STATIC (tags_decl) = 1;
-      DECL_INITIAL (tags_decl) = build_constructor_from_list
-				 (tags_type, tags_list);
+      DECL_INITIAL (tags_decl) = build_constructor (tags_type, tags_list);
       rest_of_decl_compilation (tags_decl, 1, 0);
       tags_value = build_address_of (tags_decl);
     }

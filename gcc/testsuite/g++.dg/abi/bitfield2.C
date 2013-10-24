@@ -19,9 +19,9 @@ int main ()
 {
   A a;
 
-  a.bitS = 1; // { dg-warning "overflow" }
+  a.bitS = 1;
   a.bitU = 1;
-  a.bit = 1;  // { dg-warning "overflow" }
+  a.bit = 1;
 
   if (a.bitS != -1)
     return 1;

@@ -16,20 +16,45 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #ifndef GCC_C_TREE_H
 #define GCC_C_TREE_H
 
 #include "c-common.h"
-#include "toplev.h"
 #include "diagnostic.h"
+
+/* APPLE LOCAL begin mainline */
+/* Definition of 'struct lang_identifier' has been moved here from c-decl.c.
+   so that ObjC can see it.  */
+   
+/* Each C symbol points to three linked lists of c_binding structures.
+   These describe the values of the identifier in the three different
+   namespaces defined by the language.  */
+
+struct lang_identifier GTY(())
+{
+  struct c_common_identifier common_id;
+  struct c_binding *symbol_binding; /* vars, funcs, constants, typedefs */
+  struct c_binding *tag_binding;    /* struct/union/enum tags */
+  struct c_binding *label_binding;  /* labels */
+  tree interface_value;             /* ObjC interface, if any */
+};
+/* APPLE LOCAL end mainline */
 
 /* struct lang_identifier is private to c-decl.c, but langhooks.c needs to
    know how big it is.  This is sanity-checked in c-decl.c.  */
 #define C_SIZEOF_STRUCT_LANG_IDENTIFIER \
-  (sizeof (struct c_common_identifier) + 3 * sizeof (void *))
+  /* APPLE LOCAL mainline */ \
+  (sizeof (struct c_common_identifier) + 4 * sizeof (void *))
+
+/* For gc purposes, return the most likely link for the longest chain.  */
+#define C_LANG_TREE_NODE_CHAIN_NEXT(T)				\
+  ((union lang_tree_node *)					\
+   (TREE_CODE (T) == INTEGER_TYPE ? TYPE_NEXT_VARIANT (T)	\
+    : TREE_CODE (T) == COMPOUND_EXPR ? TREE_OPERAND (T, 1)	\
+    : TREE_CHAIN (T)))
 
 /* Language-specific declaration information.  */
 
@@ -129,10 +154,6 @@ struct lang_type GTY(())
 #define C_DECL_UNDEFINABLE_VM(EXP)	\
   DECL_LANG_FLAG_5 (LABEL_DECL_CHECK (EXP))
 
-/* Record whether a variable has been declared threadprivate by
-   #pragma omp threadprivate.  */
-#define C_DECL_THREADPRIVATE_P(DECL) DECL_LANG_FLAG_3 (VAR_DECL_CHECK (DECL))
-
 /* Nonzero for a decl which either doesn't exist or isn't a prototype.
    N.B. Could be simplified if all built-in decls had complete prototypes
    (but this is presently difficult because some of them need FILE*).  */
@@ -211,10 +232,7 @@ enum c_typespec_keyword {
   cts_char,
   cts_int,
   cts_float,
-  cts_double,
-  cts_dfloat32,
-  cts_dfloat64,
-  cts_dfloat128
+  cts_double
 };
 
 /* A sequence of declaration specifiers in C.  */
@@ -235,10 +253,6 @@ struct c_declspecs {
   enum c_typespec_keyword typespec_word;
   /* The storage class specifier, or csc_none if none.  */
   enum c_storage_class storage_class;
-  /* Whether any declaration specifiers have been seen at all.  */
-  BOOL_BITFIELD declspecs_seen_p : 1;
-  /* Whether a type specifier has been seen.  */
-  BOOL_BITFIELD type_seen_p : 1;
   /* Whether something other than a storage class specifier or
      attribute has been seen.  This is used to warn for the
      obsolescent usage of storage class specifiers other than at the
@@ -257,6 +271,16 @@ struct c_declspecs {
   BOOL_BITFIELD explicit_signed_p : 1;
   /* Whether the specifiers include a deprecated typedef.  */
   BOOL_BITFIELD deprecated_p : 1;
+  /* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+  /* Whether the specifiers include a unavailable typedef.  */
+  BOOL_BITFIELD unavailable_p : 1;
+  /* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
+  /* APPLE LOCAL begin private extern */
+  /* Whether the specifiers include __private_extern.  */
+  BOOL_BITFIELD private_extern_p : 1;
+  /* APPLE LOCAL end private extern */
+  /* APPLE LOCAL CW asm blocks */
+  BOOL_BITFIELD iasm_asm_specbit : 1;
   /* Whether the type defaulted to "int" because there were no type
      specifiers.  */
   BOOL_BITFIELD default_int_p;
@@ -309,13 +333,10 @@ struct c_arg_info {
   /* A list of non-parameter decls (notably enumeration constants)
      defined with the parameters.  */
   tree others;
-  /* A list of VLA sizes from the parameters.  In a function
-     definition, these are used to ensure that side-effects in sizes
-     of arrays converted to pointers (such as a parameter int i[n++])
-     take place; otherwise, they are ignored.  */
-  tree pending_sizes;
+  /* APPLE LOCAL begin mainline 2006-05-18 4336222 */
   /* True when these arguments had [*].  */
   BOOL_BITFIELD had_vla_unspec : 1;
+  /* APPLE LOCAL end mainline 2006-05-18 4336222 */
 };
 
 /* A declarator.  */
@@ -324,7 +345,6 @@ struct c_declarator {
   enum c_declarator_kind kind;
   /* Except for cdk_id, the contained declarator.  For cdk_id, NULL.  */
   struct c_declarator *declarator;
-  location_t id_loc; /* Currently only set for cdk_id. */
   union {
     /* For identifiers, an IDENTIFIER_NODE or NULL_TREE if an abstract
        declarator.  */
@@ -384,7 +404,8 @@ struct language_function GTY(())
   int returns_null;
   int returns_abnormally;
   int warn_about_return_type;
-  int extern_inline;
+/* APPLE LOCAL begin for-4_3 4134307 */
+/* APPLE LOCAL end for-4_3 4134307 */
 };
 
 /* Save lists of labels used or defined in particular contexts.
@@ -427,7 +448,7 @@ struct c_label_context_vm
 };
 
 
-/* in c-parser.c */
+/* in c-parse.in */
 extern void c_parse_init (void);
 
 /* in c-aux-info.c */
@@ -442,6 +463,7 @@ extern int global_bindings_p (void);
 extern void push_scope (void);
 extern tree pop_scope (void);
 extern void insert_block (tree);
+extern tree pushdecl (tree);
 extern void c_expand_body (tree);
 
 extern void c_init_decl_processing (void);
@@ -451,13 +473,12 @@ extern int quals_from_declspecs (const struct c_declspecs *);
 extern struct c_declarator *build_array_declarator (tree, struct c_declspecs *,
 						    bool, bool);
 extern tree build_enumerator (tree, tree);
-extern tree check_for_loop_decls (void);
+extern void check_for_loop_decls (void);
 extern void mark_forward_parm_decls (void);
 extern void declare_parm_level (void);
-extern void undeclared_variable (tree, location_t);
+extern void undeclared_variable (tree);
 extern tree declare_label (tree);
 extern tree define_label (location_t, tree);
-extern void c_maybe_initialize_eh (void);
 extern void finish_decl (tree, tree, tree);
 extern tree finish_enum (tree, tree, tree);
 extern void finish_function (void);
@@ -468,10 +489,14 @@ extern tree groktypename (struct c_type_name *);
 extern tree grokparm (const struct c_parm *);
 extern tree implicitly_declare (tree);
 extern void keep_next_level (void);
+extern tree lookup_name (tree);
+/* APPLE LOCAL mainline lookup_name 4125055 */
+extern tree lookup_name_two (tree, int);
 extern void pending_xref_error (void);
 extern void c_push_function_context (struct function *);
 extern void c_pop_function_context (struct function *);
 extern void push_parm_decl (const struct c_parm *);
+extern tree pushdecl_top_level (tree);
 extern struct c_declarator *set_array_declarator_inner (struct c_declarator *,
 							struct c_declarator *,
 							bool);
@@ -514,6 +539,7 @@ extern bool c_missing_noreturn_ok_p (tree);
 extern tree c_objc_common_truthvalue_conversion (tree expr);
 extern bool c_warn_unused_global_decl (tree);
 extern void c_initialize_diagnostics (diagnostic_context *);
+/* APPLE LOCAL mainline 2006-05-18 4336222 */
 extern bool c_vla_unspec_p (tree x, tree fn);
 
 #define c_build_type_variant(TYPE, CONST_P, VOLATILE_P)		  \
@@ -533,25 +559,26 @@ extern struct c_label_context_vm *label_context_stack_vm;
 extern tree require_complete_type (tree);
 extern int same_translation_unit_p (tree, tree);
 extern int comptypes (tree, tree);
+/* APPLE LOCAL mainline 2006-05-18 4336222 */
 extern bool c_vla_type_p (tree);
 extern bool c_mark_addressable (tree);
 extern void c_incomplete_type_error (tree, tree);
 extern tree c_type_promotes_to (tree);
-extern struct c_expr default_function_array_conversion (struct c_expr);
 extern tree composite_type (tree, tree);
 extern tree build_component_ref (tree, tree);
+extern tree build_indirect_ref (tree, const char *);
 extern tree build_array_ref (tree, tree);
-extern tree build_external_ref (tree, int, location_t);
+extern tree build_external_ref (tree, int);
 extern void pop_maybe_used (bool);
 extern struct c_expr c_expr_sizeof_expr (struct c_expr);
 extern struct c_expr c_expr_sizeof_type (struct c_type_name *);
-extern struct c_expr parser_build_unary_op (enum tree_code, struct c_expr);
 extern struct c_expr parser_build_binary_op (enum tree_code, struct c_expr,
 					     struct c_expr);
 extern tree build_conditional_expr (tree, tree, tree);
 extern tree build_compound_expr (tree, tree);
 extern tree c_cast_expr (struct c_type_name *, tree);
 extern tree build_c_cast (tree, tree);
+extern tree build_modify_expr (tree, enum tree_code, tree);
 extern void store_init_value (tree, tree);
 extern void error_init (const char *);
 extern void pedwarn_init (const char *);
@@ -585,10 +612,11 @@ extern tree c_finish_goto_label (tree);
 extern tree c_finish_goto_ptr (tree);
 extern void c_begin_vm_scope (unsigned int);
 extern void c_end_vm_scope (unsigned int);
-extern tree c_expr_to_decl (tree, bool *, bool *, bool *);
-extern tree c_begin_omp_parallel (void);
-extern tree c_finish_omp_parallel (tree, tree);
-extern tree c_finish_omp_clauses (tree);
+
+/* APPLE LOCAL begin CW asm blocks */
+extern tree get_structure_offset (tree, tree);
+extern tree lookup_struct_or_union_tag (tree);
+/* APPLE LOCAL end CW asm blocks */
 
 /* Set to 0 at beginning of a function definition, set to 1 if
    a return statement that specifies a return value is seen.  */
@@ -624,7 +652,8 @@ extern void c_write_global_declarations (void);
 /* In order for the format checking to accept the C frontend
    diagnostic framework extensions, you must include this file before
    toplev.h, not after.  */
-#if GCC_VERSION >= 4001
+#define GCC_DIAG_STYLE __gcc_cdiag__
+#if GCC_VERSION >= 3005
 #define ATTRIBUTE_GCC_CDIAG(m, n) __attribute__ ((__format__ (GCC_DIAG_STYLE, m ,n))) ATTRIBUTE_NONNULL(m)
 #else
 #define ATTRIBUTE_GCC_CDIAG(m, n) ATTRIBUTE_NONNULL(m)

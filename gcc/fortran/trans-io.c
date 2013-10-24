@@ -16,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 
 #include "config.h"
@@ -35,541 +35,372 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "trans-types.h"
 #include "trans-const.h"
 
+
 /* Members of the ioparm structure.  */
 
-enum ioparam_type
-{
-  IOPARM_ptype_common,
-  IOPARM_ptype_open,
-  IOPARM_ptype_close,
-  IOPARM_ptype_filepos,
-  IOPARM_ptype_inquire,
-  IOPARM_ptype_dt,
-  IOPARM_ptype_num
-};
+static GTY(()) tree ioparm_unit;
+static GTY(()) tree ioparm_err;
+static GTY(()) tree ioparm_end;
+static GTY(()) tree ioparm_eor;
+static GTY(()) tree ioparm_list_format;
+static GTY(()) tree ioparm_library_return;
+static GTY(()) tree ioparm_iostat;
+static GTY(()) tree ioparm_exist;
+static GTY(()) tree ioparm_opened;
+static GTY(()) tree ioparm_number;
+static GTY(()) tree ioparm_named;
+static GTY(()) tree ioparm_rec;
+static GTY(()) tree ioparm_nextrec;
+static GTY(()) tree ioparm_size;
+static GTY(()) tree ioparm_recl_in;
+static GTY(()) tree ioparm_recl_out;
+static GTY(()) tree ioparm_iolength;
+static GTY(()) tree ioparm_file;
+static GTY(()) tree ioparm_file_len;
+static GTY(()) tree ioparm_status;
+static GTY(()) tree ioparm_status_len;
+static GTY(()) tree ioparm_access;
+static GTY(()) tree ioparm_access_len;
+static GTY(()) tree ioparm_form;
+static GTY(()) tree ioparm_form_len;
+static GTY(()) tree ioparm_blank;
+static GTY(()) tree ioparm_blank_len;
+static GTY(()) tree ioparm_position;
+static GTY(()) tree ioparm_position_len;
+static GTY(()) tree ioparm_action;
+static GTY(()) tree ioparm_action_len;
+static GTY(()) tree ioparm_delim;
+static GTY(()) tree ioparm_delim_len;
+static GTY(()) tree ioparm_pad;
+static GTY(()) tree ioparm_pad_len;
+static GTY(()) tree ioparm_format;
+static GTY(()) tree ioparm_format_len;
+static GTY(()) tree ioparm_advance;
+static GTY(()) tree ioparm_advance_len;
+static GTY(()) tree ioparm_name;
+static GTY(()) tree ioparm_name_len;
+static GTY(()) tree ioparm_internal_unit;
+static GTY(()) tree ioparm_internal_unit_len;
+static GTY(()) tree ioparm_sequential;
+static GTY(()) tree ioparm_sequential_len;
+static GTY(()) tree ioparm_direct;
+static GTY(()) tree ioparm_direct_len;
+static GTY(()) tree ioparm_formatted;
+static GTY(()) tree ioparm_formatted_len;
+static GTY(()) tree ioparm_unformatted;
+static GTY(()) tree ioparm_unformatted_len;
+static GTY(()) tree ioparm_read;
+static GTY(()) tree ioparm_read_len;
+static GTY(()) tree ioparm_write;
+static GTY(()) tree ioparm_write_len;
+static GTY(()) tree ioparm_readwrite;
+static GTY(()) tree ioparm_readwrite_len;
+static GTY(()) tree ioparm_namelist_name;
+static GTY(()) tree ioparm_namelist_name_len;
+static GTY(()) tree ioparm_namelist_read_mode;
 
-enum iofield_type
-{
-  IOPARM_type_int4,
-  IOPARM_type_intio,
-  IOPARM_type_pint4,
-  IOPARM_type_pintio,
-  IOPARM_type_pchar,
-  IOPARM_type_parray,
-  IOPARM_type_pad,
-  IOPARM_type_char1,
-  IOPARM_type_char2,
-  IOPARM_type_common,
-  IOPARM_type_num
-};
+/* The global I/O variables */
 
-typedef struct gfc_st_parameter_field GTY(())
-{
-  const char *name;
-  unsigned int mask;
-  enum ioparam_type param_type;
-  enum iofield_type type;
-  tree field;
-  tree field_len;
-}
-gfc_st_parameter_field;
+static GTY(()) tree ioparm_var;
+static GTY(()) tree locus_file;
+static GTY(()) tree locus_line;
 
-typedef struct gfc_st_parameter GTY(())
-{
-  const char *name;
-  tree type;
-}
-gfc_st_parameter;
-
-enum iofield
-{
-#define IOPARM(param_type, name, mask, type) IOPARM_##param_type##_##name,
-#include "ioparm.def"
-#undef IOPARM
-  IOPARM_field_num
-};
-
-static GTY(()) gfc_st_parameter st_parameter[] =
-{
-  { "common", NULL },
-  { "open", NULL },
-  { "close", NULL },
-  { "filepos", NULL },
-  { "inquire", NULL },
-  { "dt", NULL }
-};
-
-static GTY(()) gfc_st_parameter_field st_parameter_field[] =
-{
-#define IOPARM(param_type, name, mask, type) \
-  { #name, mask, IOPARM_ptype_##param_type, IOPARM_type_##type, NULL, NULL },
-#include "ioparm.def"
-#undef IOPARM
-  { NULL, 0, 0, 0, NULL, NULL }
-};
 
 /* Library I/O subroutines */
 
-enum iocall
-{
-  IOCALL_READ,
-  IOCALL_READ_DONE,
-  IOCALL_WRITE,
-  IOCALL_WRITE_DONE,
-  IOCALL_X_INTEGER,
-  IOCALL_X_LOGICAL,
-  IOCALL_X_CHARACTER,
-  IOCALL_X_REAL,
-  IOCALL_X_COMPLEX,
-  IOCALL_X_ARRAY,
-  IOCALL_OPEN,
-  IOCALL_CLOSE,
-  IOCALL_INQUIRE,
-  IOCALL_IOLENGTH,
-  IOCALL_IOLENGTH_DONE,
-  IOCALL_REWIND,
-  IOCALL_BACKSPACE,
-  IOCALL_ENDFILE,
-  IOCALL_FLUSH,
-  IOCALL_SET_NML_VAL,
-  IOCALL_SET_NML_VAL_DIM,
-  IOCALL_NUM
-};
-
-static GTY(()) tree iocall[IOCALL_NUM];
+static GTY(()) tree iocall_read;
+static GTY(()) tree iocall_read_done;
+static GTY(()) tree iocall_write;
+static GTY(()) tree iocall_write_done;
+static GTY(()) tree iocall_x_integer;
+static GTY(()) tree iocall_x_logical;
+static GTY(()) tree iocall_x_character;
+static GTY(()) tree iocall_x_real;
+static GTY(()) tree iocall_x_complex;
+static GTY(()) tree iocall_open;
+static GTY(()) tree iocall_close;
+static GTY(()) tree iocall_inquire;
+static GTY(()) tree iocall_iolength;
+static GTY(()) tree iocall_iolength_done;
+static GTY(()) tree iocall_rewind;
+static GTY(()) tree iocall_backspace;
+static GTY(()) tree iocall_endfile;
+static GTY(()) tree iocall_set_nml_val;
+static GTY(()) tree iocall_set_nml_val_dim;
 
 /* Variable for keeping track of what the last data transfer statement
    was.  Used for deciding which subroutine to call when the data
    transfer is complete.  */
 static enum { READ, WRITE, IOLENGTH } last_dt;
 
-/* The data transfer parameter block that should be shared by all
-   data transfer calls belonging to the same read/write/iolength.  */
-static GTY(()) tree dt_parm;
-static stmtblock_t *dt_post_end_block;
+#define ADD_FIELD(name, type)						\
+  ioparm_ ## name = gfc_add_field_to_struct				\
+        (&(TYPE_FIELDS (ioparm_type)), ioparm_type,			\
+	 get_identifier (stringize(name)), type)
 
-static void
-gfc_build_st_parameter (enum ioparam_type ptype, tree *types)
-{
-  enum iofield type;
-  gfc_st_parameter_field *p;
-  char name[64];
-  size_t len;
-  tree t = make_node (RECORD_TYPE);
+#define ADD_STRING(name) \
+  ioparm_ ## name = gfc_add_field_to_struct				\
+        (&(TYPE_FIELDS (ioparm_type)), ioparm_type,			\
+	 get_identifier (stringize(name)), pchar_type_node);		\
+  ioparm_ ## name ## _len = gfc_add_field_to_struct			\
+        (&(TYPE_FIELDS (ioparm_type)), ioparm_type,			\
+	 get_identifier (stringize(name) "_len"), gfc_charlen_type_node)
 
-  len = strlen (st_parameter[ptype].name);
-  gcc_assert (len <= sizeof (name) - sizeof ("__st_parameter_"));
-  memcpy (name, "__st_parameter_", sizeof ("__st_parameter_"));
-  memcpy (name + sizeof ("__st_parameter_") - 1, st_parameter[ptype].name,
-	  len + 1);
-  TYPE_NAME (t) = get_identifier (name);
-
-  for (type = 0, p = st_parameter_field; type < IOPARM_field_num; type++, p++)
-    if (p->param_type == ptype)
-      switch (p->type)
-	{
-	case IOPARM_type_int4:
-	case IOPARM_type_intio:
-	case IOPARM_type_pint4:
-	case IOPARM_type_pintio:
-	case IOPARM_type_parray:
-	case IOPARM_type_pchar:
-	case IOPARM_type_pad:
-	  p->field = gfc_add_field_to_struct (&TYPE_FIELDS (t), t,
-					      get_identifier (p->name),
-					      types[p->type]);
-	  break;
-	case IOPARM_type_char1:
-	  p->field = gfc_add_field_to_struct (&TYPE_FIELDS (t), t,
-					      get_identifier (p->name),
-					      pchar_type_node);
-	  /* FALLTHROUGH */
-	case IOPARM_type_char2:
-	  len = strlen (p->name);
-	  gcc_assert (len <= sizeof (name) - sizeof ("_len"));
-	  memcpy (name, p->name, len);
-	  memcpy (name + len, "_len", sizeof ("_len"));
-	  p->field_len = gfc_add_field_to_struct (&TYPE_FIELDS (t), t,
-						  get_identifier (name),
-						  gfc_charlen_type_node);
-	  if (p->type == IOPARM_type_char2)
-	    p->field = gfc_add_field_to_struct (&TYPE_FIELDS (t), t,
-						get_identifier (p->name),
-						pchar_type_node);
-	  break;
-	case IOPARM_type_common:
-	  p->field
-	    = gfc_add_field_to_struct (&TYPE_FIELDS (t), t,
-				       get_identifier (p->name),
-				       st_parameter[IOPARM_ptype_common].type);
-	  break;
-	case IOPARM_type_num:
-	  gcc_unreachable ();
-	}
-
-  gfc_finish_type (t);
-  st_parameter[ptype].type = t;
-}
 
 /* Create function decls for IO library functions.  */
 
 void
 gfc_build_io_library_fndecls (void)
 {
-  tree types[IOPARM_type_num], pad_idx, gfc_int4_type_node;
-  tree gfc_intio_type_node;
-  tree parm_type, dt_parm_type;
-  tree gfc_c_int_type_node;
-  HOST_WIDE_INT pad_size;
-  enum ioparam_type ptype;
+  tree gfc_int4_type_node;
+  tree gfc_pint4_type_node;
+  tree ioparm_type;
 
-  types[IOPARM_type_int4] = gfc_int4_type_node = gfc_get_int_type (4);
-  types[IOPARM_type_intio] = gfc_intio_type_node
-			    = gfc_get_int_type (gfc_intio_kind);
-  types[IOPARM_type_pint4] = build_pointer_type (gfc_int4_type_node);
-  types[IOPARM_type_pintio]
-			    = build_pointer_type (gfc_intio_type_node);
-  types[IOPARM_type_parray] = pchar_type_node;
-  types[IOPARM_type_pchar] = pchar_type_node;
-  pad_size = 16 * TREE_INT_CST_LOW (TYPE_SIZE_UNIT (pchar_type_node));
-  pad_size += 32 * TREE_INT_CST_LOW (TYPE_SIZE_UNIT (integer_type_node));
-  pad_idx = build_index_type (build_int_cst (NULL_TREE, pad_size));
-  types[IOPARM_type_pad] = build_array_type (char_type_node, pad_idx);
+  gfc_int4_type_node = gfc_get_int_type (4);
+  gfc_pint4_type_node = build_pointer_type (gfc_int4_type_node);
 
-  /* pad actually contains pointers and integers so it needs to have an
-     alignment that is at least as large as the needed alignment for those
-     types.  See the st_parameter_dt structure in libgfortran/io/io.h for
-     what really goes into this space.  */
-  TYPE_ALIGN (types[IOPARM_type_pad]) = MAX (TYPE_ALIGN (pchar_type_node),
-		     TYPE_ALIGN (gfc_get_int_type (gfc_max_integer_kind)));
+  /* Build the st_parameter structure.  Information associated with I/O
+     calls are transferred here.  This must match the one defined in the
+     library exactly.  */
 
-  gfc_c_int_type_node = gfc_get_int_type (gfc_c_int_kind);
+  ioparm_type = make_node (RECORD_TYPE);
+  TYPE_NAME (ioparm_type) = get_identifier ("_gfc_ioparm");
 
-  for (ptype = IOPARM_ptype_common; ptype < IOPARM_ptype_num; ptype++)
-    gfc_build_st_parameter (ptype, types);
+  ADD_FIELD (unit, gfc_int4_type_node);
+  ADD_FIELD (err, gfc_int4_type_node);
+  ADD_FIELD (end, gfc_int4_type_node);
+  ADD_FIELD (eor, gfc_int4_type_node);
+  ADD_FIELD (list_format, gfc_int4_type_node);
+  ADD_FIELD (library_return, gfc_int4_type_node);
+
+  ADD_FIELD (iostat, gfc_pint4_type_node);
+  ADD_FIELD (exist, gfc_pint4_type_node);
+  ADD_FIELD (opened, gfc_pint4_type_node);
+  ADD_FIELD (number, gfc_pint4_type_node);
+  ADD_FIELD (named, gfc_pint4_type_node);
+  ADD_FIELD (rec, gfc_int4_type_node);
+  ADD_FIELD (nextrec, gfc_pint4_type_node);
+  ADD_FIELD (size, gfc_pint4_type_node);
+
+  ADD_FIELD (recl_in, gfc_int4_type_node);
+  ADD_FIELD (recl_out, gfc_pint4_type_node);
+
+  ADD_FIELD (iolength, gfc_pint4_type_node);
+
+  ADD_STRING (file);
+  ADD_STRING (status);
+
+  ADD_STRING (access);
+  ADD_STRING (form);
+  ADD_STRING (blank);
+  ADD_STRING (position);
+  ADD_STRING (action);
+  ADD_STRING (delim);
+  ADD_STRING (pad);
+  ADD_STRING (format);
+  ADD_STRING (advance);
+  ADD_STRING (name);
+  ADD_STRING (internal_unit);
+  ADD_STRING (sequential);
+
+  ADD_STRING (direct);
+  ADD_STRING (formatted);
+  ADD_STRING (unformatted);
+  ADD_STRING (read);
+  ADD_STRING (write);
+  ADD_STRING (readwrite);
+
+  ADD_STRING (namelist_name);
+  ADD_FIELD (namelist_read_mode, gfc_int4_type_node);
+
+  gfc_finish_type (ioparm_type);
+
+  ioparm_var = build_decl (VAR_DECL, get_identifier (PREFIX("ioparm")),
+			   ioparm_type);
+  DECL_EXTERNAL (ioparm_var) = 1;
+  TREE_PUBLIC (ioparm_var) = 1;
+
+  locus_line = build_decl (VAR_DECL, get_identifier (PREFIX("line")),
+			   gfc_int4_type_node);
+  DECL_EXTERNAL (locus_line) = 1;
+  TREE_PUBLIC (locus_line) = 1;
+
+  locus_file = build_decl (VAR_DECL, get_identifier (PREFIX("filename")),
+			   pchar_type_node);
+  DECL_EXTERNAL (locus_file) = 1;
+  TREE_PUBLIC (locus_file) = 1;
 
   /* Define the transfer functions.  */
 
-  dt_parm_type = build_pointer_type (st_parameter[IOPARM_ptype_dt].type);
-
-  iocall[IOCALL_X_INTEGER] =
+  iocall_x_integer =
     gfc_build_library_function_decl (get_identifier
 				     (PREFIX("transfer_integer")),
-				     void_type_node, 3, dt_parm_type,
-				     pvoid_type_node, gfc_int4_type_node);
+				     void_type_node, 2, pvoid_type_node,
+				     gfc_int4_type_node);
 
-  iocall[IOCALL_X_LOGICAL] =
+  iocall_x_logical =
     gfc_build_library_function_decl (get_identifier
 				     (PREFIX("transfer_logical")),
-				     void_type_node, 3, dt_parm_type,
-				     pvoid_type_node, gfc_int4_type_node);
+				     void_type_node, 2, pvoid_type_node,
+				     gfc_int4_type_node);
 
-  iocall[IOCALL_X_CHARACTER] =
+  iocall_x_character =
     gfc_build_library_function_decl (get_identifier
 				     (PREFIX("transfer_character")),
-				     void_type_node, 3, dt_parm_type,
-				     pvoid_type_node, gfc_int4_type_node);
+				     void_type_node, 2, pvoid_type_node,
+				     gfc_int4_type_node);
 
-  iocall[IOCALL_X_REAL] =
+  iocall_x_real =
     gfc_build_library_function_decl (get_identifier (PREFIX("transfer_real")),
-				     void_type_node, 3, dt_parm_type,
+				     void_type_node, 2,
 				     pvoid_type_node, gfc_int4_type_node);
 
-  iocall[IOCALL_X_COMPLEX] =
+  iocall_x_complex =
     gfc_build_library_function_decl (get_identifier
 				     (PREFIX("transfer_complex")),
-				     void_type_node, 3, dt_parm_type,
-				     pvoid_type_node, gfc_int4_type_node);
-
-  iocall[IOCALL_X_ARRAY] =
-    gfc_build_library_function_decl (get_identifier
-				     (PREFIX("transfer_array")),
-				     void_type_node, 4, dt_parm_type,
-				     pvoid_type_node, gfc_c_int_type_node,
-				     gfc_charlen_type_node);
+				     void_type_node, 2, pvoid_type_node,
+				     gfc_int4_type_node);
 
   /* Library entry points */
 
-  iocall[IOCALL_READ] =
+  iocall_read =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_read")),
-				     void_type_node, 1, dt_parm_type);
+				     void_type_node, 0);
 
-  iocall[IOCALL_WRITE] =
+  iocall_write =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_write")),
-				     void_type_node, 1, dt_parm_type);
-
-  parm_type = build_pointer_type (st_parameter[IOPARM_ptype_open].type);
-  iocall[IOCALL_OPEN] =
+				     void_type_node, 0);
+  iocall_open =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_open")),
-				     void_type_node, 1, parm_type);
+				     void_type_node, 0);
 
-
-  parm_type = build_pointer_type (st_parameter[IOPARM_ptype_close].type);
-  iocall[IOCALL_CLOSE] =
+  iocall_close =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_close")),
-				     void_type_node, 1, parm_type);
+				     void_type_node, 0);
 
-  parm_type = build_pointer_type (st_parameter[IOPARM_ptype_inquire].type);
-  iocall[IOCALL_INQUIRE] =
+  iocall_inquire =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_inquire")),
-				     gfc_int4_type_node, 1, parm_type);
+				     gfc_int4_type_node, 0);
 
-  iocall[IOCALL_IOLENGTH] =
+  iocall_iolength =
     gfc_build_library_function_decl(get_identifier (PREFIX("st_iolength")),
-				    void_type_node, 1, dt_parm_type);
+				    void_type_node, 0);
 
-  parm_type = build_pointer_type (st_parameter[IOPARM_ptype_filepos].type);
-  iocall[IOCALL_REWIND] =
+  iocall_rewind =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_rewind")),
-				     gfc_int4_type_node, 1, parm_type);
+				     gfc_int4_type_node, 0);
 
-  iocall[IOCALL_BACKSPACE] =
+  iocall_backspace =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_backspace")),
-				     gfc_int4_type_node, 1, parm_type);
+				     gfc_int4_type_node, 0);
 
-  iocall[IOCALL_ENDFILE] =
+  iocall_endfile =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_endfile")),
-				     gfc_int4_type_node, 1, parm_type);
-
-  iocall[IOCALL_FLUSH] =
-    gfc_build_library_function_decl (get_identifier (PREFIX("st_flush")),
-				     gfc_int4_type_node, 1, parm_type);
-
+				     gfc_int4_type_node, 0);
   /* Library helpers */
 
-  iocall[IOCALL_READ_DONE] =
+  iocall_read_done =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_read_done")),
-				     gfc_int4_type_node, 1, dt_parm_type);
+				     gfc_int4_type_node, 0);
 
-  iocall[IOCALL_WRITE_DONE] =
+  iocall_write_done =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_write_done")),
-				     gfc_int4_type_node, 1, dt_parm_type);
+				     gfc_int4_type_node, 0);
 
-  iocall[IOCALL_IOLENGTH_DONE] =
+  iocall_iolength_done =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_iolength_done")),
-				     gfc_int4_type_node, 1, dt_parm_type);
+				     gfc_int4_type_node, 0);
 
 
-  iocall[IOCALL_SET_NML_VAL] =
+  iocall_set_nml_val =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_set_nml_var")),
-				     void_type_node, 6, dt_parm_type,
-				     pvoid_type_node, pvoid_type_node,
-				     gfc_int4_type_node, gfc_charlen_type_node,
+                                     void_type_node, 5,
+                                     pvoid_type_node, pvoid_type_node,
+                                     gfc_int4_type_node, gfc_charlen_type_node, 
 				     gfc_int4_type_node);
 
-  iocall[IOCALL_SET_NML_VAL_DIM] =
+  iocall_set_nml_val_dim =
     gfc_build_library_function_decl (get_identifier (PREFIX("st_set_nml_var_dim")),
-				     void_type_node, 5, dt_parm_type,
+				     void_type_node, 4,
 				     gfc_int4_type_node, gfc_int4_type_node,
 				     gfc_int4_type_node, gfc_int4_type_node);
 }
 
 
-/* Generate code to store an integer constant into the
-   st_parameter_XXX structure.  */
-
-static unsigned int
-set_parameter_const (stmtblock_t *block, tree var, enum iofield type,
-		     unsigned int val)
-{
-  tree tmp;
-  gfc_st_parameter_field *p = &st_parameter_field[type];
-
-  if (p->param_type == IOPARM_ptype_common)
-    var = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		  var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  tmp = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-		NULL_TREE);
-  gfc_add_modify_expr (block, tmp, build_int_cst (TREE_TYPE (p->field), val));
-  return p->mask;
-}
-
-
-/* Generate code to store a non-string I/O parameter into the
-   st_parameter_XXX structure.  This is a pass by value.  */
-
-static unsigned int
-set_parameter_value (stmtblock_t *block, tree var, enum iofield type,
-		     gfc_expr *e)
-{
-  gfc_se se;
-  tree tmp;
-  gfc_st_parameter_field *p = &st_parameter_field[type];
-
-  gfc_init_se (&se, NULL);
-  gfc_conv_expr_type (&se, e, TREE_TYPE (p->field));
-  gfc_add_block_to_block (block, &se.pre);
-
-  if (p->param_type == IOPARM_ptype_common)
-    var = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		  var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  tmp = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-		NULL_TREE);
-  gfc_add_modify_expr (block, tmp, se.expr);
-  return p->mask;
-}
-
-
-/* Generate code to store a non-string I/O parameter into the
-   st_parameter_XXX structure.  This is pass by reference.  */
-
-static unsigned int
-set_parameter_ref (stmtblock_t *block, stmtblock_t *postblock,
-		   tree var, enum iofield type, gfc_expr *e)
-{
-  gfc_se se;
-  tree tmp, addr;
-  gfc_st_parameter_field *p = &st_parameter_field[type];
-
-  gcc_assert (e->ts.type == BT_INTEGER || e->ts.type == BT_LOGICAL);
-  gfc_init_se (&se, NULL);
-  gfc_conv_expr_lhs (&se, e);
-
-  gfc_add_block_to_block (block, &se.pre);
-
-  if (TYPE_MODE (TREE_TYPE (se.expr))
-      == TYPE_MODE (TREE_TYPE (TREE_TYPE (p->field))))
-    addr = convert (TREE_TYPE (p->field),
-		    build_fold_addr_expr (se.expr));
-  else
-    {
-      /* The type used by the library has different size
-	 from the type of the variable supplied by the user.
-	 Need to use a temporary.  */
-      tree tmpvar
-	= gfc_create_var (TREE_TYPE (TREE_TYPE (p->field)),
-			  st_parameter_field[type].name);
-      addr = build_fold_addr_expr (tmpvar);
-      tmp = convert (TREE_TYPE (se.expr), tmpvar);
-      gfc_add_modify_expr (postblock, se.expr, tmp);
-    }
-
-  if (p->param_type == IOPARM_ptype_common)
-    var = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		  var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  tmp = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-		NULL_TREE);
-  gfc_add_modify_expr (block, tmp, addr);
-  return p->mask;
-}
-
-/* Given an array expr, find its address and length to get a string. If the
-   array is full, the string's address is the address of array's first element
-   and the length is the size of the whole array. If it is an element, the
-   string's address is the element's address and the length is the rest size of
-   the array.
-*/
+/* Generate code to store an non-string I/O parameter into the
+   ioparm structure.  This is a pass by value.  */
 
 static void
-gfc_convert_array_to_string (gfc_se * se, gfc_expr * e)
+set_parameter_value (stmtblock_t * block, tree var, gfc_expr * e)
 {
+  gfc_se se;
   tree tmp;
-  tree array;
-  tree type;
-  tree size;
-  int rank;
-  gfc_symbol *sym;
 
-  sym = e->symtree->n.sym;
-  rank = sym->as->rank - 1;
+  gfc_init_se (&se, NULL);
+  gfc_conv_expr_type (&se, e, TREE_TYPE (var));
+  gfc_add_block_to_block (block, &se.pre);
 
-  if (e->ref->u.ar.type == AR_FULL)
-    {
-      se->expr = gfc_get_symbol_decl (sym);
-      se->expr = gfc_conv_array_data (se->expr);
-    }
-  else
-    {
-      gfc_conv_expr (se, e);
-    }
+  tmp = build3 (COMPONENT_REF, TREE_TYPE (var), ioparm_var, var, NULL_TREE);
+  gfc_add_modify_expr (block, tmp, se.expr);
+}
 
-  array = sym->backend_decl;
-  type = TREE_TYPE (array);
 
-  if (GFC_ARRAY_TYPE_P (type))
-    size = GFC_TYPE_ARRAY_SIZE (type);
-  else
-    {
-      gcc_assert (GFC_DESCRIPTOR_TYPE_P (type));
-      size = gfc_conv_array_stride (array, rank);
-      tmp = fold_build2 (MINUS_EXPR, gfc_array_index_type,
-		gfc_conv_array_ubound (array, rank),
-		gfc_conv_array_lbound (array, rank));
-      tmp = fold_build2 (PLUS_EXPR, gfc_array_index_type, tmp,
-		gfc_index_one_node);
-      size = fold_build2 (MULT_EXPR, gfc_array_index_type, tmp, size);      
-    }
+/* Generate code to store an non-string I/O parameter into the
+   ioparm structure.  This is pass by reference.  */
 
-  gcc_assert (size);
+static void
+set_parameter_ref (stmtblock_t * block, tree var, gfc_expr * e)
+{
+  gfc_se se;
+  tree tmp;
 
-  /* If it is an element, we need the its address and size of the rest.  */
-  if (e->ref->u.ar.type == AR_ELEMENT)
-    {
-      size = fold_build2 (MINUS_EXPR, gfc_array_index_type, size,
-		TREE_OPERAND (se->expr, 1));
-      se->expr = build_fold_addr_expr (se->expr);
-    }
+  gfc_init_se (&se, NULL);
+  se.want_pointer = 1;
 
-  tmp = TYPE_SIZE_UNIT (gfc_get_element_type (type));
-  size = fold_build2 (MULT_EXPR, gfc_array_index_type, size, tmp);
+  gfc_conv_expr_type (&se, e, TREE_TYPE (var));
+  gfc_add_block_to_block (block, &se.pre);
 
-  se->string_length = fold_convert (gfc_charlen_type_node, size);
+  tmp = build3 (COMPONENT_REF, TREE_TYPE (var), ioparm_var, var, NULL_TREE);
+  gfc_add_modify_expr (block, tmp, se.expr);
 }
 
 
 /* Generate code to store a string and its length into the
-   st_parameter_XXX structure.  */
+   ioparm structure.  */
 
-static unsigned int
+static void
 set_string (stmtblock_t * block, stmtblock_t * postblock, tree var,
-	    enum iofield type, gfc_expr * e)
+	    tree var_len, gfc_expr * e)
 {
   gfc_se se;
   tree tmp;
+  tree msg;
   tree io;
   tree len;
-  gfc_st_parameter_field *p = &st_parameter_field[type];
 
   gfc_init_se (&se, NULL);
 
-  if (p->param_type == IOPARM_ptype_common)
-    var = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		  var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  io = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-	       NULL_TREE);
-  len = build3 (COMPONENT_REF, TREE_TYPE (p->field_len), var, p->field_len,
+  io = build3 (COMPONENT_REF, TREE_TYPE (var), ioparm_var, var, NULL_TREE);
+  len = build3 (COMPONENT_REF, TREE_TYPE (var_len), ioparm_var, var_len,
 		NULL_TREE);
 
   /* Integer variable assigned a format label.  */
   if (e->ts.type == BT_INTEGER && e->symtree->n.sym->attr.assign == 1)
     {
-      char * msg;
-
       gfc_conv_label_variable (&se, e);
+      msg =
+        gfc_build_cstring_const ("Assigned label is not a format label");
       tmp = GFC_DECL_STRING_LEN (se.expr);
-      tmp = fold_build2 (LT_EXPR, boolean_type_node,
-			 tmp, build_int_cst (TREE_TYPE (tmp), 0));
-
-      asprintf(&msg, "Label assigned to variable '%s' is not a format label",
-	       e->symtree->name);
-      gfc_trans_runtime_check (tmp, msg, &se.pre, &e->where);
-      gfc_free (msg);
-
+      tmp = build2 (LE_EXPR, boolean_type_node,
+		    tmp, convert (TREE_TYPE (tmp), integer_minus_one_node));
+      gfc_trans_runtime_check (tmp, msg, &se.pre);
       gfc_add_modify_expr (&se.pre, io,
 		 fold_convert (TREE_TYPE (io), GFC_DECL_ASSIGN_ADDR (se.expr)));
       gfc_add_modify_expr (&se.pre, len, GFC_DECL_STRING_LEN (se.expr));
     }
   else
     {
-      /* General character.  */
-      if (e->ts.type == BT_CHARACTER && e->rank == 0)
-	gfc_conv_expr (&se, e);
-      /* Array assigned Hollerith constant or character array.  */
-      else if (e->symtree && (e->symtree->n.sym->as->rank > 0))
-	gfc_convert_array_to_string (&se, e);
-      else
-	gcc_unreachable ();
-
+      gfc_conv_expr (&se, e);
       gfc_conv_string_parameter (&se);
       gfc_add_modify_expr (&se.pre, io, fold_convert (TREE_TYPE (io), se.expr));
       gfc_add_modify_expr (&se.pre, len, se.string_length);
@@ -577,85 +408,20 @@ set_string (stmtblock_t * block, stmtblock_t * postblock, tree var,
 
   gfc_add_block_to_block (block, &se.pre);
   gfc_add_block_to_block (postblock, &se.post);
-  return p->mask;
+
 }
 
 
-/* Generate code to store the character (array) and the character length
-   for an internal unit.  */
-
-static unsigned int
-set_internal_unit (stmtblock_t * block, stmtblock_t * post_block,
-		   tree var, gfc_expr * e)
+/* Set a member of the ioparm structure to one.  */
+static void
+set_flag (stmtblock_t *block, tree var)
 {
-  gfc_se se;
-  tree io;
-  tree len;
-  tree desc;
-  tree tmp;
-  gfc_st_parameter_field *p;
-  unsigned int mask;
+  tree tmp, type = TREE_TYPE (var);
 
-  gfc_init_se (&se, NULL);
-
-  p = &st_parameter_field[IOPARM_dt_internal_unit];
-  mask = p->mask;
-  io = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-	       NULL_TREE);
-  len = build3 (COMPONENT_REF, TREE_TYPE (p->field_len), var, p->field_len,
-		NULL_TREE);
-  p = &st_parameter_field[IOPARM_dt_internal_unit_desc];
-  desc = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-		 NULL_TREE);
-
-  gcc_assert (e->ts.type == BT_CHARACTER);
-
-  /* Character scalars.  */
-  if (e->rank == 0)
-    {
-      gfc_conv_expr (&se, e);
-      gfc_conv_string_parameter (&se);
-      tmp = se.expr;
-      se.expr = build_int_cst (pchar_type_node, 0);
-    }
-
-  /* Character array.  */
-  else if (e->rank > 0)
-    {
-      se.ss = gfc_walk_expr (e);
-
-      if (is_aliased_array (e))
-	{
-	  /* Use a temporary for components of arrays of derived types
-	     or substring array references.  */
-	  gfc_conv_aliased_arg (&se, e, 0,
-		last_dt == READ ? INTENT_IN : INTENT_OUT);
-	  tmp = build_fold_indirect_ref (se.expr);
-	  se.expr = gfc_build_addr_expr (pchar_type_node, tmp);
-	  tmp = gfc_conv_descriptor_data_get (tmp);
-	}
-      else
-	{
-	  /* Return the data pointer and rank from the descriptor.  */
-	  gfc_conv_expr_descriptor (&se, e, se.ss);
-	  tmp = gfc_conv_descriptor_data_get (se.expr);
-	  se.expr = gfc_build_addr_expr (pchar_type_node, se.expr);
-	}
-    }
-  else
-    gcc_unreachable ();
-
-  /* The cast is needed for character substrings and the descriptor
-     data.  */
-  gfc_add_modify_expr (&se.pre, io, fold_convert (TREE_TYPE (io), tmp));
-  gfc_add_modify_expr (&se.pre, len,
-		       fold_convert (TREE_TYPE (len), se.string_length));
-  gfc_add_modify_expr (&se.pre, desc, se.expr);
-
-  gfc_add_block_to_block (block, &se.pre);
-  gfc_add_block_to_block (post_block, &se.post);
-  return mask;
+  tmp = build3 (COMPONENT_REF, type, ioparm_var, var, NULL_TREE);
+  gfc_add_modify_expr (block, tmp, convert (type, integer_one_node));
 }
+
 
 /* Add a case to a IO-result switch.  */
 
@@ -689,12 +455,11 @@ add_case (int label_value, gfc_st_label * label, stmtblock_t * body)
    be created anyway.  */
 
 static void
-io_result (stmtblock_t * block, tree var, gfc_st_label * err_label,
+io_result (stmtblock_t * block, gfc_st_label * err_label,
 	   gfc_st_label * end_label, gfc_st_label * eor_label)
 {
   stmtblock_t body;
   tree tmp, rc;
-  gfc_st_parameter_field *p = &st_parameter_field[IOPARM_common_flags];
 
   /* If no labels are specified, ignore the result instead
      of building an empty switch.  */
@@ -714,12 +479,8 @@ io_result (stmtblock_t * block, tree var, gfc_st_label * err_label,
 
   tmp = gfc_finish_block (&body);
 
-  var = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  rc = build3 (COMPONENT_REF, TREE_TYPE (p->field), var, p->field,
-	       NULL_TREE);
-  rc = build2 (BIT_AND_EXPR, TREE_TYPE (rc), rc,
-	       build_int_cst (TREE_TYPE (rc), IOPARM_common_libreturn_mask));
+  rc = build3 (COMPONENT_REF, TREE_TYPE (ioparm_library_return), ioparm_var,
+	       ioparm_library_return, NULL_TREE);
 
   tmp = build3_v (SWITCH_EXPR, rc, tmp, NULL_TREE);
 
@@ -731,29 +492,24 @@ io_result (stmtblock_t * block, tree var, gfc_st_label * err_label,
    library call goes awry, we can tell the user where the problem is.  */
 
 static void
-set_error_locus (stmtblock_t * block, tree var, locus * where)
+set_error_locus (stmtblock_t * block, locus * where)
 {
   gfc_file *f;
-  tree str, locus_file;
+  tree tmp;
   int line;
-  gfc_st_parameter_field *p = &st_parameter_field[IOPARM_common_filename];
 
-  locus_file = build3 (COMPONENT_REF, st_parameter[IOPARM_ptype_common].type,
-		       var, TYPE_FIELDS (TREE_TYPE (var)), NULL_TREE);
-  locus_file = build3 (COMPONENT_REF, TREE_TYPE (p->field), locus_file,
-		       p->field, NULL_TREE);
   f = where->lb->file;
-  str = gfc_build_cstring_const (f->filename);
+  tmp = gfc_build_cstring_const (f->filename);
 
-  str = gfc_build_addr_expr (pchar_type_node, str);
-  gfc_add_modify_expr (block, locus_file, str);
+  tmp = gfc_build_addr_expr (pchar_type_node, tmp);
+  gfc_add_modify_expr (block, locus_file, tmp);
 
 #ifdef USE_MAPPED_LOCATION
   line = LOCATION_LINE (where->lb->location);
 #else
   line = where->lb->linenum;
 #endif
-  set_parameter_const (block, var, IOPARM_common_line, line);
+  gfc_add_modify_expr (block, locus_line, build_int_cst (NULL_TREE, line));
 }
 
 
@@ -764,83 +520,65 @@ gfc_trans_open (gfc_code * code)
 {
   stmtblock_t block, post_block;
   gfc_open *p;
-  tree tmp, var;
-  unsigned int mask = 0;
+  tree tmp;
 
-  gfc_start_block (&block);
+  gfc_init_block (&block);
   gfc_init_block (&post_block);
 
-  var = gfc_create_var (st_parameter[IOPARM_ptype_open].type, "open_parm");
-
-  set_error_locus (&block, var, &code->loc);
+  set_error_locus (&block, &code->loc);
   p = code->ext.open;
 
   if (p->unit)
-    set_parameter_value (&block, var, IOPARM_common_unit, p->unit);
-  else
-    set_parameter_const (&block, var, IOPARM_common_unit, 0);
+    set_parameter_value (&block, ioparm_unit, p->unit);
 
   if (p->file)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_file, p->file);
+    set_string (&block, &post_block, ioparm_file, ioparm_file_len, p->file);
 
   if (p->status)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_status,
-			p->status);
+    set_string (&block, &post_block, ioparm_status,
+		ioparm_status_len, p->status);
 
   if (p->access)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_access,
-			p->access);
+    set_string (&block, &post_block, ioparm_access,
+		ioparm_access_len, p->access);
 
   if (p->form)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_form, p->form);
+    set_string (&block, &post_block, ioparm_form, ioparm_form_len, p->form);
 
   if (p->recl)
-    mask |= set_parameter_value (&block, var, IOPARM_open_recl_in, p->recl);
+    set_parameter_value (&block, ioparm_recl_in, p->recl);
 
   if (p->blank)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_blank,
-			p->blank);
+    set_string (&block, &post_block, ioparm_blank, ioparm_blank_len,
+		p->blank);
 
   if (p->position)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_position,
-			p->position);
+    set_string (&block, &post_block, ioparm_position,
+		ioparm_position_len, p->position);
 
   if (p->action)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_action,
-			p->action);
+    set_string (&block, &post_block, ioparm_action,
+		ioparm_action_len, p->action);
 
   if (p->delim)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_delim,
-			p->delim);
+    set_string (&block, &post_block, ioparm_delim, ioparm_delim_len,
+		p->delim);
 
   if (p->pad)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_pad, p->pad);
-
-  if (p->iomsg)
-    mask |= set_string (&block, &post_block, var, IOPARM_common_iomsg,
-			p->iomsg);
+    set_string (&block, &post_block, ioparm_pad, ioparm_pad_len, p->pad);
 
   if (p->iostat)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_common_iostat,
-			       p->iostat);
+    set_parameter_ref (&block, ioparm_iostat, p->iostat);
 
   if (p->err)
-    mask |= IOPARM_common_err;
+    set_flag (&block, ioparm_err);
 
-  if (p->convert)
-    mask |= set_string (&block, &post_block, var, IOPARM_open_convert,
-			p->convert);
-
-  set_parameter_const (&block, var, IOPARM_common_flags, mask);
-
-  tmp = build_fold_addr_expr (var);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (iocall[IOCALL_OPEN], tmp);
+  tmp = gfc_build_function_call (iocall_open, NULL_TREE);
   gfc_add_expr_to_block (&block, tmp);
 
   gfc_add_block_to_block (&block, &post_block);
 
-  io_result (&block, var, p->err, NULL, NULL);
+  io_result (&block, p->err, NULL, NULL);
 
   return gfc_finish_block (&block);
 }
@@ -853,47 +591,33 @@ gfc_trans_close (gfc_code * code)
 {
   stmtblock_t block, post_block;
   gfc_close *p;
-  tree tmp, var;
-  unsigned int mask = 0;
+  tree tmp;
 
-  gfc_start_block (&block);
+  gfc_init_block (&block);
   gfc_init_block (&post_block);
 
-  var = gfc_create_var (st_parameter[IOPARM_ptype_close].type, "close_parm");
-
-  set_error_locus (&block, var, &code->loc);
+  set_error_locus (&block, &code->loc);
   p = code->ext.close;
 
   if (p->unit)
-    set_parameter_value (&block, var, IOPARM_common_unit, p->unit);
-  else
-    set_parameter_const (&block, var, IOPARM_common_unit, 0);
+    set_parameter_value (&block, ioparm_unit, p->unit);
 
   if (p->status)
-    mask |= set_string (&block, &post_block, var, IOPARM_close_status,
-			p->status);
-
-  if (p->iomsg)
-    mask |= set_string (&block, &post_block, var, IOPARM_common_iomsg,
-			p->iomsg);
+    set_string (&block, &post_block, ioparm_status,
+		ioparm_status_len, p->status);
 
   if (p->iostat)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_common_iostat,
-			       p->iostat);
+    set_parameter_ref (&block, ioparm_iostat, p->iostat);
 
   if (p->err)
-    mask |= IOPARM_common_err;
+    set_flag (&block, ioparm_err);
 
-  set_parameter_const (&block, var, IOPARM_common_flags, mask);
-
-  tmp = build_fold_addr_expr (var);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (iocall[IOCALL_CLOSE], tmp);
+  tmp = gfc_build_function_call (iocall_close, NULL_TREE);
   gfc_add_expr_to_block (&block, tmp);
 
   gfc_add_block_to_block (&block, &post_block);
 
-  io_result (&block, var, p->err, NULL, NULL);
+  io_result (&block, p->err, NULL, NULL);
 
   return gfc_finish_block (&block);
 }
@@ -904,47 +628,29 @@ gfc_trans_close (gfc_code * code)
 static tree
 build_filepos (tree function, gfc_code * code)
 {
-  stmtblock_t block, post_block;
+  stmtblock_t block;
   gfc_filepos *p;
-  tree tmp, var;
-  unsigned int mask = 0;
+  tree tmp;
 
   p = code->ext.filepos;
 
-  gfc_start_block (&block);
-  gfc_init_block (&post_block);
+  gfc_init_block (&block);
 
-  var = gfc_create_var (st_parameter[IOPARM_ptype_filepos].type,
-			"filepos_parm");
-
-  set_error_locus (&block, var, &code->loc);
+  set_error_locus (&block, &code->loc);
 
   if (p->unit)
-    set_parameter_value (&block, var, IOPARM_common_unit, p->unit);
-  else
-    set_parameter_const (&block, var, IOPARM_common_unit, 0);
-
-  if (p->iomsg)
-    mask |= set_string (&block, &post_block, var, IOPARM_common_iomsg,
-			p->iomsg);
+    set_parameter_value (&block, ioparm_unit, p->unit);
 
   if (p->iostat)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_common_iostat,
-			       p->iostat);
+    set_parameter_ref (&block, ioparm_iostat, p->iostat);
 
   if (p->err)
-    mask |= IOPARM_common_err;
+    set_flag (&block, ioparm_err);
 
-  set_parameter_const (&block, var, IOPARM_common_flags, mask);
-
-  tmp = build_fold_addr_expr (var);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (function, tmp);
+  tmp = gfc_build_function_call (function, NULL);
   gfc_add_expr_to_block (&block, tmp);
 
-  gfc_add_block_to_block (&block, &post_block);
-
-  io_result (&block, var, p->err, NULL, NULL);
+  io_result (&block, p->err, NULL, NULL);
 
   return gfc_finish_block (&block);
 }
@@ -955,7 +661,8 @@ build_filepos (tree function, gfc_code * code)
 tree
 gfc_trans_backspace (gfc_code * code)
 {
-  return build_filepos (iocall[IOCALL_BACKSPACE], code);
+
+  return build_filepos (iocall_backspace, code);
 }
 
 
@@ -964,7 +671,8 @@ gfc_trans_backspace (gfc_code * code)
 tree
 gfc_trans_endfile (gfc_code * code)
 {
-  return build_filepos (iocall[IOCALL_ENDFILE], code);
+
+  return build_filepos (iocall_endfile, code);
 }
 
 
@@ -973,16 +681,8 @@ gfc_trans_endfile (gfc_code * code)
 tree
 gfc_trans_rewind (gfc_code * code)
 {
-  return build_filepos (iocall[IOCALL_REWIND], code);
-}
 
-
-/* Translate a FLUSH statement.  */
-
-tree
-gfc_trans_flush (gfc_code * code)
-{
-  return build_filepos (iocall[IOCALL_FLUSH], code);
+  return build_filepos (iocall_rewind, code);
 }
 
 
@@ -993,144 +693,107 @@ gfc_trans_inquire (gfc_code * code)
 {
   stmtblock_t block, post_block;
   gfc_inquire *p;
-  tree tmp, var;
-  unsigned int mask = 0;
+  tree tmp;
 
-  gfc_start_block (&block);
+  gfc_init_block (&block);
   gfc_init_block (&post_block);
 
-  var = gfc_create_var (st_parameter[IOPARM_ptype_inquire].type,
-			"inquire_parm");
-
-  set_error_locus (&block, var, &code->loc);
+  set_error_locus (&block, &code->loc);
   p = code->ext.inquire;
 
-  /* Sanity check.  */
-  if (p->unit && p->file)
-    gfc_error ("INQUIRE statement at %L cannot contain both FILE and UNIT specifiers.", &code->loc);
-
   if (p->unit)
-    set_parameter_value (&block, var, IOPARM_common_unit, p->unit);
-  else
-    set_parameter_const (&block, var, IOPARM_common_unit, 0);
+    set_parameter_value (&block, ioparm_unit, p->unit);
 
   if (p->file)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_file,
-			p->file);
-
-  if (p->iomsg)
-    mask |= set_string (&block, &post_block, var, IOPARM_common_iomsg,
-			p->iomsg);
+    set_string (&block, &post_block, ioparm_file, ioparm_file_len, p->file);
 
   if (p->iostat)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_common_iostat,
-			       p->iostat);
+    set_parameter_ref (&block, ioparm_iostat, p->iostat);
 
   if (p->exist)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_inquire_exist,
-			       p->exist);
+    set_parameter_ref (&block, ioparm_exist, p->exist);
 
   if (p->opened)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_inquire_opened,
-			       p->opened);
+    set_parameter_ref (&block, ioparm_opened, p->opened);
 
   if (p->number)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_inquire_number,
-			       p->number);
+    set_parameter_ref (&block, ioparm_number, p->number);
 
   if (p->named)
-    mask |= set_parameter_ref (&block, &post_block, var, IOPARM_inquire_named,
-			       p->named);
+    set_parameter_ref (&block, ioparm_named, p->named);
 
   if (p->name)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_name,
-			p->name);
+    set_string (&block, &post_block, ioparm_name, ioparm_name_len, p->name);
 
   if (p->access)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_access,
-			p->access);
+    set_string (&block, &post_block, ioparm_access,
+		ioparm_access_len, p->access);
 
   if (p->sequential)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_sequential,
-			p->sequential);
+    set_string (&block, &post_block, ioparm_sequential,
+		ioparm_sequential_len, p->sequential);
 
   if (p->direct)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_direct,
-			p->direct);
+    set_string (&block, &post_block, ioparm_direct,
+		ioparm_direct_len, p->direct);
 
   if (p->form)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_form,
-			p->form);
+    set_string (&block, &post_block, ioparm_form, ioparm_form_len, p->form);
 
   if (p->formatted)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_formatted,
-			p->formatted);
+    set_string (&block, &post_block, ioparm_formatted,
+		ioparm_formatted_len, p->formatted);
 
   if (p->unformatted)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_unformatted,
-			p->unformatted);
+    set_string (&block, &post_block, ioparm_unformatted,
+		ioparm_unformatted_len, p->unformatted);
 
   if (p->recl)
-    mask |= set_parameter_ref (&block, &post_block, var,
-			       IOPARM_inquire_recl_out, p->recl);
+    set_parameter_ref (&block, ioparm_recl_out, p->recl);
 
   if (p->nextrec)
-    mask |= set_parameter_ref (&block, &post_block, var,
-			       IOPARM_inquire_nextrec, p->nextrec);
+    set_parameter_ref (&block, ioparm_nextrec, p->nextrec);
 
   if (p->blank)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_blank,
-			p->blank);
+    set_string (&block, &post_block, ioparm_blank, ioparm_blank_len,
+		p->blank);
 
   if (p->position)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_position,
-			p->position);
+    set_string (&block, &post_block, ioparm_position,
+		ioparm_position_len, p->position);
 
   if (p->action)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_action,
-			p->action);
+    set_string (&block, &post_block, ioparm_action,
+		ioparm_action_len, p->action);
 
   if (p->read)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_read,
-			p->read);
+    set_string (&block, &post_block, ioparm_read, ioparm_read_len, p->read);
 
   if (p->write)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_write,
-			p->write);
+    set_string (&block, &post_block, ioparm_write,
+		ioparm_write_len, p->write);
 
   if (p->readwrite)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_readwrite,
-			p->readwrite);
+    set_string (&block, &post_block, ioparm_readwrite,
+		ioparm_readwrite_len, p->readwrite);
 
   if (p->delim)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_delim,
-			p->delim);
+    set_string (&block, &post_block, ioparm_delim, ioparm_delim_len,
+		p->delim);
 
   if (p->pad)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_pad,
-			p->pad);
+    set_string (&block, &post_block, ioparm_pad, ioparm_pad_len,
+                p->pad); 
 
   if (p->err)
-    mask |= IOPARM_common_err;
+    set_flag (&block, ioparm_err);
 
-  if (p->convert)
-    mask |= set_string (&block, &post_block, var, IOPARM_inquire_convert,
-			p->convert);
-
-  if (p->strm_pos)
-    mask |= set_parameter_ref (&block, &post_block, var,
-			       IOPARM_inquire_strm_pos_out, p->strm_pos);
-
-  set_parameter_const (&block, var, IOPARM_common_flags, mask);
-
-  tmp = build_fold_addr_expr (var);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (iocall[IOCALL_INQUIRE], tmp);
+  tmp = gfc_build_function_call (iocall_inquire, NULL);
   gfc_add_expr_to_block (&block, tmp);
 
   gfc_add_block_to_block (&block, &post_block);
 
-  io_result (&block, var, p->err, NULL, NULL);
+  io_result (&block, p->err, NULL, NULL);
 
   return gfc_finish_block (&block);
 }
@@ -1204,7 +867,7 @@ nml_get_addr_expr (gfc_symbol * sym, gfc_component * c,
 
   dummy_arg_flagged = POINTER_TYPE_P (TREE_TYPE(tmp));
 
-  itmp = (dummy_arg_flagged) ? build_fold_indirect_ref (tmp) : tmp;
+  itmp = (dummy_arg_flagged) ? gfc_build_indirect_ref (tmp) : tmp;
 
   /* If an array, set flag and use indirect ref. if built.  */
 
@@ -1231,12 +894,12 @@ nml_get_addr_expr (gfc_symbol * sym, gfc_component * c,
 
   /* Now build the address expression.  */
 
-  tmp = build_fold_addr_expr (tmp);
+  tmp = gfc_build_addr_expr (NULL, tmp);
 
   /* If scalar dummy, resolve indirect reference now.  */
 
   if (dummy_arg_flagged && !array_flagged)
-    tmp = build_fold_indirect_ref (tmp);
+    tmp = gfc_build_indirect_ref (tmp);
 
   gcc_assert (tmp && POINTER_TYPE_P (TREE_TYPE (tmp)));
 
@@ -1244,8 +907,8 @@ nml_get_addr_expr (gfc_symbol * sym, gfc_component * c,
 }
 
 /* For an object VAR_NAME whose base address is BASE_ADDR, generate a
-   call to iocall[IOCALL_SET_NML_VAL].  For derived type variable, recursively
-   generate calls to iocall[IOCALL_SET_NML_VAL] for each component.  */
+   call to iocall_set_nml_val.  For derived type variable, recursively
+   generate calls to iocall_set_nml_val for each component.  */
 
 #define NML_FIRST_ARG(a) args = gfc_chainon_list (NULL_TREE, a)
 #define NML_ADD_ARG(a) args = gfc_chainon_list (args, a)
@@ -1264,7 +927,6 @@ transfer_namelist_element (stmtblock_t * block, const char * var_name,
   tree tmp;
   tree args;
   tree dtype;
-  tree dt_parm_addr;
   int n_dim; 
   int itype;
   int rank = 0;
@@ -1327,19 +989,17 @@ transfer_namelist_element (stmtblock_t * block, const char * var_name,
      The call for the scalar part transfers:
      (address, name, type, kind or string_length, dtype)  */
 
-  dt_parm_addr = build_fold_addr_expr (dt_parm);
-  NML_FIRST_ARG (dt_parm_addr);
-  NML_ADD_ARG (addr_expr);
+  NML_FIRST_ARG (addr_expr);
   NML_ADD_ARG (string);
   NML_ADD_ARG (IARG (ts->kind));
 
   if (ts->type == BT_CHARACTER)
     NML_ADD_ARG (ts->cl->backend_decl);
   else
-    NML_ADD_ARG (build_int_cst (gfc_charlen_type_node, 0));
+    NML_ADD_ARG (convert (gfc_charlen_type_node, integer_zero_node));
 
   NML_ADD_ARG (dtype);
-  tmp = build_function_call_expr (iocall[IOCALL_SET_NML_VAL], args);
+  tmp = gfc_build_function_call (iocall_set_nml_val, args);
   gfc_add_expr_to_block (block, tmp);
 
   /* If the object is an array, transfer rank times:
@@ -1347,12 +1007,11 @@ transfer_namelist_element (stmtblock_t * block, const char * var_name,
 
   for ( n_dim = 0 ; n_dim < rank ; n_dim++ )
     {
-      NML_FIRST_ARG (dt_parm_addr);
-      NML_ADD_ARG (IARG (n_dim));
+      NML_FIRST_ARG (IARG (n_dim));
       NML_ADD_ARG (GFC_TYPE_ARRAY_STRIDE (dt, n_dim));
       NML_ADD_ARG (GFC_TYPE_ARRAY_LBOUND (dt, n_dim));
       NML_ADD_ARG (GFC_TYPE_ARRAY_UBOUND (dt, n_dim));
-      tmp = build_function_call_expr (iocall[IOCALL_SET_NML_VAL_DIM], args);
+      tmp = gfc_build_function_call (iocall_set_nml_val_dim, args);
       gfc_add_expr_to_block (block, tmp);
     }
 
@@ -1362,7 +1021,7 @@ transfer_namelist_element (stmtblock_t * block, const char * var_name,
 
       /* Provide the RECORD_TYPE to build component references.  */
 
-      tree expr = build_fold_indirect_ref (addr_expr);
+      tree expr = gfc_build_indirect_ref (addr_expr);
 
       for (cmp = ts->derived->components; cmp; cmp = cmp->next)
 	{
@@ -1384,145 +1043,90 @@ transfer_namelist_element (stmtblock_t * block, const char * var_name,
    out by now.  */
 
 static tree
-build_dt (tree function, gfc_code * code)
+build_dt (tree * function, gfc_code * code)
 {
-  stmtblock_t block, post_block, post_end_block, post_iu_block;
+  stmtblock_t block, post_block;
   gfc_dt *dt;
-  tree tmp, var;
+  tree tmp;
   gfc_expr *nmlname;
   gfc_namelist *nml;
-  unsigned int mask = 0;
 
-  gfc_start_block (&block);
+  gfc_init_block (&block);
   gfc_init_block (&post_block);
-  gfc_init_block (&post_end_block);
-  gfc_init_block (&post_iu_block);
 
-  var = gfc_create_var (st_parameter[IOPARM_ptype_dt].type, "dt_parm");
+  set_error_locus (&block, &code->loc);
+  dt = code->ext.dt;
 
-  set_error_locus (&block, var, &code->loc);
+  gcc_assert (dt != NULL);
 
-  if (last_dt == IOLENGTH)
-    {
-      gfc_inquire *inq;
-
-      inq = code->ext.inquire;
-
-      /* First check that preconditions are met.  */
-      gcc_assert (inq != NULL);
-      gcc_assert (inq->iolength != NULL);
-
-      /* Connect to the iolength variable.  */
-      mask |= set_parameter_ref (&block, &post_end_block, var,
-				 IOPARM_dt_iolength, inq->iolength);
-      dt = NULL;
-    }
-  else
-    {
-      dt = code->ext.dt;
-      gcc_assert (dt != NULL);
-    }
-
-  if (dt && dt->io_unit)
+  if (dt->io_unit)
     {
       if (dt->io_unit->ts.type == BT_CHARACTER)
 	{
-	  mask |= set_internal_unit (&block, &post_iu_block,
-				     var, dt->io_unit);
-	  set_parameter_const (&block, var, IOPARM_common_unit, 0);
+	  set_string (&block, &post_block, ioparm_internal_unit,
+		      ioparm_internal_unit_len, dt->io_unit);
 	}
       else
-	set_parameter_value (&block, var, IOPARM_common_unit, dt->io_unit);
+	set_parameter_value (&block, ioparm_unit, dt->io_unit);
     }
-  else
-    set_parameter_const (&block, var, IOPARM_common_unit, 0);
 
-  if (dt)
+  if (dt->rec)
+    set_parameter_value (&block, ioparm_rec, dt->rec);
+
+  if (dt->advance)
+    set_string (&block, &post_block, ioparm_advance, ioparm_advance_len,
+		dt->advance);
+
+  if (dt->format_expr)
+    set_string (&block, &post_block, ioparm_format, ioparm_format_len,
+		dt->format_expr);
+
+  if (dt->format_label)
     {
-      if (dt->rec)
-	mask |= set_parameter_value (&block, var, IOPARM_dt_rec, dt->rec);
-
-      if (dt->advance)
-	mask |= set_string (&block, &post_block, var, IOPARM_dt_advance,
-			    dt->advance);
-
-      if (dt->format_expr)
-	mask |= set_string (&block, &post_end_block, var, IOPARM_dt_format,
-			    dt->format_expr);
-
-      if (dt->format_label)
-	{
-	  if (dt->format_label == &format_asterisk)
-	    mask |= IOPARM_dt_list_format;
-	  else
-	    mask |= set_string (&block, &post_block, var, IOPARM_dt_format,
-				dt->format_label->format);
-	}
-
-      if (dt->iomsg)
-	mask |= set_string (&block, &post_block, var, IOPARM_common_iomsg,
-			    dt->iomsg);
-
-      if (dt->iostat)
-	mask |= set_parameter_ref (&block, &post_end_block, var,
-				   IOPARM_common_iostat, dt->iostat);
-
-      if (dt->size)
-	mask |= set_parameter_ref (&block, &post_end_block, var,
-				   IOPARM_dt_size, dt->size);
-
-      if (dt->err)
-	mask |= IOPARM_common_err;
-
-      if (dt->eor)
-	mask |= IOPARM_common_eor;
-
-      if (dt->end)
-	mask |= IOPARM_common_end;
-
-      if (dt->namelist)
-	{
-	  if (dt->format_expr || dt->format_label)
-	    gfc_internal_error ("build_dt: format with namelist");
-
-	  nmlname = gfc_new_nml_name_expr (dt->namelist->name);
-
-	  mask |= set_string (&block, &post_block, var, IOPARM_dt_namelist_name,
-			      nmlname);
-
-	  if (last_dt == READ)
-	    mask |= IOPARM_dt_namelist_read_mode;
-
-	  set_parameter_const (&block, var, IOPARM_common_flags, mask);
-
-	  dt_parm = var;
-
-	  for (nml = dt->namelist->namelist; nml; nml = nml->next)
-	    transfer_namelist_element (&block, nml->sym->name, nml->sym,
-				       NULL, NULL);
-	}
+      if (dt->format_label == &format_asterisk)
+	set_flag (&block, ioparm_list_format);
       else
-	set_parameter_const (&block, var, IOPARM_common_flags, mask);
+        set_string (&block, &post_block, ioparm_format,
+		    ioparm_format_len, dt->format_label->format);
     }
-  else
-    set_parameter_const (&block, var, IOPARM_common_flags, mask);
 
-  tmp = build_fold_addr_expr (var);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (function, tmp);
+  if (dt->iostat)
+    set_parameter_ref (&block, ioparm_iostat, dt->iostat);
+
+  if (dt->size)
+    set_parameter_ref (&block, ioparm_size, dt->size);
+
+  if (dt->err)
+    set_flag (&block, ioparm_err);
+
+  if (dt->eor)
+    set_flag(&block, ioparm_eor);
+
+  if (dt->end)
+    set_flag(&block, ioparm_end);
+
+  if (dt->namelist)
+    {
+      if (dt->format_expr || dt->format_label)
+        gfc_internal_error ("build_dt: format with namelist");
+
+      nmlname = gfc_new_nml_name_expr(dt->namelist->name);
+
+      set_string (&block, &post_block, ioparm_namelist_name,
+		  ioparm_namelist_name_len, nmlname);
+
+      if (last_dt == READ)
+	set_flag (&block, ioparm_namelist_read_mode);
+
+      for (nml = dt->namelist->namelist; nml; nml = nml->next)
+	transfer_namelist_element (&block, nml->sym->name, nml->sym,
+				   NULL, NULL);
+    }
+
+  tmp = gfc_build_function_call (*function, NULL_TREE);
   gfc_add_expr_to_block (&block, tmp);
 
   gfc_add_block_to_block (&block, &post_block);
-
-  dt_parm = var;
-  dt_post_end_block = &post_end_block;
-
-  gfc_add_expr_to_block (&block, gfc_trans_code (code->block->next));
-
-  gfc_add_block_to_block (&block, &post_iu_block);
-
-  dt_parm = NULL;
-  dt_post_end_block = NULL;
 
   return gfc_finish_block (&block);
 }
@@ -1535,8 +1139,31 @@ build_dt (tree function, gfc_code * code)
 tree
 gfc_trans_iolength (gfc_code * code)
 {
+  stmtblock_t block;
+  gfc_inquire *inq;
+  tree dt;
+
+  gfc_init_block (&block);
+
+  set_error_locus (&block, &code->loc);
+
+  inq = code->ext.inquire;
+
+  /* First check that preconditions are met.  */
+  gcc_assert (inq != NULL);
+  gcc_assert (inq->iolength != NULL);
+
+  /* Connect to the iolength variable.  */
+  if (inq->iolength)
+    set_parameter_ref (&block, ioparm_iolength, inq->iolength);
+
+  /* Actual logic.  */
   last_dt = IOLENGTH;
-  return build_dt (iocall[IOCALL_IOLENGTH], code);
+  dt = build_dt(&iocall_iolength, code);
+
+  gfc_add_expr_to_block (&block, dt);
+
+  return gfc_finish_block (&block);
 }
 
 
@@ -1545,8 +1172,9 @@ gfc_trans_iolength (gfc_code * code)
 tree
 gfc_trans_read (gfc_code * code)
 {
+
   last_dt = READ;
-  return build_dt (iocall[IOCALL_READ], code);
+  return build_dt (&iocall_read, code);
 }
 
 
@@ -1555,8 +1183,9 @@ gfc_trans_read (gfc_code * code)
 tree
 gfc_trans_write (gfc_code * code)
 {
+
   last_dt = WRITE;
-  return build_dt (iocall[IOCALL_WRITE], code);
+  return build_dt (&iocall_write, code);
 }
 
 
@@ -1573,32 +1202,28 @@ gfc_trans_dt_end (gfc_code * code)
   switch (last_dt)
     {
     case READ:
-      function = iocall[IOCALL_READ_DONE];
+      function = iocall_read_done;
       break;
 
     case WRITE:
-      function = iocall[IOCALL_WRITE_DONE];
+      function = iocall_write_done;
       break;
 
     case IOLENGTH:
-      function = iocall[IOCALL_IOLENGTH_DONE];
+      function = iocall_iolength_done;
       break;
 
     default:
       gcc_unreachable ();
     }
 
-  tmp = build_fold_addr_expr (dt_parm);
-  tmp = gfc_chainon_list (NULL_TREE, tmp);
-  tmp = build_function_call_expr (function, tmp);
+  tmp = gfc_build_function_call (function, NULL);
   gfc_add_expr_to_block (&block, tmp);
-  gfc_add_block_to_block (&block, dt_post_end_block);
-  gfc_init_block (dt_post_end_block);
 
   if (last_dt != IOLENGTH)
     {
       gcc_assert (code->ext.dt != NULL);
-      io_result (&block, dt_parm, code->ext.dt->err,
+      io_result (&block, code->ext.dt->err,
 		 code->ext.dt->end, code->ext.dt->eor);
     }
 
@@ -1673,7 +1298,7 @@ transfer_array_component (tree expr, gfc_component * cm)
 
   /* Now se.expr contains an element of the array.  Take the address and pass
      it to the IO routines.  */
-  tmp = build_fold_addr_expr (se.expr);
+  tmp = gfc_build_addr_expr (NULL, se.expr);
   transfer_expr (&se, &cm->ts, tmp);
 
   /* We are done now with the loop body.  Wrap up the scalarizer and
@@ -1713,41 +1338,40 @@ transfer_expr (gfc_se * se, gfc_typespec * ts, tree addr_expr)
     {
     case BT_INTEGER:
       arg2 = build_int_cst (NULL_TREE, kind);
-      function = iocall[IOCALL_X_INTEGER];
+      function = iocall_x_integer;
       break;
 
     case BT_REAL:
       arg2 = build_int_cst (NULL_TREE, kind);
-      function = iocall[IOCALL_X_REAL];
+      function = iocall_x_real;
       break;
 
     case BT_COMPLEX:
       arg2 = build_int_cst (NULL_TREE, kind);
-      function = iocall[IOCALL_X_COMPLEX];
+      function = iocall_x_complex;
       break;
 
     case BT_LOGICAL:
       arg2 = build_int_cst (NULL_TREE, kind);
-      function = iocall[IOCALL_X_LOGICAL];
+      function = iocall_x_logical;
       break;
 
     case BT_CHARACTER:
-    case BT_HOLLERITH:
       if (se->string_length)
 	arg2 = se->string_length;
       else
 	{
-	  tmp = build_fold_indirect_ref (addr_expr);
+	  tmp = gfc_build_indirect_ref (addr_expr);
 	  gcc_assert (TREE_CODE (TREE_TYPE (tmp)) == ARRAY_TYPE);
 	  arg2 = TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (tmp)));
 	}
-      function = iocall[IOCALL_X_CHARACTER];
+      function = iocall_x_character;
       break;
 
     case BT_DERIVED:
       /* Recurse into the elements of the derived type.  */
       expr = gfc_evaluate_now (addr_expr, &se->pre);
-      expr = build_fold_indirect_ref (expr);
+      expr = gfc_build_indirect_ref (expr);
 
       for (c = ts->derived->components; c; c = c->next)
 	{
@@ -1765,7 +1389,7 @@ transfer_expr (gfc_se * se, gfc_typespec * ts, tree addr_expr)
           else
             {
               if (!c->pointer)
-                tmp = build_fold_addr_expr (tmp);
+                tmp = gfc_build_addr_expr (NULL, tmp);
               transfer_expr (se, &c->ts, tmp);
             }
 	}
@@ -1775,41 +1399,13 @@ transfer_expr (gfc_se * se, gfc_typespec * ts, tree addr_expr)
       internal_error ("Bad IO basetype (%d)", ts->type);
     }
 
-  tmp = build_fold_addr_expr (dt_parm);
-  args = gfc_chainon_list (NULL_TREE, tmp);
-  args = gfc_chainon_list (args, addr_expr);
+  args = gfc_chainon_list (NULL_TREE, addr_expr);
   args = gfc_chainon_list (args, arg2);
 
-  tmp = build_function_call_expr (function, args);
+  tmp = gfc_build_function_call (function, args);
   gfc_add_expr_to_block (&se->pre, tmp);
   gfc_add_block_to_block (&se->pre, &se->post);
 
-}
-
-
-/* Generate a call to pass an array descriptor to the IO library. The
-   array should be of one of the intrinsic types.  */
-
-static void
-transfer_array_desc (gfc_se * se, gfc_typespec * ts, tree addr_expr)
-{
-  tree args, tmp, charlen_arg, kind_arg;
-
-  if (ts->type == BT_CHARACTER)
-    charlen_arg = se->string_length;
-  else
-    charlen_arg = build_int_cstu (NULL_TREE, 0);
-
-  kind_arg = build_int_cst (NULL_TREE, ts->kind);
-
-  tmp = build_fold_addr_expr (dt_parm);
-  args = gfc_chainon_list (NULL_TREE, tmp);
-  args = gfc_chainon_list (args, addr_expr);
-  args = gfc_chainon_list (args, kind_arg);
-  args = gfc_chainon_list (args, charlen_arg);
-  tmp = build_function_call_expr (iocall[IOCALL_X_ARRAY], args);
-  gfc_add_expr_to_block (&se->pre, tmp);
-  gfc_add_block_to_block (&se->pre, &se->post);
 }
 
 
@@ -1821,47 +1417,21 @@ gfc_trans_transfer (gfc_code * code)
   stmtblock_t block, body;
   gfc_loopinfo loop;
   gfc_expr *expr;
-  gfc_ref *ref;
   gfc_ss *ss;
   gfc_se se;
   tree tmp;
 
   gfc_start_block (&block);
-  gfc_init_block (&body);
 
   expr = code->expr;
   ss = gfc_walk_expr (expr);
 
-  ref = NULL;
   gfc_init_se (&se, NULL);
 
   if (ss == gfc_ss_terminator)
-    {
-      /* Transfer a scalar value.  */
-      gfc_conv_expr_reference (&se, expr);
-      transfer_expr (&se, &expr->ts, se.expr);
-    }
+    gfc_init_block (&body);
   else
     {
-      /* Transfer an array. If it is an array of an intrinsic
-	 type, pass the descriptor to the library.  Otherwise
-	 scalarize the transfer.  */
-      if (expr->ref)
-	{
-	  for (ref = expr->ref; ref && ref->type != REF_ARRAY;
-		 ref = ref->next);
-	  gcc_assert (ref->type == REF_ARRAY);
-	}
-
-      if (expr->ts.type != BT_DERIVED && ref && ref->next == NULL)
-	{
-	  /* Get the descriptor.  */
-	  gfc_conv_expr_descriptor (&se, expr, ss);
-	  tmp = build_fold_addr_expr (se.expr);
-	  transfer_array_desc (&se, &expr->ts, tmp);
-	  goto finish_block_label;
-	}
-      
       /* Initialize the scalarizer.  */
       gfc_init_loopinfo (&loop);
       gfc_add_ss_to_loop (&loop, ss);
@@ -1876,12 +1446,11 @@ gfc_trans_transfer (gfc_code * code)
 
       gfc_copy_loopinfo_to_se (&se, &loop);
       se.ss = ss;
-
-      gfc_conv_expr_reference (&se, expr);
-      transfer_expr (&se, &expr->ts, se.expr);
     }
 
- finish_block_label:
+  gfc_conv_expr_reference (&se, expr);
+
+  transfer_expr (&se, &expr->ts, se.expr);
 
   gfc_add_block_to_block (&body, &se.pre);
   gfc_add_block_to_block (&body, &se.post);

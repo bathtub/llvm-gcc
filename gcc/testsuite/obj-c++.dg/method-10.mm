@@ -1,11 +1,13 @@
+/* APPLE LOCAL file mainline */
 /* Test for sending messages to aliased classes (and instances thereof).  */
 /* Author: Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-options "-lobjc" } */
 /* { dg-do run } */
 
-#include <objc/Object.h>
-#include <stdlib.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
+extern "C" void abort(void);
 #define CHECK_IF(expr) if(!(expr)) abort()
 
 @interface Int1: Object

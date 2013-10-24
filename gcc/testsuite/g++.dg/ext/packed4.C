@@ -1,4 +1,5 @@
-// { dg-do run { target { ! default_packed } } }
+// { dg-do run }
+// APPLE LOCAL mainline
 // { dg-options "-w" }
 
 // Copyright (C) 2003 Free Software Foundation, Inc.

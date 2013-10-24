@@ -15,8 +15,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 extern void default_external_libcall (rtx);
 
@@ -24,21 +24,25 @@ extern enum machine_mode default_cc_modes_compatible (enum machine_mode,
 						      enum machine_mode);
 
 extern bool default_return_in_memory (tree, tree);
+/* APPLE LOCAL radar 4781080 */
+extern bool default_objc_fpreturn_msgcall (tree, bool);
 
 extern rtx default_expand_builtin_saveregs (void);
 extern void default_setup_incoming_varargs (CUMULATIVE_ARGS *, enum machine_mode, tree, int *, int);
 extern rtx default_builtin_setjmp_frame_value (void);
 extern bool default_pretend_outgoing_varargs_named (CUMULATIVE_ARGS *);
+/* APPLE LOCAL begin Altivec */
+extern bool default_skip_vec_args (tree, int, int*);
+/* APPLE LOCAL end Altivec */
 
 extern enum machine_mode default_eh_return_filter_mode (void);
 extern unsigned HOST_WIDE_INT default_shift_truncation_mask
   (enum machine_mode);
-extern unsigned int default_min_divisions_for_recip_mul (enum machine_mode);
-extern int default_mode_rep_extended (enum machine_mode, enum machine_mode);
-
+/* APPLE LOCAL begin mainline */
 extern tree default_stack_protect_guard (void);
 extern tree default_external_stack_protect_fail (void);
 extern tree default_hidden_stack_protect_fail (void);
+/* APPLE LOCAL end mainline */
 
 extern tree default_cxx_guard_type (void);
 extern tree default_cxx_get_cookie_size (tree);
@@ -51,11 +55,6 @@ extern bool hook_callee_copies_named
 extern void default_unwind_emit (FILE *, rtx);
 
 extern bool default_scalar_mode_supported_p (enum machine_mode);
-extern bool default_decimal_float_supported_p (void);
-
-extern const char * default_invalid_within_doloop (rtx);
-
-extern bool default_narrow_bitfield (void);
 
 /* These are here, and not in hooks.[ch], because not all users of
    hooks.h include tm.h, and thus we don't have CUMULATIVE_ARGS.  */
@@ -69,14 +68,14 @@ extern bool hook_bool_CUMULATIVE_ARGS_mode_tree_bool_true
   (CUMULATIVE_ARGS *, enum machine_mode, tree, bool);
 extern int hook_int_CUMULATIVE_ARGS_mode_tree_bool_0
   (CUMULATIVE_ARGS *, enum machine_mode, tree, bool);
+/* APPLE LOCAL begin mainline 2005-04-14 */
 extern const char *hook_invalid_arg_for_unprototyped_fn
   (tree, tree, tree);
-extern bool hook_bool_rtx_commutative_p (rtx, int);
-extern rtx default_function_value (tree, tree, bool);
+/* APPLE LOCAL end mainline 2005-04-14 */
+/* APPLE LOCAL begin 4375453 */
+extern bool vector_alignment_reachable (tree, bool);
+extern bool default_vector_alignment_reachable (tree, bool);
+/* APPLE LOCAL end 4375453 */
+/* APPLE LOCAL begin mainline 2006-02-17 4356747 stack realign */
 extern rtx default_internal_arg_pointer (void);
-extern enum reg_class default_secondary_reload (bool, rtx, enum reg_class,
-						enum machine_mode,
-						secondary_reload_info *);
-extern void hook_void_bitmap (bitmap);
-
-extern int default_reloc_rw_mask (void);
+/* APPLE LOCAL end mainline 2006-02-17 4356747 stack realign */

@@ -1,6 +1,6 @@
 // Stream buffer classes -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -42,8 +42,8 @@
 
 #pragma GCC system_header
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   template<typename _CharT, typename _Traits>
     streamsize
     basic_streambuf<_CharT, _Traits>::
@@ -52,11 +52,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       streamsize __ret = 0;
       while (__ret < __n)
 	{
-	  const streamsize __buf_len = this->egptr() - this->gptr();
+	  const size_t __buf_len = this->egptr() - this->gptr();
 	  if (__buf_len)
 	    {
-	      const streamsize __remaining = __n - __ret;
-	      const streamsize __len = std::min(__buf_len, __remaining);
+	      const size_t __remaining = __n - __ret;
+	      const size_t __len = std::min(__buf_len, __remaining);
 	      traits_type::copy(__s, this->gptr(), __len);
 	      __ret += __len;
 	      __s += __len;
@@ -86,11 +86,11 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       streamsize __ret = 0;
       while (__ret < __n)
 	{
-	  const streamsize __buf_len = this->epptr() - this->pptr();
+	  const size_t __buf_len = this->epptr() - this->pptr();
 	  if (__buf_len)
 	    {
-	      const streamsize __remaining = __n - __ret;
-	      const streamsize __len = std::min(__buf_len, __remaining);
+	      const size_t __remaining = __n - __ret;
+	      const size_t __len = std::min(__buf_len, __remaining);
 	      traits_type::copy(this->pptr(), __s, __len);
 	      __ret += __len;
 	      __s += __len;
@@ -117,34 +117,20 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   // standard.
   template<typename _CharT, typename _Traits>
     streamsize
-    __copy_streambufs_eof(basic_streambuf<_CharT, _Traits>* __sbin,
-			  basic_streambuf<_CharT, _Traits>* __sbout,
-			  bool& __ineof)
+    __copy_streambufs(basic_streambuf<_CharT, _Traits>* __sbin,
+		      basic_streambuf<_CharT, _Traits>* __sbout)
     {
       streamsize __ret = 0;
-      __ineof = true;
       typename _Traits::int_type __c = __sbin->sgetc();
       while (!_Traits::eq_int_type(__c, _Traits::eof()))
 	{
 	  __c = __sbout->sputc(_Traits::to_char_type(__c));
 	  if (_Traits::eq_int_type(__c, _Traits::eof()))
-	    {
-	      __ineof = false;
-	      break;
-	    }
+	    break;
 	  ++__ret;
 	  __c = __sbin->snextc();
 	}
       return __ret;
-    }
-
-  template<typename _CharT, typename _Traits>
-    inline streamsize
-    __copy_streambufs(basic_streambuf<_CharT, _Traits>* __sbin,
-		      basic_streambuf<_CharT, _Traits>* __sbout)
-    {
-      bool __ineof;
-      return __copy_streambufs_eof(__sbin, __sbout, __ineof);
     }
 
   // Inhibit implicit instantiations for required instantiations,
@@ -154,26 +140,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   extern template class basic_streambuf<char>;
   extern template
     streamsize
-    __copy_streambufs(basic_streambuf<char>*,
-		      basic_streambuf<char>*);
-  extern template
-    streamsize
-    __copy_streambufs_eof(basic_streambuf<char>*,
-			  basic_streambuf<char>*, bool&);
+    __copy_streambufs(basic_streambuf<char>*, basic_streambuf<char>*);
 
 #ifdef _GLIBCXX_USE_WCHAR_T
   extern template class basic_streambuf<wchar_t>;
   extern template
     streamsize
-    __copy_streambufs(basic_streambuf<wchar_t>*,
-		      basic_streambuf<wchar_t>*);
-  extern template
-    streamsize
-    __copy_streambufs_eof(basic_streambuf<wchar_t>*,
-			  basic_streambuf<wchar_t>*, bool&);
+    __copy_streambufs(basic_streambuf<wchar_t>*, basic_streambuf<wchar_t>*);
 #endif
 #endif
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif

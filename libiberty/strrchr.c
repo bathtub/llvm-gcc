@@ -16,7 +16,9 @@ null character, the results are undefined.
 #include <ansidecl.h>
 
 char *
-strrchr (register const char *s, int c)
+strrchr (s, c)
+  register const char *s;
+  int c;
 {
   char *rtnval = 0;
 

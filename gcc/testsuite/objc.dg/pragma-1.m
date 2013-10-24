@@ -1,7 +1,24 @@
-/* { dg-do compile { target *-*-darwin* } } */
-/* ??? Is there a better pragma that is handled for all targets, not
-   handled by the preprocessor, that would be better for testing here?  */
+/* APPLE LOCAL file mainline */
+/* It is OK to use #pragma inside @implementation body. This test checks that.  */
+/* Ziemowit Laski  <zlaski@apple.com>.  */
 
-@interface a {}
-#pragma mark --- Output ---
+@interface A
+{
+   int p;
+}
++(int) foo;
+-(int) bar;
+@end
+
+@implementation A
+#pragma mark -
+#pragma mark init / dealloc
++ (int)foo {
+  return 1;
+}
+#pragma mark -
+#pragma mark Private Functions
+- (int)bar {
+  return 2;
+}
 @end

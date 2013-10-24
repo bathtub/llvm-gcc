@@ -18,15 +18,12 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "fixlib.h"
 
 #include <sys/stat.h>
-#ifndef SEPARATE_FIX_PROC
-#include <sys/wait.h>
-#endif
 
 #if defined( HAVE_MMAP_FILE )
 #include <sys/mman.h>
@@ -454,7 +451,7 @@ run_compiles (void)
 {
   tFixDesc *p_fixd = fixDescList;
   int fix_ct = FIX_COUNT;
-  regex_t *p_re = XCNEWVEC (regex_t, REGEX_COUNT);
+  regex_t *p_re = xcalloc (REGEX_COUNT, sizeof (regex_t));
 
   /*  Make sure compile_re does not stumble across invalid data */
 
@@ -869,7 +866,7 @@ fix_with_system (tFixDesc* p_fixd,
               + strlen (pz_temp_file);
 
       /* Allocate something sure to be big enough for our purposes */
-      pz_cmd = XNEWVEC (char, argsize);
+      pz_cmd = xmalloc (argsize);
       strcpy (pz_cmd, pz_orig_dir);
       pz_scan = pz_cmd + strlen (pz_orig_dir);
 
@@ -936,7 +933,7 @@ fix_with_system (tFixDesc* p_fixd,
         }
 
       /* Estimated buffer size we will need.  */
-      pz_scan = pz_cmd = XNEWVEC (char, argsize);
+      pz_scan = pz_cmd = xmalloc (argsize);
       /* How much of it do we allot to the program name and its
          arguments.  */
       parg_size = argsize - parg_size;
@@ -1023,7 +1020,7 @@ start_fixer (int read_fd, tFixDesc* p_fixd, char* pz_fix_file)
   else
     {
       tSCC z_cmd_fmt[] = "file='%s'\n%s";
-      pz_cmd = XNEWVEC (char, strlen (p_fixd->patch_args[2])
+      pz_cmd = xmalloc (strlen (p_fixd->patch_args[2])
 			+ sizeof (z_cmd_fmt) + strlen (pz_fix_file));
       sprintf (pz_cmd, z_cmd_fmt, pz_fix_file, p_fixd->patch_args[2]);
       pz_cmd_save = p_fixd->patch_args[2];
@@ -1202,10 +1199,7 @@ write_replacement (tFixDesc* p_fixd)
 
    {
      FILE* out_fp = create_file ();
-     size_t sz = strlen (pz_text);
-     fwrite (pz_text, sz, 1, out_fp);
-     if (pz_text[ sz-1 ] != '\n')
-       fputc ('\n', out_fp);
+     fputs (pz_text, out_fp);
      fclose (out_fp);
    }
 }

@@ -122,6 +122,7 @@
 (define_cpu_unit "athlon-fadd" "athlon_fp")
 (define_cpu_unit "athlon-fmul" "athlon_fp")
 (define_cpu_unit "athlon-fstore" "athlon_fp")
+; APPLE LOCAL begin mainline 2006-04-19 4434601
 (define_reservation "athlon-fany" "(athlon-fstore | athlon-fmul | athlon-fadd)")
 (define_reservation "athlon-faddmul" "(athlon-fadd | athlon-fmul)")
 
@@ -343,7 +344,7 @@
 			 "athlon-direct,(athlon-fpsched+athlon-agu),(athlon-fstore+athlon-store)")
 (define_insn_reservation "athlon_fist" 4
 			 (and (eq_attr "cpu" "athlon,k8,generic64")
-			      (eq_attr "type" "fistp,fisttp"))
+			      (eq_attr "type" "fistp"))
 			 "athlon-direct,(athlon-fpsched+athlon-agu),(athlon-fstore+athlon-store)")
 (define_insn_reservation "athlon_fmov" 2
 			 (and (eq_attr "cpu" "athlon,k8,generic64")
@@ -872,3 +873,4 @@
 			 (and (eq_attr "cpu" "k8,generic64")
 			      (eq_attr "type" "ssediv"))
 			 "athlon-double,athlon-fmul*34")
+; APPLE LOCAL end mainline 2006-04-19 4434601

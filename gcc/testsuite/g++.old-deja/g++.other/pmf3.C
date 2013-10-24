@@ -5,11 +5,11 @@
 template<class T>
   void connect_to_method(
     T *receiver,
-    void (T::*method)()) // { dg-error "candidates are" }
+    void (T::*method)())
   {}
 
 class Gtk_Base
-{
+{ 
 public:
   void expose();
   void show();

@@ -1,6 +1,4 @@
 ;; Predicate definitions for the Blackfin.
-;; Copyright (C) 2005, 2006  Free Software Foundation, Inc.
-;; Contributed by Analog Devices.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -16,8 +14,8 @@
 ;;
 ;; You should have received a copy of the GNU General Public License
 ;; along with GCC; see the file COPYING.  If not, write to
-;; the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-;; Boston, MA 02110-1301, USA.
+;; the Free Software Foundation, 59 Temple Place - Suite 330,
+;; Boston, MA 02111-1307, USA.
 
 ;; Return nonzero iff OP is one of the integer constants 1 or 2.
 (define_predicate "pos_scale_operand"
@@ -51,20 +49,6 @@
        (and (match_code "const_int")
 	    (match_test "log2constp (INTVAL (op))"))))
 
-;; Return nonzero if OP is a register or an integer constant.
-(define_predicate "reg_or_const_int_operand"
-  (ior (match_operand 0 "register_operand")
-       (match_code "const_int")))
-
-(define_predicate "const01_operand"
-  (and (match_code "const_int")
-       (match_test "op == const0_rtx || op == const1_rtx")))
-
-(define_predicate "vec_shift_operand"
-  (ior (and (match_code "const_int")
-	    (match_test "INTVAL (op) >= -16 && INTVAL (op) < 15"))
-       (match_operand 0 "register_operand")))
-
 ;; Like register_operand, but make sure that hard regs have a valid mode.
 (define_predicate "valid_reg_operand"
   (match_operand 0 "register_operand")
@@ -76,50 +60,16 @@
   return 1;
 })
 
-;; Return nonzero if OP is a LC register.
-(define_predicate "lc_register_operand"
+;; Return nonzero if OP is the CC register.
+(define_predicate "cc_operand"
   (and (match_code "reg")
-       (match_test "REGNO (op) == REG_LC0 || REGNO (op) == REG_LC1")))
-
-;; Return nonzero if OP is a LT register.
-(define_predicate "lt_register_operand"
-  (and (match_code "reg")
-       (match_test "REGNO (op) == REG_LT0 || REGNO (op) == REG_LT1")))
-
-;; Return nonzero if OP is a LB register.
-(define_predicate "lb_register_operand"
-  (and (match_code "reg")
-       (match_test "REGNO (op) == REG_LB0 || REGNO (op) == REG_LB1")))
+       (match_test "REGNO (op) == REG_CC && GET_MODE (op) == BImode")))
 
 ;; Return nonzero if OP is a register or a 7 bit signed constant.
 (define_predicate "reg_or_7bit_operand"
   (ior (match_operand 0 "register_operand")
        (and (match_code "const_int")
 	    (match_test "CONST_7BIT_IMM_P (INTVAL (op))"))))
-
-;; Return nonzero if OP is a register other than DREG and PREG.
-(define_predicate "nondp_register_operand"
-  (match_operand 0 "register_operand")
-{
-  unsigned int regno;
-  if (GET_CODE (op) == SUBREG)
-    op = SUBREG_REG (op);
-
-  regno = REGNO (op);
-  return (regno >= FIRST_PSEUDO_REGISTER || !DP_REGNO_P (regno));
-})
-
-;; Return nonzero if OP is a register other than DREG and PREG, or MEM.
-(define_predicate "nondp_reg_or_memory_operand"
-  (ior (match_operand 0 "nondp_register_operand")
-       (match_operand 0 "memory_operand")))
-
-;; Return nonzero if OP is a register or, when negated, a 7 bit signed
-;; constant.
-(define_predicate "reg_or_neg7bit_operand"
-  (ior (match_operand 0 "register_operand")
-       (and (match_code "const_int")
-	    (match_test "CONST_7BIT_IMM_P (-INTVAL (op))"))))
 
 ;; Used for secondary reloads, this function returns 1 if OP is of the
 ;; form (plus (fp) (const_int)).
@@ -151,10 +101,6 @@
   (ior (match_code "const_int,const_double")
        (match_operand 0 "symbolic_operand")))
 
-;; Returns 1 if OP is a SYMBOL_REF.
-(define_predicate "symbol_ref_operand"
-  (match_code "symbol_ref"))
-
 ;; True for any non-virtual or eliminable register.  Used in places where
 ;; instantiation of such a register may cause the pattern to not be recognized.
 (define_predicate "register_no_elim_operand"
@@ -168,6 +114,23 @@
 	       && REGNO (op) <= LAST_VIRTUAL_REGISTER));
 })
 
+;; Test for a valid operand for a call instruction.  Don't allow the
+;; arg pointer register or virtual regs since they may decay into
+;; reg + const, which the patterns can't handle.
+;; We only allow SYMBOL_REF if !flag_pic.
+(define_predicate "call_insn_operand"
+  (ior (and (match_test "!flag_pic") (match_code "symbol_ref"))
+       (match_operand 0 "register_no_elim_operand")))
+
 ;; Test for an operator valid in a conditional branch
 (define_predicate "bfin_cbranch_operator"
   (match_code "eq,ne"))
+
+(define_predicate "validreg_operand"
+  (match_operand 0 "register_operand")
+{
+  if (GET_CODE (op) == SUBREG)
+    op = SUBREG_REG (op);
+  return (REGNO (op) >= FIRST_PSEUDO_REGISTER
+	  || HARD_REGNO_MODE_OK (REGNO (op), mode));
+})

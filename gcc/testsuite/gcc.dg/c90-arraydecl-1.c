@@ -2,7 +2,7 @@
 /* Origin: Joseph Myers <jsm28@cam.ac.uk> */
 /* { dg-do compile } */
 /* { dg-options "-std=iso9899:1990 -pedantic-errors" } */
-
+/* APPLE LOCAL file mainline 2006-05-18 4336222 */
 /* Use of [*] (possibly with type qualifiers) in an array declarator with
    function prototype scope is a C99 feature.  GCC does not yet implement
    it correctly, so gives a warning about this. so we can't yet test here

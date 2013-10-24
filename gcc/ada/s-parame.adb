@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1995-2005, Free Software Foundation, Inc.         --
+--          Copyright (C) 1995-2001 Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,8 +31,6 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
---  This is the default (used on all native platforms) version of this package
-
 package body System.Parameters is
 
    -------------------------
@@ -43,8 +41,10 @@ package body System.Parameters is
    begin
       if Size = Unspecified_Size then
          return Default_Stack_Size;
+
       elsif Size < Minimum_Stack_Size then
          return Minimum_Stack_Size;
+
       else
          return Size;
       end if;
@@ -55,14 +55,8 @@ package body System.Parameters is
    ------------------------
 
    function Default_Stack_Size return Size_Type is
-      Default_Stack_Size : Integer;
-      pragma Import (C, Default_Stack_Size, "__gl_default_stack_size");
    begin
-      if Default_Stack_Size = -1 then
-         return 2 * 1024 * 1024;
-      else
-         return Size_Type (Default_Stack_Size);
-      end if;
+      return 20 * 1024;
    end Default_Stack_Size;
 
    ------------------------
@@ -71,10 +65,7 @@ package body System.Parameters is
 
    function Minimum_Stack_Size return Size_Type is
    begin
-      --  12K is required for stack-checking to work reliably on most platforms
-      --  when using the GCC scheme to propagate an exception in the ZCX case.
-
-      return 12 * 1024;
+      return 8 * 1024;
    end Minimum_Stack_Size;
 
 end System.Parameters;

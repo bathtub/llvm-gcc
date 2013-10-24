@@ -14,8 +14,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /*
 
@@ -29,9 +29,6 @@ valid until at least the next call.
 
 */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "ansidecl.h"
 #include "libiberty.h"
 
@@ -40,12 +37,13 @@ valid until at least the next call.
 #include <unixlib.h>
 #else
 /* For systems with larger pointers than ints, these must be declared.  */
-extern PTR malloc (size_t);
-extern void free (PTR);
+extern PTR malloc PARAMS ((size_t));
+extern void free PARAMS ((PTR));
 #endif
 
 const char *
-spaces (int count)
+spaces (count)
+  int count;
 {
   register char *t;
   static char *buf;
@@ -57,7 +55,7 @@ spaces (int count)
 	{
 	  free (buf);
 	}
-      buf = (char *) malloc (count + 1);
+      buf = malloc (count + 1);
       if (buf == (char *) 0)
 	return 0;
       for (t = buf + count ; t != buf ; )

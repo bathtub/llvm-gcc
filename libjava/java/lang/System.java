@@ -1,5 +1,5 @@
 /* System.java -- useful methods to interface with the system
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004
    Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,7 +39,7 @@ exception statement from your version. */
 
 package java.lang;
 
-import gnu.classpath.SystemProperties;
+import gnu.classpath.Configuration;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -64,6 +64,77 @@ public final class System
 {
   // WARNING: System is a CORE class in the bootstrap cycle. See the comments
   // in vm/reference/java/lang/Runtime for implications of this fact.
+
+  /**
+   * Add to the default properties. The field is stored in Runtime, because
+   * of the bootstrap sequence; but this adds several useful properties to
+   * the defaults. Once the default is stabilized, it should not be modified;
+   * instead it is passed as a parent properties for fast setup of the
+   * defaults when calling <code>setProperties(null)</code>.
+   */
+  static
+  {
+    // Note that this loadLibrary() takes precedence over the one in Object,
+    // since Object.<clinit> is waiting for System.<clinit> to complete
+    // first; but loading a library twice is harmless.
+    if (Configuration.INIT_LOAD_LIBRARY)
+      loadLibrary("javalang");
+
+    Properties defaultProperties = Runtime.defaultProperties;
+
+    // Set base URL if not already set.
+    if (defaultProperties.get("gnu.classpath.home.url") == null)
+      defaultProperties.put("gnu.classpath.home.url",
+			    "file://"
+			    + defaultProperties.get("gnu.classpath.home")
+			    + "/lib");
+
+    // Set short name if not already set.
+    if (defaultProperties.get("gnu.classpath.vm.shortname") == null)
+      {
+	String value = defaultProperties.getProperty("java.vm.name");
+	int index = value.lastIndexOf(' ');
+	if (index != -1)
+	  value = value.substring(index + 1);
+	defaultProperties.put("gnu.classpath.vm.shortname", value);
+      }
+
+    // Network properties
+    if (defaultProperties.get("http.agent") == null)
+      {
+	String userAgent
+	  = ("gnu-classpath/"
+	     + defaultProperties.getProperty("gnu.classpath.version")
+	     + " ("
+	     + defaultProperties.getProperty("gnu.classpath.vm.shortname")
+	     + "/"
+	     + defaultProperties.getProperty("java.vm.version")
+	     + ")");
+	defaultProperties.put("http.agent", userAgent);
+      }
+
+    defaultProperties.put("gnu.cpu.endian",
+			  isWordsBigEndian() ? "big" : "little");
+
+    // GCJ LOCAL: Classpath sets common encoding aliases here.
+    // Since we don't (yet) have gnu.java.io.EncodingManager, these
+    // are a waste of time and just slow down system startup.
+
+    // XXX FIXME - Temp hack for old systems that set the wrong property
+    if (defaultProperties.get("java.io.tmpdir") == null)
+      defaultProperties.put("java.io.tmpdir",
+                            defaultProperties.get("java.tmpdir"));
+  }
+
+  /**
+   * Stores the current system properties. This can be modified by
+   * {@link #setProperties(Properties)}, but will never be null, because
+   * setProperties(null) sucks in the default properties.
+   */
+  // Note that we use clone here and not new.  Some programs assume
+  // that the system properties do not have a parent.
+  static Properties properties
+    = (Properties) Runtime.defaultProperties.clone();
 
   /**
    * The standard InputStream. This is assigned at startup and starts its
@@ -120,7 +191,7 @@ public final class System
    */
   public static void setIn(InputStream in)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPermission(new RuntimePermission("setIO"));
     setIn0(in);
@@ -137,7 +208,7 @@ public final class System
    */
   public static void setOut(PrintStream out)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPermission(new RuntimePermission("setIO"));
     
@@ -155,7 +226,7 @@ public final class System
    */
   public static void setErr(PrintStream err)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPermission(new RuntimePermission("setIO"));
     setErr0(err);
@@ -167,18 +238,23 @@ public final class System
    * first. Since this permission is denied by the default security manager,
    * setting the security manager is often an irreversible action.
    *
+   * <STRONG>Spec Note:</STRONG> Don't ask me, I didn't write it.  It looks
+   * pretty vulnerable; whoever gets to the gate first gets to set the policy.
+   * There is probably some way to set the original security manager as a
+   * command line argument to the VM, but I don't know it.
+   *
    * @param sm the new SecurityManager
    * @throws SecurityException if permission is denied
    */
-  public static synchronized void setSecurityManager(SecurityManager sm)
+  public synchronized static void setSecurityManager(SecurityManager sm)
   {
-    // Implementation note: the field lives in SecurityManager because of
-    // bootstrap initialization issues. This method is synchronized so that
-    // no other thread changes it to null before this thread makes the change.
-    if (SecurityManager.current != null)
-      SecurityManager.current.checkPermission
+    // Implementation note: the field lives in Runtime because of bootstrap
+    // initialization issues. This method is synchronized so that no other
+    // thread changes it to null before this thread makes the change.
+    if (Runtime.securityManager != null)
+      Runtime.securityManager.checkPermission
         (new RuntimePermission("setSecurityManager"));
-    SecurityManager.current = sm;
+    Runtime.securityManager = sm;
   }
 
   /**
@@ -189,7 +265,9 @@ public final class System
    */
   public static SecurityManager getSecurityManager()
   {
-    return SecurityManager.current;
+    // Implementation note: the field lives in Runtime because of bootstrap
+    // initialization issues.
+    return Runtime.securityManager;
   }
 
   /**
@@ -201,15 +279,6 @@ public final class System
    * @see java.util.Date
    */
   public static native long currentTimeMillis();
-
-  /**
-   * Get the current time, measured in nanoseconds.  The result is as
-   * precise as possible, and is measured against a fixed epoch.
-   * However, unlike currentTimeMillis(), the epoch chosen is
-   * arbitrary and may vary by platform, etc.
-   * @since 1.5
-   */
-  public static native long nanoTime();
 
   /**
    * Copy one array onto another from <code>src[srcStart]</code> ...
@@ -311,10 +380,10 @@ public final class System
    */
   public static Properties getProperties()
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPropertiesAccess();
-    return SystemProperties.getProperties();
+    return properties;
   }
 
   /**
@@ -328,10 +397,16 @@ public final class System
    */
   public static void setProperties(Properties properties)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPropertiesAccess();
-    SystemProperties.setProperties(properties);
+    if (properties == null)
+      {
+	// Note that we use clone here and not new.  Some programs
+	// assume that the system properties do not have a parent.
+	properties = (Properties) Runtime.defaultProperties.clone();
+      }
+    System.properties = properties;
   }
 
   /**
@@ -346,12 +421,12 @@ public final class System
    */
   public static String getProperty(String key)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPropertyAccess(key);
     else if (key.length() == 0)
       throw new IllegalArgumentException("key can't be empty");
-    return SystemProperties.getProperty(key);
+    return properties.getProperty(key);
   }
 
   /**
@@ -367,10 +442,10 @@ public final class System
    */
   public static String getProperty(String key, String def)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPropertyAccess(key);
-    return SystemProperties.getProperty(key, def);
+    return properties.getProperty(key, def);
   }
 
   /**
@@ -387,31 +462,28 @@ public final class System
    */
   public static String setProperty(String key, String value)
   {
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
       sm.checkPermission(new PropertyPermission(key, "write"));
-    return SystemProperties.setProperty(key, value);
+    return (String) properties.setProperty(key, value);
   }
 
   /**
    * Gets the value of an environment variable.
    *
    * @param name the name of the environment variable
-   * @return the string value of the variable or null when the
-   *         environment variable is not defined.
+   * @return the string value of the variable
    * @throws NullPointerException
    * @throws SecurityException if permission is denied
    * @since 1.5
-   * @specnote This method was deprecated in some JDK releases, but
-   *           was restored in 1.5.
    */
   public static String getenv(String name)
   {
     if (name == null)
       throw new NullPointerException();
-    SecurityManager sm = SecurityManager.current; // Be thread-safe.
+    SecurityManager sm = Runtime.securityManager; // Be thread-safe.
     if (sm != null)
-      sm.checkPermission(new RuntimePermission("getenv." + name));
+      sm.checkPermission(new RuntimePermission("getenv."+name));
     return getenv0(name);
   }
 
@@ -481,10 +553,6 @@ public final class System
    * check may be performed, <code>checkLink</code>. This just calls
    * <code>Runtime.getRuntime().load(filename)</code>.
    *
-   * <p>
-   * The library is loaded using the class loader associated with the
-   * class associated with the invoking method.
-   *
    * @param filename the code file to load
    * @throws SecurityException if permission is denied
    * @throws UnsatisfiedLinkError if the file cannot be loaded
@@ -499,10 +567,6 @@ public final class System
    * Load a library using its explicit system-dependent filename. A security
    * check may be performed, <code>checkLink</code>. This just calls
    * <code>Runtime.getRuntime().load(filename)</code>.
-   *
-   * <p>
-   * The library is loaded using the class loader associated with the
-   * class associated with the invoking method.
    *
    * @param libname the library file to load
    * @throws SecurityException if permission is denied
@@ -526,6 +590,13 @@ public final class System
     // XXX Fix this!!!!
     return Runtime.nativeGetLibname("", libname);
   }
+
+  /**
+   * Detect big-endian systems.
+   *
+   * @return true if the system is big-endian.
+   */
+  static native boolean isWordsBigEndian();
 
   /**
    * Set {@link #in} to a new InputStream.

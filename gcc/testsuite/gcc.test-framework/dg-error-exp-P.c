@@ -4,6 +4,6 @@
 
 int main (int argc, char *argv[])
 {
-  +;		/* { dg-error "expected expression" "error test" } */
+  +;		/* { dg-error "syntax error" "error test" } */
   return 0;
 }

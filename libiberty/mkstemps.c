@@ -13,8 +13,8 @@
 
    You should have received a copy of the GNU Library General Public
    License along with the GNU C Library; see the file COPYING.LIB.  If not,
-   write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -49,23 +49,19 @@ typedef unsigned long gcc_uint64_t;
 #define TMP_MAX 16384
 #endif
 
-#ifndef O_BINARY
-# define O_BINARY 0
-#endif
-
 /*
 
-@deftypefn Replacement int mkstemps (char *@var{pattern}, int @var{suffix_len})
+@deftypefn Replacement int mkstemps (char *@var{template}, int @var{suffix_len})
 
-Generate a unique temporary file name from @var{pattern}.
-@var{pattern} has the form:
+Generate a unique temporary file name from @var{template}.
+@var{template} has the form:
 
 @example
    @var{path}/ccXXXXXX@var{suffix}
 @end example
 
 @var{suffix_len} tells us how long @var{suffix} is (it can be zero
-length).  The last six characters of @var{pattern} before @var{suffix}
+length).  The last six characters of @var{template} before @var{suffix}
 must be @samp{XXXXXX}; they are replaced with a string that makes the
 filename unique.  Returns a file descriptor open on the file for
 reading and writing.
@@ -75,7 +71,9 @@ reading and writing.
 */
 
 int
-mkstemps (char *pattern, int suffix_len)
+mkstemps (template, suffix_len)
+     char *template;
+     int suffix_len;
 {
   static const char letters[]
     = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -87,15 +85,15 @@ mkstemps (char *pattern, int suffix_len)
   size_t len;
   int count;
 
-  len = strlen (pattern);
+  len = strlen (template);
 
   if ((int) len < 6 + suffix_len
-      || strncmp (&pattern[len - 6 - suffix_len], "XXXXXX", 6))
+      || strncmp (&template[len - 6 - suffix_len], "XXXXXX", 6))
     {
       return -1;
     }
 
-  XXXXXX = &pattern[len - 6 - suffix_len];
+  XXXXXX = &template[len - 6 - suffix_len];
 
 #ifdef HAVE_GETTIMEOFDAY
   /* Get some more or less random data.  */
@@ -123,7 +121,7 @@ mkstemps (char *pattern, int suffix_len)
       v /= 62;
       XXXXXX[5] = letters[v % 62];
 
-      fd = open (pattern, O_BINARY|O_RDWR|O_CREAT|O_EXCL, 0600);
+      fd = open (template, O_RDWR|O_CREAT|O_EXCL, 0600);
       if (fd >= 0)
 	/* The file does not exist.  */
 	return fd;
@@ -135,6 +133,6 @@ mkstemps (char *pattern, int suffix_len)
     }
 
   /* We return the null string if we can't find a unique file name.  */
-  pattern[0] = '\0';
+  template[0] = '\0';
   return -1;
 }

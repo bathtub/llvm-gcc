@@ -1,5 +1,5 @@
 /* Implement the vsnprintf function.
-   Copyright (C) 2003, 2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 2003 Free Software Foundation, Inc.
    Written by Kaveh R. Ghazi <ghazi@caip.rutgers.edu>.
 
 This file is part of the libiberty library.  This library is free
@@ -15,7 +15,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU CC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.
+the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 As a special exception, if you link this library with files
 compiled with a GNU compiler to produce an executable, this does not cause
@@ -42,7 +42,11 @@ system version of this function is used.
 #include "config.h"
 #include "ansidecl.h"
 
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
@@ -54,7 +58,11 @@ system version of this function is used.
 
 /* This implementation relies on a working vasprintf.  */
 int
-vsnprintf (char *s, size_t n, const char *format, va_list ap)
+vsnprintf (s, n, format, ap)
+     char * s;
+     size_t n;
+     const char *format;
+     va_list ap;
 {
   char *buf = 0;
   int result = vasprintf (&buf, format, ap);
@@ -89,7 +97,7 @@ vsnprintf (char *s, size_t n, const char *format, va_list ap)
 #define VERIFY(P) do { if (!(P)) abort(); } while (0)
 
 static int ATTRIBUTE_PRINTF_3
-checkit (char *s, size_t n, const char *format, ...)
+checkit VPARAMS ((char *s, size_t n, const char *format, ...))
 {
   int result;
   VA_OPEN (ap, format);
@@ -101,9 +109,9 @@ checkit (char *s, size_t n, const char *format, ...)
   return result;
 }
 
-extern int main (void);
+extern int main PARAMS ((void));
 int
-main (void)
+main ()
 {
   char buf[128];
   int status;

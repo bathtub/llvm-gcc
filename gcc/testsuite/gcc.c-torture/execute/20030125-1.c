@@ -16,6 +16,11 @@ q1(float a)
 {
 	return floor(a);
 }
+float
+q2(double a)
+{
+	return floor(a);
+}
 main()
 {
 #ifdef __OPTIMIZE__
@@ -24,6 +29,8 @@ main()
 	if (q(0)!=0)
 		abort ();
 	if (q1(0)!=0)
+		abort ();
+	if (q2(0)!=0)
 		abort ();
 #endif
 	return 0;

@@ -27,5 +27,3 @@ int main(void)
 
 /* And one if (for the exit condition of the loop):  */
 /* { dg-final { scan-tree-dump-times "if " 1 "cddce"} } */
-
-/* { dg-final { cleanup-tree-dump "cddce" } } */

@@ -1,6 +1,5 @@
 /* { dg-do compile } */
 /* { dg-options "-O2 -fPIC" } */
-/* { dg-require-effective-target tls } */
 
 static __thread void *baz [4] __attribute__((tls_model ("initial-exec")));
 void foo (void)

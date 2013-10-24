@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 1998-2006, AdaCore                     --
+--            Copyright (C) 1998-2005 Ada Core Technologies, Inc.           --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -33,6 +33,7 @@
 
 with Ada.Characters.Handling;
 with Ada.Strings.Fixed;
+with Ada.Strings.Maps;
 
 with Unchecked_Deallocation;
 with Unchecked_Conversion;
@@ -104,11 +105,11 @@ package body GNAT.Directory_Operations is
             Cut_Start := Cut_Start + 1;
          end if;
 
-         --  Cut_End point to the last basename character
+         --  Cut_End point to the last basename character.
 
          Cut_End := Path'Last;
 
-         --  If basename ends with Suffix, adjust Cut_End
+         --  If basename ends with Suffix, adjust Cut_End.
 
          if Suffix /= ""
            and then Path (Path'Last - Suffix'Length + 1 .. Cut_End) = Suffix
@@ -185,9 +186,6 @@ package body GNAT.Directory_Operations is
    procedure Close (Dir : in out Dir_Type) is
       Discard : Integer;
       pragma Warnings (Off, Discard);
-
-      function closedir (directory : DIRs) return Integer;
-      pragma Import (C, closedir, "__gnat_closedir");
 
    begin
       if not Is_Open (Dir) then
@@ -281,7 +279,8 @@ package body GNAT.Directory_Operations is
 
       procedure Double_Result_Size is
          New_Result : constant OS_Lib.String_Access :=
-                        new String (1 .. 2 * Result'Last);
+           new String (1 .. 2 * Result'Last);
+
       begin
          New_Result (1 .. Result_Last) := Result (1 .. Result_Last);
          OS_Lib.Free (Result);
@@ -307,7 +306,6 @@ package body GNAT.Directory_Operations is
 
       procedure Read (K : in out Positive) is
          P : Character;
-
       begin
          For_All_Characters : loop
             if Is_Var_Prefix (Path (K)) then
@@ -316,6 +314,7 @@ package body GNAT.Directory_Operations is
                --  Could be a variable
 
                if K < Path'Last then
+
                   if Path (K + 1) = P then
 
                      --  Not a variable after all, this is a double $ or %,
@@ -567,6 +566,7 @@ package body GNAT.Directory_Operations is
    function Get_Current_Dir return Dir_Name_Str is
       Current_Dir : String (1 .. Max_Path + 1);
       Last        : Natural;
+
    begin
       Get_Current_Dir (Current_Dir, Last);
       return Current_Dir (1 .. Last);
@@ -627,9 +627,6 @@ package body GNAT.Directory_Operations is
      (Dir      : out Dir_Type;
       Dir_Name : Dir_Name_Str)
    is
-      function opendir (file_name : String) return DIRs;
-      pragma Import (C, opendir, "__gnat_opendir");
-
       C_File_Name : constant String := Dir_Name & ASCII.NUL;
 
    begin
@@ -652,7 +649,7 @@ package body GNAT.Directory_Operations is
       Last : out Natural)
    is
       Filename_Addr : Address;
-      Filename_Len  : aliased Integer;
+      Filename_Len  : Integer;
 
       Buffer : array (0 .. Filename_Max + 12) of Character;
       --  12 is the size of the dirent structure (see dirent.h), without the
@@ -660,9 +657,11 @@ package body GNAT.Directory_Operations is
 
       function readdir_gnat
         (Directory : System.Address;
-         Buffer    : System.Address;
-         Last      : access Integer) return System.Address;
+         Buffer    : System.Address) return System.Address;
       pragma Import (C, readdir_gnat, "__gnat_readdir");
+
+      function strlen (S : Address) return Integer;
+      pragma Import (C, strlen, "strlen");
 
    begin
       if not Is_Open (Dir) then
@@ -670,13 +669,14 @@ package body GNAT.Directory_Operations is
       end if;
 
       Filename_Addr :=
-        readdir_gnat
-          (System.Address (Dir.all), Buffer'Address, Filename_Len'Access);
+        readdir_gnat (System.Address (Dir.all), Buffer'Address);
 
       if Filename_Addr = System.Null_Address then
          Last := 0;
          return;
       end if;
+
+      Filename_Len  := strlen (Filename_Addr);
 
       if Str'Length > Filename_Len then
          Last := Str'First + Filename_Len - 1;
@@ -708,9 +708,11 @@ package body GNAT.Directory_Operations is
    -------------------------
 
    function Read_Is_Thread_Safe return Boolean is
+
       function readdir_is_thread_safe return Integer;
       pragma Import
         (C, readdir_is_thread_safe, "__gnat_readdir_is_thread_safe");
+
    begin
       return (readdir_is_thread_safe /= 0);
    end Read_Is_Thread_Safe;

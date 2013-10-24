@@ -25,36 +25,61 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <string.h>
 #include "libgfortran.h"
 #include "io.h"
 
+st_parameter ioparm = { };
+iexport_data(ioparm);
+
+namelist_info *ionml = 0;
+global_t g = { };
+
+
 /* library_start()-- Called with a library call is entered.  */
 
 void
-library_start (st_parameter_common *cmp)
+library_start (void)
 {
-  if ((cmp->flags & IOPARM_HAS_IOSTAT) != 0)
-    *cmp->iostat = ERROR_OK;
+  if (g.in_library)
+    internal_error ("Recursive library calls not allowed");
 
-  cmp->flags &= ~IOPARM_LIBRETURN_MASK;
+  /* The in_library flag indicates whether we're currently processing a
+     library call.  Some calls leave immediately, but READ and WRITE
+     processing return control to the caller but are still considered to
+     stay within the library. */
+  g.in_library = 1;
+
+  if (ioparm.iostat != NULL && ioparm.library_return == LIBRARY_OK)
+    *ioparm.iostat = ERROR_OK;
+
+  ioparm.library_return = LIBRARY_OK;
 }
 
 
+/* library_end()-- Called when a library call is complete in order to
+   clean up for the next call. */
+
 void
-free_ionml (st_parameter_dt *dtp)
+library_end (void)
 {
+  int t;
   namelist_info * t1, *t2;
+
+  g.in_library = 0;
+  filename = NULL;
+  line = 0;
+  t = ioparm.library_return;
 
   /* Delete the namelist, if it exists.  */
 
-  if (dtp->u.p.ionml != NULL)
+  if (ionml != NULL)
     {
-      t1 = dtp->u.p.ionml;
+      t1 = ionml;
       while (t1 != NULL)
 	{
 	  t2 = t1;
@@ -68,5 +93,8 @@ free_ionml (st_parameter_dt *dtp)
 	  free_mem (t2);
 	}
     }
-  dtp->u.p.ionml = NULL;
+  ionml = NULL;
+
+  memset (&ioparm, '\0', sizeof (ioparm));
+  ioparm.library_return = t;
 }

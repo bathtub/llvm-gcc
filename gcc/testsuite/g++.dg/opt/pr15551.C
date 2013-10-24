@@ -7,7 +7,6 @@
 
 #include <cstring>
 #include <fstream>
-#include <cstdio>
 using namespace std;
 
 ostream* logfile;
@@ -18,9 +17,6 @@ int main () {
 
   char expList[20000];
   strcpy(expList, "foo");
-
-  delete logfile;
-  remove ("bar");
 
   return 0;
 }

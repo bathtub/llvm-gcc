@@ -24,5 +24,3 @@ int main() {
   foo<int> f;
   f.g();
 }
-
-// { dg-final { cleanup-repo-files } }

@@ -1,10 +1,8 @@
 /* Test for a bogus warning on comparison between signed and unsigned.
-   This was inspired by code in gcc.  This testcase is identical to
-   compare9.c except that we use -fno-short-enums here and expect a
-   warning from case 4.  */
+   This was inspired by code in gcc. */
 
 /* { dg-do compile } */
-/* { dg-options "-fno-short-enums -Wsign-compare" } */
+/* { dg-options "-Wsign-compare" } */
 
 int tf = 1;
 

@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* bf-no-ms-layout.c */
 
 /* Test for gcc bitfield layout, with -mno-ms-bitfields */

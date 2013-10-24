@@ -2,8 +2,12 @@
 /* Origin: Waldek Hebisch <hebisch@math.uni.wroc.pl> */
 
 /* { dg-do run } */
-/* { dg-options "-O2" } */
-
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-O2 -fnested-functions" } */
+/* APPLE LOCAL testsuite nested functions */
+/* Weird, if one adds -lgcc, then it works, seems like ar isn't pulling all it needs to out of a single .a file (libgcc.a.  */
+/* APPLE LOCAL ARM stack not executable */
+/* { dg-skip-if "" { arm*-*-darwin* } { "*" } { "" } } */
 /* This used to fail on various versions of Solaris 2 because the
    trampoline couldn't be made executable.  */
 

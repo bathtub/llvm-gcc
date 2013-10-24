@@ -13,14 +13,19 @@ Uses @code{malloc} to allocate storage for @var{nelem} objects of
 */
  
 #include "ansidecl.h"
+#ifdef ANSI_PROTOTYPES
 #include <stddef.h>
+#else
+#define size_t unsigned long
+#endif
 
 /* For systems with larger pointers than ints, this must be declared.  */
-PTR malloc (size_t);
-void bzero (PTR, size_t);
+PTR malloc PARAMS ((size_t));
+void bzero PARAMS ((PTR, size_t));
 
 PTR
-calloc (size_t nelem, size_t elsize)
+calloc (nelem, elsize)
+  size_t nelem, elsize;
 {
   register PTR ptr;  
 

@@ -31,4 +31,3 @@ voidify_wrapper_expr (tree wrapper)
 
 /* There should be no IF conditionals.  */
 /* { dg-final { scan-tree-dump-times "if " 0 "dom3"} } */
-/* { dg-final { cleanup-tree-dump "dom3" } } */

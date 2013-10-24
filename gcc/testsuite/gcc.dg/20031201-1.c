@@ -4,7 +4,7 @@
    the jump bypassing pass.  */
 
 /* { dg-do compile } */
-/* { dg-options "-O2 -fno-expensive-optimizations" } */
+/* { dg-options "-O2 -fno-expensive-optimizations -fno-rerun-loop-opt" } */
 
 int outbuf[100];
 int outcnt;

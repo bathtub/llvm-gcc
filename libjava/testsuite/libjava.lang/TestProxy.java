@@ -3,7 +3,7 @@ import java.net.*;
 
 public class TestProxy
 {
-  public static class MyInvocationHandler implements InvocationHandler
+  public class MyInvocationHandler implements InvocationHandler
   {
     public Object invoke (Object proxy,
 			  Method method,

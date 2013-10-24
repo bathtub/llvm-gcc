@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -64,8 +64,8 @@
 #include <bits/cpp_type_traits.h>
 #include <new>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   /**
    * @if maint
    * Constructs an object in existing memory by invoking an allocated
@@ -174,15 +174,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	__alloc.destroy(&*__first);
     }
 
-  template<typename _ForwardIterator, typename _Tp>
+  template<typename _ForwardIterator, typename _Allocator, typename _Tp>
     inline void
     _Destroy(_ForwardIterator __first, _ForwardIterator __last,
 	     allocator<_Tp>)
     {
       _Destroy(__first, __last);
     }
+   
 
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif /* _STL_CONSTRUCT_H */
 

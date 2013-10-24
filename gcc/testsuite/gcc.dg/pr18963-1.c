@@ -1,5 +1,6 @@
 /* { dg-do run } */
-/* { dg-options "" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-fnested-functions" } */
 
 static int barf ();
 

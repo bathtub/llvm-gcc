@@ -24,16 +24,6 @@
    OTHER DEALINGS IN THE SOFTWARE.
    ----------------------------------------------------------------------- */
 
-#if defined(__ppc64__)
-#define MODE_CHOICE(x, y) y
-#else
-#define MODE_CHOICE(x, y) x
-#endif
-
-#define g_long  MODE_CHOICE(long, quad)         /* usage is ".g_long" */
-
-#define LOG2_GPR_BYTES  MODE_CHOICE(2,3)        /* log2(GPR_BYTES) */
-
 #define LIBFFI_ASM
 #include <fficonfig.h>
 #include <ffi.h>
@@ -200,7 +190,7 @@ LSCIE1:
 	.byte	0xc	; DW_CFA_def_cfa
 	.byte	0x1	; uleb128 0x1
 	.byte	0x0	; uleb128 0x0
-	.align	LOG2_GPR_BYTES
+	.align	2
 LECIE1:
 .globl _ffi_call_DARWIN.eh
 _ffi_call_DARWIN.eh:
@@ -209,9 +199,9 @@ LSFDE1:
 	.long	L$set$1	; FDE Length
 LASFDE1:
 	.long	LASFDE1-EH_frame1 ; FDE CIE offset
-	.g_long	LLFB0$non_lazy_ptr-.	; FDE initial location
+	.long	LLFB0$non_lazy_ptr-.	; FDE initial location
 	.set	L$set$3,LFE1-LFB0
-	.g_long	L$set$3	; FDE address range
+	.long	L$set$3	; FDE address range
 	.byte   0x0     ; uleb128 0x0; Augmentation size
 	.byte	0x4	; DW_CFA_advance_loc4
 	.set	L$set$4,LCFI0-LFB1
@@ -237,9 +227,9 @@ LASFDE1:
 	.long	L$set$6
 	.byte	0xd	; DW_CFA_def_cfa_register
 	.byte	0x1c	; uleb128 0x1c
-	.align LOG2_GPR_BYTES
+	.align 2
 LEFDE1:
 .data
-	.align LOG2_GPR_BYTES
+	.align 2
 LLFB0$non_lazy_ptr:
-	.g_long LFB0
+	.long   LFB0

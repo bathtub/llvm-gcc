@@ -1,14 +1,14 @@
 // { dg-do assemble  }
 
-const char *a="aê";
+char *a="aê";
 
 class A
 {
 public:
 	A()
 	{
-		const char *b="aê";
+		char *b="aê";
 	}
 };
 
-const char *c="aê";
+char *c="aê";

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---                     Copyright (C) 2000-2005 AdaCore                      --
+--            Copyright (C) 2000-2003 Ada Core Technologies, Inc.           --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -65,7 +65,7 @@ package body GNAT.AWK is
 
       procedure Current_Line (S : Mode; Session : Session_Type)
         is abstract;
-      --  Split current line of Session using split mode S
+      --  Split Session's current line using split mode.
 
       ------------------------
       -- Split on separator --
@@ -102,7 +102,7 @@ package body GNAT.AWK is
 
    package File_Table is
       new Dynamic_Tables (AWK_File, Natural, 1, 5, 50);
-   --  List of file names associated with a Session
+   --  List of filename associated with a Session.
 
    procedure Free is new Unchecked_Deallocation (String, AWK_File);
 
@@ -114,17 +114,17 @@ package body GNAT.AWK is
       First : Positive;
       Last  : Natural;
    end record;
-   --  This is a field slice (First .. Last) in session's current line
+   --  This is a field slice (First .. Last) in session's current line.
 
    package Field_Table is
       new Dynamic_Tables (Field_Slice, Natural, 1, 10, 100);
-   --  List of fields for the current line
+   --  List of fields for the current line.
 
    --------------
    -- Patterns --
    --------------
 
-   --  Define all patterns style: exact string, regular expression, boolean
+   --  Define all patterns style : exact string, regular expression, boolean
    --  function.
 
    package Patterns is
@@ -137,12 +137,13 @@ package body GNAT.AWK is
 
       function Match
         (P       : Pattern;
-         Session : Session_Type) return Boolean
+         Session : Session_Type)
+         return    Boolean
       is abstract;
-      --  Returns True if P match for the current session and False otherwise
+      --  Returns True if P match for the current session and False otherwise.
 
       procedure Release (P : in out Pattern);
-      --  Release memory used by the pattern structure
+      --  Release memory used by the pattern structure.
 
       --------------------------
       -- Exact string pattern --
@@ -155,7 +156,8 @@ package body GNAT.AWK is
 
       function Match
         (P       : String_Pattern;
-         Session : Session_Type) return Boolean;
+         Session : Session_Type)
+         return    Boolean;
 
       --------------------------------
       -- Regular expression pattern --
@@ -170,7 +172,8 @@ package body GNAT.AWK is
 
       function Match
         (P       : Regexp_Pattern;
-         Session : Session_Type) return Boolean;
+         Session : Session_Type)
+         return    Boolean;
 
       procedure Release (P : in out Regexp_Pattern);
 
@@ -184,7 +187,8 @@ package body GNAT.AWK is
 
       function Match
         (P       : Callback_Pattern;
-         Session : Session_Type) return Boolean;
+         Session : Session_Type)
+         return    Boolean;
 
    end Patterns;
 
@@ -207,8 +211,9 @@ package body GNAT.AWK is
 
       procedure Call
         (A       : Action;
-         Session : Session_Type) is abstract;
-      --  Call action A as required
+         Session : Session_Type)
+         is abstract;
+      --  Call action A as required.
 
       -------------------
       -- Simple action --
@@ -266,7 +271,7 @@ package body GNAT.AWK is
       NR           : Natural := 0;
       FNR          : Natural := 0;
       Matches      : Regpat.Match_Array (0 .. 100);
-      --  Latest matches for the regexp pattern
+      --  latest matches for the regexp pattern
    end record;
 
    procedure Free is
@@ -312,13 +317,13 @@ package body GNAT.AWK is
 
    procedure Finalize (Session : in out Session_Type) is
    begin
-      --  We release the session data only if it is not the default session
+      --  We release the session data only if it is not the default session.
 
       if Session.Data /= Def_Session.Data then
          Free (Session.Data);
 
-         --  Since we have closed the current session, set it to point now to
-         --  the default session.
+         --  Since we have closed the current session, set it to point
+         --  now to the default session.
 
          Cur_Session.Data := Def_Session.Data;
       end if;
@@ -329,10 +334,11 @@ package body GNAT.AWK is
    ----------------------
 
    function Always_True return Boolean;
-   --  A function that always returns True
+   --  A function that always returns True.
 
    function Apply_Filters
-     (Session : Session_Type := Current_Session) return Boolean;
+     (Session : Session_Type := Current_Session)
+      return    Boolean;
    --  Apply any filters for which the Pattern is True for Session. It returns
    --  True if a least one filters has been applied (i.e. associated action
    --  callback has been called).
@@ -352,7 +358,7 @@ package body GNAT.AWK is
    --  number and the filename if possible.
 
    procedure Read_Line (Session : Session_Type);
-   --  Read a line for the Session and set Current_Line
+   --  Read a line for the Session and set Current_Line.
 
    procedure Split_Line (Session : Session_Type);
    --  Split session's Current_Line according to the session separators and
@@ -377,6 +383,7 @@ package body GNAT.AWK is
          Session : Session_Type)
       is
          pragma Unreferenced (Session);
+
       begin
          A.Proc.all;
       end Call;
@@ -407,7 +414,8 @@ package body GNAT.AWK is
 
       function Match
         (P       : String_Pattern;
-         Session : Session_Type) return Boolean
+         Session : Session_Type)
+         return    Boolean
       is
       begin
          return P.Str = Field (P.Rank, Session);
@@ -419,9 +427,11 @@ package body GNAT.AWK is
 
       function Match
         (P       : Regexp_Pattern;
-         Session : Session_Type) return Boolean
+         Session : Session_Type)
+         return    Boolean
       is
          use type Regpat.Match_Location;
+
       begin
          Regpat.Match
            (P.Regx.all, Field (P.Rank, Session), Session.Data.Matches);
@@ -434,9 +444,11 @@ package body GNAT.AWK is
 
       function Match
         (P       : Callback_Pattern;
-         Session : Session_Type) return Boolean
+         Session : Session_Type)
+         return    Boolean
       is
          pragma Unreferenced (Session);
+
       begin
          return P.Pattern.all;
       end Match;
@@ -447,6 +459,7 @@ package body GNAT.AWK is
 
       procedure Release (P : in out Pattern) is
          pragma Unreferenced (P);
+
       begin
          null;
       end Release;
@@ -458,6 +471,7 @@ package body GNAT.AWK is
       procedure Release (P : in out Regexp_Pattern) is
          procedure Free is new Unchecked_Deallocation
            (Regpat.Pattern_Matcher, Pattern_Matcher_Access);
+
       begin
          Free (P.Regx);
       end Release;
@@ -650,13 +664,14 @@ package body GNAT.AWK is
    -------------------
 
    function Apply_Filters
-     (Session : Session_Type := Current_Session) return Boolean
+     (Session : Session_Type := Current_Session)
+      return    Boolean
    is
       Filters : Pattern_Action_Table.Instance renames Session.Data.Filters;
       Results : Boolean := False;
 
    begin
-      --  Iterate through the filters table, if pattern match call action
+      --  Iterate through the filters table, if pattern match call action.
 
       for F in 1 .. Pattern_Action_Table.Last (Filters) loop
          if Patterns.Match (Filters.Table (F).Pattern.all, Session) then
@@ -733,7 +748,8 @@ package body GNAT.AWK is
 
    function Discrete_Field
      (Rank    : Count;
-      Session : Session_Type := Current_Session) return Discrete
+      Session : Session_Type := Current_Session)
+      return    Discrete
    is
    begin
       return Discrete'Value (Field (Rank, Session));
@@ -744,7 +760,8 @@ package body GNAT.AWK is
    -----------------
 
    function End_Of_Data
-     (Session : Session_Type := Current_Session) return Boolean
+     (Session : Session_Type := Current_Session)
+      return    Boolean
    is
    begin
       return Session.Data.File_Index = File_Table.Last (Session.Data.Files)
@@ -756,7 +773,8 @@ package body GNAT.AWK is
    -----------------
 
    function End_Of_File
-     (Session : Session_Type := Current_Session) return Boolean
+     (Session : Session_Type := Current_Session)
+      return    Boolean
    is
    begin
       return Text_IO.End_Of_File (Session.Data.Current_File);
@@ -768,7 +786,8 @@ package body GNAT.AWK is
 
    function Field
      (Rank    : Count;
-      Session : Session_Type := Current_Session) return String
+      Session : Session_Type := Current_Session)
+      return    String
    is
       Fields : Field_Table.Instance renames Session.Data.Fields;
 
@@ -781,7 +800,7 @@ package body GNAT.AWK is
 
       elsif Rank = 0 then
 
-         --  Returns the whole line, this is what $0 does under Session_Type
+         --  Returns the whole line, this is what $0 does under Session_Type.
 
          return To_String (Session.Data.Current_Line);
 
@@ -794,7 +813,8 @@ package body GNAT.AWK is
 
    function Field
      (Rank    : Count;
-      Session : Session_Type := Current_Session) return Integer
+      Session : Session_Type := Current_Session)
+      return    Integer
    is
    begin
       return Integer'Value (Field (Rank, Session));
@@ -810,7 +830,8 @@ package body GNAT.AWK is
 
    function Field
      (Rank    : Count;
-      Session : Session_Type := Current_Session) return Float
+      Session : Session_Type := Current_Session)
+      return    Float
    is
    begin
       return Float'Value (Field (Rank, Session));
@@ -829,7 +850,8 @@ package body GNAT.AWK is
    ----------
 
    function File
-     (Session : Session_Type := Current_Session) return String
+     (Session : Session_Type := Current_Session)
+      return    String
    is
       Files : File_Table.Instance renames Session.Data.Files;
 
@@ -920,7 +942,8 @@ package body GNAT.AWK is
    ----------------------
 
    function Number_Of_Fields
-     (Session : Session_Type := Current_Session) return Count
+     (Session : Session_Type := Current_Session)
+      return    Count
    is
    begin
       return Count (Field_Table.Last (Session.Data.Fields));
@@ -931,7 +954,8 @@ package body GNAT.AWK is
    --------------------------
 
    function Number_Of_File_Lines
-     (Session : Session_Type := Current_Session) return Count
+     (Session : Session_Type := Current_Session)
+      return    Count
    is
    begin
       return Count (Session.Data.FNR);
@@ -942,9 +966,11 @@ package body GNAT.AWK is
    ---------------------
 
    function Number_Of_Files
-     (Session : Session_Type := Current_Session) return Natural
+     (Session : Session_Type := Current_Session)
+      return    Natural
    is
       Files : File_Table.Instance renames Session.Data.Files;
+
    begin
       return File_Table.Last (Files);
    end Number_Of_Files;
@@ -954,7 +980,8 @@ package body GNAT.AWK is
    ---------------------
 
    function Number_Of_Lines
-     (Session : Session_Type := Current_Session) return Count
+     (Session : Session_Type := Current_Session)
+      return    Count
    is
    begin
       return Count (Session.Data.NR);
@@ -1051,7 +1078,7 @@ package body GNAT.AWK is
       Session : Session_Type)
    is
       function Filename return String;
-      --  Returns current filename and "??" if this information is not
+      --  Returns current filename and "??" if the informations is not
       --  available.
 
       function Line return String;
@@ -1063,6 +1090,7 @@ package body GNAT.AWK is
 
       function Filename return String is
          File : constant String := AWK.File (Session);
+
       begin
          if File = "" then
             return "??";
@@ -1077,6 +1105,7 @@ package body GNAT.AWK is
 
       function Line return String is
          L : constant String := Natural'Image (Session.Data.FNR);
+
       begin
          return L (2 .. L'Last);
       end Line;
@@ -1102,10 +1131,6 @@ package body GNAT.AWK is
 
       NR  : Natural renames Session.Data.NR;
       FNR : Natural renames Session.Data.FNR;
-
-      ---------------
-      -- Read_Line --
-      ---------------
 
       function Read_Line return String is
          Buffer : String (1 .. 1_024);
@@ -1252,8 +1277,8 @@ package body GNAT.AWK is
 
    procedure Set_Field_Widths
      (Field_Widths : Widths_Set;
-      Session      : Session_Type := Current_Session)
-   is
+      Session      : Session_Type := Current_Session) is
+
    begin
       Free (Session.Data.Separators);
 
@@ -1274,8 +1299,10 @@ package body GNAT.AWK is
 
    procedure Split_Line (Session : Session_Type) is
       Fields : Field_Table.Instance renames Session.Data.Fields;
+
    begin
       Field_Table.Init (Fields);
+
       Split.Current_Line (Session.Data.Separators.all, Session);
    end Split_Line;
 

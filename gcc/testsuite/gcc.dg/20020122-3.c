@@ -4,7 +4,8 @@
 
 /* { dg-do compile } */
 /* { dg-options "-Os -fprefetch-loop-arrays -w" } */
-/* { dg-options "-Os -fprefetch-loop-arrays -mtune=pentium3 -w" { target { { i?86-*-* x86_64-*-* } && ilp32 } } } */
+/* { dg-options "-Os -fprefetch-loop-arrays -mtune=pentium3 -w" { target i?86-*-* } } */
+/* { dg-skip-if "" { i?86-*-* } { "-m64" } { "" } } */
 
 int foo (int *p, int n)
 {

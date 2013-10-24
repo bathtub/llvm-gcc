@@ -1,4 +1,3 @@
-/* { dg-require-effective-target int32plus } */
 #include "struct-1.h"
 
 struct ChainSearchRecord {

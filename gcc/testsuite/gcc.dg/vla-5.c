@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline 2006-05-18 4336222 */
 /* { dg-options "-std=c99 -pedantic-errors" } */
 
 void foo1(int (*o)(int p[*])) { }

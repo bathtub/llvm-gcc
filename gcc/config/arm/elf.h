@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler.
    For ARM with ELF obj format.
-   Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2004, 2005
+   Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2004
    Free Software Foundation, Inc.
    Contributed by Philip Blundell <philb@gnu.org> and
    Catherine Moore <clm@cygnus.com>
@@ -19,8 +19,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef OBJECT_FORMAT_ELF
  #error elf.h included before elfos.h
@@ -77,7 +77,6 @@
       ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "function");	\
       ASM_DECLARE_RESULT (FILE, DECL_RESULT (DECL));		\
       ASM_OUTPUT_LABEL(FILE, NAME);				\
-      ARM_OUTPUT_FN_UNWIND (FILE, TRUE);			\
     }								\
   while (0)
 
@@ -86,7 +85,6 @@
 #define ASM_DECLARE_FUNCTION_SIZE(FILE, FNAME, DECL)		\
   do								\
     {								\
-      ARM_OUTPUT_FN_UNWIND (FILE, FALSE);			\
       ARM_DECLARE_FUNCTION_SIZE (FILE, FNAME, DECL);		\
       if (!flag_inhibit_size_directive)				\
 	ASM_OUTPUT_MEASURED_SIZE (FILE, FNAME);			\
@@ -98,7 +96,10 @@
    Otherwise, the readonly data section is used.  */
 /* We put ARM jump tables in the text section, because it makes the code
    more efficient, but for Thumb it's better to put them out of band.  */
-#define JUMP_TABLES_IN_TEXT_SECTION (TARGET_ARM)
+/* APPLE LOCAL begin ARM 4790140 compact switch tables */
+/* The above is no longer true. */
+#define JUMP_TABLES_IN_TEXT_SECTION (TARGET_EITHER)
+/* APPLE LOCAL end ARM 4790140 compact switch tables */
 
 #ifndef LINK_SPEC
 #define LINK_SPEC "%{mbig-endian:-EB} %{mlittle-endian:-EL} -X"
@@ -110,7 +111,7 @@
 #endif
 
 #ifndef TARGET_DEFAULT
-#define TARGET_DEFAULT (MASK_APCS_FRAME)
+#define TARGET_DEFAULT (ARM_FLAG_APCS_FRAME)
 #endif
 
 #ifndef MULTILIB_DEFAULTS
@@ -121,10 +122,6 @@
 #define TARGET_ASM_FILE_START_APP_OFF true
 #define TARGET_ASM_FILE_START_FILE_DIRECTIVE true
 
-
-/* Output an element in the static constructor array.  */
-#undef TARGET_ASM_CONSTRUCTOR
-#define TARGET_ASM_CONSTRUCTOR arm_elf_asm_constructor
 
 /* For PIC code we need to explicitly specify (PLT) and (GOT) relocs.  */
 #define NEED_PLT_RELOC	flag_pic
@@ -149,5 +146,4 @@
     }							\
   while (0)
 
-/* The EABI doesn't provide a way of implementing init_priority.  */
-#define SUPPORTS_INIT_PRIORITY (!TARGET_AAPCS_BASED)
+#define SUPPORTS_INIT_PRIORITY 1

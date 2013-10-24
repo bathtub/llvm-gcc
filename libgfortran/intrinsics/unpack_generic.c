@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -34,10 +34,13 @@ Boston, MA 02110-1301, USA.  */
 #include <string.h>
 #include "libgfortran.h"
 
-static void
-unpack_internal (gfc_array_char *ret, const gfc_array_char *vector,
-		 const gfc_array_l4 *mask, const gfc_array_char *field,
-		 index_type size, index_type fsize)
+extern void unpack1 (gfc_array_char *, const gfc_array_char *,
+		     const gfc_array_l4 *, const gfc_array_char *);
+iexport_proto(unpack1);
+
+void
+unpack1 (gfc_array_char *ret, const gfc_array_char *vector,
+	 const gfc_array_l4 *mask, const gfc_array_char *field)
 {
   /* r.* indicates the return array.  */
   index_type rstride[GFC_MAX_DIMENSIONS];
@@ -60,7 +63,12 @@ unpack_internal (gfc_array_char *ret, const gfc_array_char *vector,
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type n;
   index_type dim;
+  index_type size;
+  index_type fsize;
 
+  size = GFC_DESCRIPTOR_SIZE (ret);
+  /* A field element size of 0 actually means this is a scalar.  */
+  fsize = GFC_DESCRIPTOR_SIZE (field);
   if (ret->data == NULL)
     {
       /* The front end has signalled that we need to populate the
@@ -79,7 +87,7 @@ unpack_internal (gfc_array_char *ret, const gfc_array_char *vector,
 	  mstride[n] = mask->dim[n].stride;
 	  rs *= extent[n];
 	}
-      ret->offset = 0;
+      ret->base = 0;
       ret->data = internal_malloc_size (rs * size);
     }
   else
@@ -148,7 +156,7 @@ unpack_internal (gfc_array_char *ret, const gfc_array_char *vector,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           rptr -= rstride[n] * extent[n];
           fptr -= fstride[n] * extent[n];
           mptr -= mstride[n] * extent[n];
@@ -169,66 +177,19 @@ unpack_internal (gfc_array_char *ret, const gfc_array_char *vector,
         }
     }
 }
+iexport(unpack1);
 
-extern void unpack1 (gfc_array_char *, const gfc_array_char *,
-		     const gfc_array_l4 *, const gfc_array_char *);
-export_proto(unpack1);
-
-void
-unpack1 (gfc_array_char *ret, const gfc_array_char *vector,
-	 const gfc_array_l4 *mask, const gfc_array_char *field)
-{
-  unpack_internal (ret, vector, mask, field,
-		   GFC_DESCRIPTOR_SIZE (vector),
-		   GFC_DESCRIPTOR_SIZE (field));
-}
-
-extern void unpack1_char (gfc_array_char *, GFC_INTEGER_4,
-			  const gfc_array_char *, const gfc_array_l4 *,
-			  const gfc_array_char *, GFC_INTEGER_4,
-			  GFC_INTEGER_4);
-export_proto(unpack1_char);
-
-void
-unpack1_char (gfc_array_char *ret,
-	      GFC_INTEGER_4 ret_length __attribute__((unused)),
-	      const gfc_array_char *vector, const gfc_array_l4 *mask,
-	      const gfc_array_char *field, GFC_INTEGER_4 vector_length,
-	      GFC_INTEGER_4 field_length)
-{
-  unpack_internal (ret, vector, mask, field, vector_length, field_length);
-}
-
-extern void unpack0 (gfc_array_char *, const gfc_array_char *,
+extern void unpack0 (const gfc_array_char *, const gfc_array_char *,
 		     const gfc_array_l4 *, char *);
 export_proto(unpack0);
 
 void
-unpack0 (gfc_array_char *ret, const gfc_array_char *vector,
+unpack0 (const gfc_array_char *ret, const gfc_array_char *vector,
 	 const gfc_array_l4 *mask, char *field)
 {
   gfc_array_char tmp;
 
   tmp.dtype = 0;
   tmp.data = field;
-  unpack_internal (ret, vector, mask, &tmp, GFC_DESCRIPTOR_SIZE (vector), 0);
-}
-
-extern void unpack0_char (gfc_array_char *, GFC_INTEGER_4,
-			  const gfc_array_char *, const gfc_array_l4 *,
-			  char *, GFC_INTEGER_4, GFC_INTEGER_4);
-export_proto(unpack0_char);
-
-void
-unpack0_char (gfc_array_char *ret,
-	      GFC_INTEGER_4 ret_length __attribute__((unused)),
-	      const gfc_array_char *vector, const gfc_array_l4 *mask,
-	      char *field, GFC_INTEGER_4 vector_length,
-	      GFC_INTEGER_4 field_length __attribute__((unused)))
-{
-  gfc_array_char tmp;
-
-  tmp.dtype = 0;
-  tmp.data = field;
-  unpack_internal (ret, vector, mask, &tmp, vector_length, 0);
+  unpack1 (ret, vector, mask, &tmp);
 }

@@ -1,4 +1,4 @@
-// { dg-do compile }
+// { dg-do compile { xfail *-*-* } }
 external_reference void exit (int code);
 
 static int foo ();

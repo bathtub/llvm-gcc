@@ -17,7 +17,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 #
 # As a special exception to the GNU General Public License, if you
 # distribute this file as part of a program that contains a
@@ -495,11 +495,34 @@ if test -z "$show_help"; then
     # Only attempt this if the compiler in the base compile
     # command doesn't match the default compiler.
     if test -n "$available_tags" && test -z "$tagname"; then
+      # APPLE LOCAL begin handle ~ in pathnames 2002-01-14 --sts
+      # Since CC may have args with shell metachars in them, add
+      # doublequotes to args so it looks the same as $base_compile.
+      qCC=
+      for argu in $CC; do
+	case $argu in
+	# Double-quote args containing other shell metacharacters.
+	# Many Bourne shells cannot handle close brackets correctly
+	# in scan sets, so we specify it separately.
+	*[\[\~\#\^\&\*\(\)\{\}\|\;\<\>\?\'\ \	]*|*]*|"")
+	  argu="\"$argu\""
+	  ;;
+	esac
+        # Add the previous argument to qCC.
+        if test -z "$qCC"; then
+	  qCC="$argu"
+        else
+	  qCC="$qCC $argu"
+        fi
+      done
+      # APPLE LOCAL end handle ~ in pathnames 2002-01-14 --sts 
       case $base_compile in
-      "$CC "*) ;;
+      # APPLE LOCAL handle ~ in pathnames 2002-01-14 --sts 
+      "$qCC "*) ;;
       # Blanks in the command may have been stripped by the calling shell,
       # but not from the CC environment variable when ltconfig was run.
-      "`$echo $CC` "*) ;;
+      # APPLE LOCAL handle ~ in pathnames 2002-01-14 --sts 
+      "`$echo $qCC` "*) ;;
       *)
         for z in $available_tags; do
           if grep "^### BEGIN LIBTOOL TAG CONFIG: $z$" < "$0" > /dev/null; then
@@ -829,7 +852,6 @@ EOF
     linker_flags=
     dllsearchpath=
     lib_search_path=`pwd`
-    inst_prefix_dir=
 
     avoid_version=no
     dlfiles=
@@ -959,11 +981,6 @@ EOF
 	  ;;
 	expsyms_regex)
 	  export_symbols_regex="$arg"
-	  prev=
-	  continue
-	  ;;
-	inst_prefix)
-	  inst_prefix_dir="$arg"
 	  prev=
 	  continue
 	  ;;
@@ -1190,11 +1207,6 @@ EOF
 	else
 	  prev=expsyms_regex
 	fi
-	continue
-	;;
-
-      -inst-prefix-dir)
-	prev=inst_prefix
 	continue
 	;;
 
@@ -2182,14 +2194,6 @@ EOF
 		add="$dir/$linklib"
 	      elif test "$hardcode_minus_L" = yes; then
 		add_dir="-L$dir"
-		# Try looking first in the location we're being installed to.
-		if test -n "$inst_prefix_dir"; then
-		  case "$libdir" in
-		    [\\/]*)
-		      add_dir="$add_dir -L$inst_prefix_dir$libdir"
-		      ;;
-		  esac
-		fi
 		add="-l$name"
 	      elif test "$hardcode_shlibpath_var" = yes; then
 		add_shlibpath="$dir"
@@ -2248,14 +2252,6 @@ EOF
 	    else
 	      # We cannot seem to hardcode it, guess we'll fake it.
 	      add_dir="-L$libdir"
-	      # Try looking first in the location we're being installed to.
-	      if test -n "$inst_prefix_dir"; then
-		case "$libdir" in
-		  [\\/]*)
-		    add_dir="$add_dir -L$inst_prefix_dir$libdir"
-		    ;;
-		esac
-	      fi
 	      add="-l$name"
 	    fi
 
@@ -3674,7 +3670,7 @@ EOF
       # Now hardcode the library paths
       rpath=
       hardcode_libdirs=
-      for libdir in $compile_rpath; do
+      for libdir in $compile_rpath $finalize_rpath; do
 	if test -n "$hardcode_libdir_flag_spec"; then
 	  if test -n "$hardcode_libdir_separator"; then
 	    if test -z "$hardcode_libdirs"; then
@@ -3839,13 +3835,7 @@ extern \"C\" {
 	    fi
 
 	    # Try sorting and uniquifying the output.
-	    if grep -v "^: " < "$nlist" |
-		if sort -k 3 </dev/null >/dev/null 2>&1; then
-		  sort -k 3
-		else
-		  sort +2
-		fi |
-		uniq > "$nlist"S; then
+	    if grep -v "^: " < "$nlist" | sort +2 | uniq > "$nlist"S; then
 	      :
 	    else
 	      grep -v "^: " < "$nlist" > "$nlist"S
@@ -4493,7 +4483,7 @@ fi\
       for tag in $taglist; do
         tagopts="$tagopts --tag $tag"
       done
-      relink_command="(cd `pwd`; $SHELL $0$tagopts --mode=relink $libtool_args @inst_prefix_dir@)"
+      relink_command="(cd `pwd`; $SHELL $0$tagopts --mode=relink $libtool_args)"
       relink_command=`$echo "X$relink_command" | $Xsed -e "$sed_quote_subst"`
 
       # Only create the output if not a dry run.
@@ -4794,27 +4784,6 @@ relink_command=\"$relink_command\""
 	dir="$dir$objdir"
 
 	if test -n "$relink_command"; then
-	  # Determine the prefix the user has applied to our future dir.
-	  inst_prefix_dir=`$echo "$destdir" | sed "s%$libdir\$%%"`
-
-	  # Don't allow the user to place us outside of our expected
-	  # location b/c this prevents finding dependent libraries that
-	  # are installed to the same prefix.
-	  # At present, this check doesn't affect windows .dll's that
-	  # are installed into $libdir/../bin (currently, that works fine)
-	  # but it's something to keep an eye on.
-	  if test "$inst_prefix_dir" = "$destdir"; then
-	    $echo "$modename: error: cannot install \`$file' to a directory not ending in $libdir" 1>&2
-	    exit 1
-	  fi
-
-	  if test -n "$inst_prefix_dir"; then
-	    # Stick the inst_prefix_dir data into the link command.
-	    relink_command=`$echo "$relink_command" | sed "s%@inst_prefix_dir@%-inst-prefix-dir $inst_prefix_dir%"`
-	  else
-	    relink_command=`$echo "$relink_command" | sed "s%@inst_prefix_dir@%%"`
-	  fi
-
 	  $echo "$modename: warning: relinking \`$file'" 1>&2
 	  $show "$relink_command"
 	  if $run eval "$relink_command"; then :
@@ -5045,7 +5014,8 @@ relink_command=\"$relink_command\""
 
       # Do each command in the postinstall commands.
       eval cmds=\"$old_postinstall_cmds\"
-      IFS="${IFS= 	}"; save_ifs="$IFS"; IFS='~'
+      # APPLE LOCAL handle ~ in pathnames 2002-01-14 --sts
+      IFS="${IFS= 	}"; save_ifs="$IFS"; IFS='@'
       for cmd in $cmds; do
 	IFS="$save_ifs"
 	$show "$cmd"

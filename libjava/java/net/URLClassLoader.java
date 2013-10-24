@@ -1,5 +1,5 @@
 /* URLClassLoader.java --  ClassLoader that loads classes from one or more URLs
-   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005
    Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -248,10 +248,12 @@ public class URLClassLoader extends SecureClassLoader
   abstract static class Resource
   {
     final URLLoader loader;
+    final String name;
 
-    Resource(URLLoader loader)
+    Resource(URLLoader loader, String name)
     {
       this.loader = loader;
+      this.name = name;
     }
 
     /**
@@ -305,10 +307,9 @@ public class URLClassLoader extends SecureClassLoader
 
     Vector classPath;	// The "Class-Path" attribute of this Jar's manifest
 
-    public JarURLLoader(URLClassLoader classloader, URL baseURL,
-			URL absoluteUrl)
+    public JarURLLoader(URLClassLoader classloader, URL baseURL)
     {
-      super(classloader, baseURL, absoluteUrl);
+      super(classloader, baseURL);
 
       // Cache url prefix for all resources in this jar url.
       String external = baseURL.toExternalForm();
@@ -403,13 +404,11 @@ public class URLClassLoader extends SecureClassLoader
   static final class JarURLResource extends Resource
   {
     private final JarEntry entry;
-    private final String name;
 
     JarURLResource(JarURLLoader loader, String name, JarEntry entry)
     {
-      super(loader);
+      super(loader, name);
       this.entry = entry;
-      this.name = name;
     }
 
     InputStream getInputStream() throws IOException
@@ -510,7 +509,7 @@ public class URLClassLoader extends SecureClassLoader
     RemoteResource(RemoteURLLoader loader, String name, URL url,
                    InputStream stream, int length)
     {
-      super(loader);
+      super(loader, name);
       this.url = url;
       this.stream = stream;
       this.length = length;
@@ -562,15 +561,15 @@ public class URLClassLoader extends SecureClassLoader
       URL url = helper.findResource(name);
       if (url == null)
 	return null;
-      return new SoResource(this, url);
+      return new SoResource(this, name, url);
     }
   }
 
   final static class SoResource extends Resource
   {
-    SoResource(SoURLLoader loader, URL url)
+    SoResource(SoURLLoader loader, String name, URL url)
     {
-      super(loader);
+      super(loader, name);
       this.url = url;
     }
 
@@ -602,25 +601,18 @@ public class URLClassLoader extends SecureClassLoader
   {
     File dir; //the file for this file url
 
-    FileURLLoader(URLClassLoader classloader, URL url, URL absoluteUrl)
+    FileURLLoader(URLClassLoader classloader, URL url)
     {
-      super(classloader, url, absoluteUrl);
-      dir = new File(absoluteUrl.getFile());
+      super(classloader, url);
+      dir = new File(baseURL.getFile());
     }
 
     /** get resource with the name "name" in the file url */
     Resource getResource(String name)
     {
-      try 
- 	{
- 	  File file = new File(dir, name).getCanonicalFile();
- 	  if (file.exists() && !file.isDirectory())
- 	    return new FileResource(this, file);
- 	}
-      catch (IOException e)
- 	{
- 	  // Fall through...
- 	}
+      File file = new File(dir, name);
+      if (file.exists() && ! file.isDirectory())
+        return new FileResource(this, name, file);
       return null;
     }
   }
@@ -629,44 +621,19 @@ public class URLClassLoader extends SecureClassLoader
   {
     final File file;
 
-    FileResource(FileURLLoader loader, File file)
+    FileResource(FileURLLoader loader, String name, File file)
     {
-      super(loader);
+      super(loader, name);
       this.file = file;
     }
 
     InputStream getInputStream() throws IOException
     {
-      // Delegate to the URL content handler mechanism to retrieve an
-      // HTML representation of the directory listing if a directory
-      if (file.isDirectory())
-        {
-          URL url = getURL();
-          return url.openStream();
-        }
-      // Otherwise simply return a FileInputStream
       return new FileInputStream(file);
     }
 
     public int getLength()
     {
-      // Delegate to the URL content handler mechanism to retrieve the
-      // length of the HTML representation of the directory listing if
-      // a directory, or -1 if an exception occurs opening the directory.
-      if (file.isDirectory())
-        {
-          URL url = getURL();
-          try
-            {
-              URLConnection connection = url.openConnection();
-              return connection.getContentLength();
-            }
-          catch (IOException e)
-            {
-              return -1;
-            }
-        }
-      // Otherwise simply return the file length
       return (int) file.length();
     }
 
@@ -674,7 +641,8 @@ public class URLClassLoader extends SecureClassLoader
     {
       try
         {
-          return file.toURL();
+          return new URL(loader.baseURL, name,
+                         loader.classloader.getURLStreamHandler("file"));
         }
       catch (MalformedURLException e)
         {
@@ -711,14 +679,12 @@ public class URLClassLoader extends SecureClassLoader
 
   static final class CoreResource extends Resource
   {
-    private final Core core;
-    private final String name;
+    final Core core;
 
     CoreResource(CoreURLLoader loader, String name, Core core)
     {
-      super(loader);
+      super(loader, name);
       this.core = core;
-      this.name = name;
     }
 
     InputStream getInputStream() throws IOException
@@ -757,10 +723,10 @@ public class URLClassLoader extends SecureClassLoader
    * in the order given to the URLClassLoader which uses these URLs to
    * load classes and resources (after using the default parent ClassLoader).
    *
-   * @param urls Locations that should be searched by this ClassLoader when
-   * resolving Classes or Resources.
    * @exception SecurityException if the SecurityManager disallows the
    * creation of a ClassLoader.
+   * @param urls Locations that should be searched by this ClassLoader when
+   * resolving Classes or Resources.
    * @see SecureClassLoader
    */
   public URLClassLoader(URL[] urls) throws SecurityException
@@ -772,6 +738,25 @@ public class URLClassLoader extends SecureClassLoader
   }
 
   /**
+   * Private constructor used by the static
+   * <code>newInstance(URL[])</code> method.  Creates an
+   * <code>URLClassLoader</code> without any <code>URL</code>s
+   * yet. This is used to bypass the normal security check for
+   * creating classloaders, but remembers the security context which
+   * will be used when defining classes.  The <code>URL</code>s to
+   * load from must be added by the <code>newInstance()</code> method
+   * in the security context of the caller.
+   *
+   * @param securityContext the security context of the unprivileged code.
+   */
+  private URLClassLoader(AccessControlContext securityContext)
+  {
+    super();
+    this.factory = null;
+    this.securityContext = securityContext;
+  }
+
+  /**
    * Creates a <code>URLClassLoader</code> that gets classes from the supplied
    * <code>URL</code>s.
    * To determine if this classloader may be created the constructor of
@@ -779,13 +764,13 @@ public class URLClassLoader extends SecureClassLoader
    * can throw a SecurityException. Then the supplied URLs are added
    * in the order given to the URLClassLoader which uses these URLs to
    * load classes and resources (after using the supplied parent ClassLoader).
+   * @exception SecurityException if the SecurityManager disallows the
+   * creation of a ClassLoader.
+   * @exception SecurityException
    * @param urls Locations that should be searched by this ClassLoader when
    * resolving Classes or Resources.
    * @param parent The parent class loader used before trying this class
    * loader.
-   * @exception SecurityException if the SecurityManager disallows the
-   * creation of a ClassLoader.
-   * @exception SecurityException
    * @see SecureClassLoader
    */
   public URLClassLoader(URL[] urls, ClassLoader parent)
@@ -827,14 +812,14 @@ public class URLClassLoader extends SecureClassLoader
    * load classes and resources (after using the supplied parent ClassLoader).
    * It will use the supplied <CODE>URLStreamHandlerFactory</CODE> to get the
    * protocol handlers of the supplied URLs.
+   * @exception SecurityException if the SecurityManager disallows the
+   * creation of a ClassLoader.
+   * @exception SecurityException
    * @param urls Locations that should be searched by this ClassLoader when
    * resolving Classes or Resources.
    * @param parent The parent class loader used before trying this class
    * loader.
    * @param factory Used to get the protocol handler for the URLs.
-   * @exception SecurityException if the SecurityManager disallows the
-   * creation of a ClassLoader.
-   * @exception SecurityException
    * @see SecureClassLoader
    */
   public URLClassLoader(URL[] urls, ClassLoader parent,
@@ -870,7 +855,7 @@ public class URLClassLoader extends SecureClassLoader
 
   private void addURLImpl(URL newUrl)
   {
-    synchronized (this)
+    synchronized (urlloaders)
       {
         if (newUrl == null)
           return; // Silently ignore...
@@ -886,45 +871,14 @@ public class URLClassLoader extends SecureClassLoader
             String file = newUrl.getFile();
             String protocol = newUrl.getProtocol();
 
-	    // If we have a file: URL, we want to make it absolute
-	    // here, before we decide whether it is really a jar.
-	    URL absoluteURL;
-	    if ("file".equals (protocol))
-	      {
-		File dir = new File(file);
-		URL absUrl;
-		try
-		  {
-		    absoluteURL = dir.getCanonicalFile().toURL();
-		  }
-		catch (IOException ignore)
-		  {
-		    try
-		      {
-			absoluteURL = dir.getAbsoluteFile().toURL();
-		      }
-		    catch (MalformedURLException _)
-		      {
-			// This really should not happen.
-			absoluteURL = newUrl;
-		      }
-		  }
-	      }
-	    else
-	      {
-		// This doesn't hurt, and it simplifies the logic a
-		// little.
-		absoluteURL = newUrl;
-	      }
-
             // Check that it is not a directory
 	    if ("gcjlib".equals(protocol))
 	      loader = new SoURLLoader(this, newUrl);
 	    else if (! (file.endsWith("/") || file.endsWith(File.separator)))
-              loader = new JarURLLoader(this, newUrl, absoluteURL);
+              loader = new JarURLLoader(this, newUrl);
             else if ("file".equals(protocol))
-	      loader = new FileURLLoader(this, newUrl, absoluteURL);
-	    else if ("core".equals(protocol))
+              loader = new FileURLLoader(this, newUrl);
+	    else if ("xxxFIXMExxxcore".equals(protocol))
 	      loader = new CoreURLLoader(this, newUrl);
             else
               loader = new RemoteURLLoader(this, newUrl);
@@ -952,86 +906,40 @@ public class URLClassLoader extends SecureClassLoader
   }
 
   /**
-   * Adds an array of new locations to the end of the internal URL
-   * store.  Called from the the constructors. Should not call to the
-   * protected addURL() method since that can be overridden and
-   * subclasses are not yet in a good state at this point.
-   * jboss 4.0.3 for example depends on this.
-   *
+   * Adds an array of new locations to the end of the internal URL store.
    * @param newUrls the locations to add
    */
   private void addURLs(URL[] newUrls)
   {
     for (int i = 0; i < newUrls.length; i++)
-      {
-	urls.add(newUrls[i]);
-	addURLImpl(newUrls[i]);
-      }
-  }
-
-  /**
-   * Look in both Attributes for a given value.  The first Attributes
-   * object, if not null, has precedence.
-   */
-  private String getAttributeValue(Attributes.Name name, Attributes first,
-				   Attributes second)
-  {
-    String result = null;
-    if (first != null)
-      result = first.getValue(name);
-    if (result == null)
-      result = second.getValue(name);
-    return result;
+      addURL(newUrls[i]);
   }
 
   /**
    * Defines a Package based on the given name and the supplied manifest
-   * information. The manifest indicates the title, version and
-   * vendor information of the specification and implementation and whether the
+   * information. The manifest indicates the tile, version and
+   * vendor information of the specification and implementation and wheter the
    * package is sealed. If the Manifest indicates that the package is sealed
    * then the Package will be sealed with respect to the supplied URL.
    *
+   * @exception IllegalArgumentException If this package name already exists
+   * in this class loader
    * @param name The name of the package
    * @param manifest The manifest describing the specification,
    * implementation and sealing details of the package
    * @param url the code source url to seal the package
    * @return the defined Package
-   * @throws IllegalArgumentException If this package name already exists
-   * in this class loader
    */
   protected Package definePackage(String name, Manifest manifest, URL url)
     throws IllegalArgumentException
   {
-    // Compute the name of the package as it may appear in the
-    // Manifest.
-    StringBuffer xform = new StringBuffer(name);
-    for (int i = xform.length () - 1; i >= 0; --i)
-      if (xform.charAt(i) == '.')
-	xform.setCharAt(i, '/');
-    xform.append('/');
-    String xformName = xform.toString();
-
-    Attributes entryAttr = manifest.getAttributes(xformName);
     Attributes attr = manifest.getMainAttributes();
-
-    String specTitle
-      = getAttributeValue(Attributes.Name.SPECIFICATION_TITLE,
-			  entryAttr, attr);
-    String specVersion
-      = getAttributeValue(Attributes.Name.SPECIFICATION_VERSION,
-			  entryAttr, attr);
-    String specVendor
-      = getAttributeValue(Attributes.Name.SPECIFICATION_VENDOR,
-			  entryAttr, attr);
-    String implTitle
-      = getAttributeValue(Attributes.Name.IMPLEMENTATION_TITLE,
-			  entryAttr, attr);
-    String implVersion
-      = getAttributeValue(Attributes.Name.IMPLEMENTATION_VERSION,
-			  entryAttr, attr);
-    String implVendor
-      = getAttributeValue(Attributes.Name.IMPLEMENTATION_VENDOR,
-			  entryAttr, attr);
+    String specTitle = attr.getValue(Attributes.Name.SPECIFICATION_TITLE);
+    String specVersion = attr.getValue(Attributes.Name.SPECIFICATION_VERSION);
+    String specVendor = attr.getValue(Attributes.Name.SPECIFICATION_VENDOR);
+    String implTitle = attr.getValue(Attributes.Name.IMPLEMENTATION_TITLE);
+    String implVersion = attr.getValue(Attributes.Name.IMPLEMENTATION_VERSION);
+    String implVendor = attr.getValue(Attributes.Name.IMPLEMENTATION_VENDOR);
 
     // Look if the Manifest indicates that this package is sealed
     // XXX - most likely not completely correct!
@@ -1043,10 +951,8 @@ public class URLClassLoader extends SecureClassLoader
       // make sure that the URL is null so the package is not sealed
       url = null;
 
-    return definePackage(name,
-			 specTitle, specVendor, specVersion,
-			 implTitle, implVendor, implVersion,
-			 url);
+    return definePackage(name, specTitle, specVersion, specVendor, implTitle,
+                         implVersion, implVendor, url);
   }
 
   /**
@@ -1078,58 +984,46 @@ public class URLClassLoader extends SecureClassLoader
 	resource = loader.getResource(resourceName);
       }
     if (resource == null)
-      {
-	String message = className + " not found";
-	if (runtimeInitialized())
-	  message += " in " + this;
-	throw new ClassNotFoundException(message);
-      }
+      throw new ClassNotFoundException(className + " not found in " + this);
 
     // Try to read the class data, create the CodeSource, Package and
     // construct the class (and watch out for those nasty IOExceptions)
     try
       {
-	byte[] data;
-	InputStream in = resource.getInputStream();
-	try
+        byte[] data;
+        InputStream in = resource.getInputStream();
+	int length = resource.getLength();
+	if (length != -1)
 	  {
-	    int length = resource.getLength();
-	    if (length != -1)
+	    // We know the length of the data.
+	    // Just try to read it in all at once
+	    data = new byte[length];
+	    int pos = 0;
+	    while (length - pos > 0)
 	      {
-		// We know the length of the data.
-		// Just try to read it in all at once
-		data = new byte[length];
-		int pos = 0;
-		while (length - pos > 0)
-		  {
-		    int len = in.read(data, pos, length - pos);
-		    if (len == -1)
-		      throw new EOFException("Not enough data reading from: "
-					     + in);
-		    pos += len;
-		  }
-	      }
-	    else
-	      {
-		// We don't know the data length.
-		// Have to read it in chunks.
-		ByteArrayOutputStream out = new ByteArrayOutputStream(4096);
-		byte[] b = new byte[4096];
-		int l = 0;
-		while (l != -1)
-		  {
-		    l = in.read(b);
-		    if (l != -1)
-		      out.write(b, 0, l);
-		  }
-		data = out.toByteArray();
+		int len = in.read(data, pos, length - pos);
+		if (len == -1)
+		  throw new EOFException("Not enough data reading from: "
+					 + in);
+		pos += len;
 	      }
 	  }
-	finally
+	else
 	  {
-	    in.close();
-	  }
-	final byte[] classData = data;
+	    // We don't know the data length.
+	    // Have to read it in chunks.
+	    ByteArrayOutputStream out = new ByteArrayOutputStream(4096);
+	    byte[] b = new byte[4096];
+	    int l = 0;
+	    while (l != -1)
+	      {
+		l = in.read(b);
+		if (l != -1)
+		  out.write(b, 0, l);
+	      }
+	    data = out.toByteArray();
+          }
+        final byte[] classData = data;
 
         // Now get the CodeSource
         final CodeSource source = resource.getCodeSource();
@@ -1170,11 +1064,7 @@ public class URLClassLoader extends SecureClassLoader
         else
           result = defineClass(className, classData, 0, classData.length, source);
 
-        // Avoid NullPointerExceptions.
-        Certificate[] resourceCertificates = resource.getCertificates();
-        if(resourceCertificates != null)
-          super.setSigners(result, resourceCertificates);
-        
+        super.setSigners(result, resource.getCertificates());
         return result;
       }
     catch (IOException ioe)
@@ -1196,7 +1086,7 @@ public class URLClassLoader extends SecureClassLoader
    */
   public String toString()
   {
-    synchronized (this)
+    synchronized (urlloaders)
       {
 	if (thisString == null)
 	  {
@@ -1290,11 +1180,11 @@ public class URLClassLoader extends SecureClassLoader
   /**
    * Finds all the resources with a particular name from all the locations.
    *
+   * @exception IOException when an error occurs accessing one of the
+   * locations
    * @param resourceName the name of the resource to lookup
    * @return a (possible empty) enumeration of URLs where the resource can be
    * found
-   * @exception IOException when an error occurs accessing one of the
-   * locations
    */
   public Enumeration findResources(String resourceName)
     throws IOException
@@ -1329,7 +1219,7 @@ public class URLClassLoader extends SecureClassLoader
    *
    * @param source The codesource that needs the permissions to be accessed
    * @return the collection of permissions needed to access the code resource
-   * @see java.security.SecureClassLoader#getPermissions(CodeSource)
+   * @see java.security.SecureClassLoader#getPermissions()
    */
   protected PermissionCollection getPermissions(CodeSource source)
   {
@@ -1442,11 +1332,4 @@ public class URLClassLoader extends SecureClassLoader
         return loader;
       }
   }
-
-  /**
-   * Tell whether runtime initialization is complete.
-   *
-   * @return whether runtime initialization is complete.
-   */
-  private static native boolean runtimeInitialized();  
 }

@@ -1,6 +1,6 @@
-// natDouble.cc - Implementation of java.lang.VMDouble native methods.
+// natDouble.cc - Implementation of java.lang.Double native methods.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2003, 2005, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2003, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -15,7 +15,6 @@ details.  */
 #include <gcj/cni.h>
 #include <java/lang/String.h>
 #include <java/lang/Double.h>
-#include <java/lang/VMDouble.h>
 #include <java/lang/Character.h>
 #include <java/lang/NumberFormatException.h>
 #include <jvm.h>
@@ -32,7 +31,7 @@ union u
 };
 
 jlong 
-java::lang::VMDouble::doubleToLongBits(jdouble value)
+java::lang::Double::doubleToLongBits(jdouble value)
 {
   union u u;
   u.d = value;
@@ -47,7 +46,7 @@ java::lang::VMDouble::doubleToLongBits(jdouble value)
 }
 
 jlong 
-java::lang::VMDouble::doubleToRawLongBits(jdouble value)
+java::lang::Double::doubleToRawLongBits(jdouble value)
 {
   union u u;
   u.d = value;
@@ -55,7 +54,7 @@ java::lang::VMDouble::doubleToRawLongBits(jdouble value)
 }
 
 jdouble 
-java::lang::VMDouble::longBitsToDouble(jlong bits)
+java::lang::Double::longBitsToDouble(jlong bits)
 {
   union u u;
   u.l = bits;
@@ -63,15 +62,15 @@ java::lang::VMDouble::longBitsToDouble(jlong bits)
 }
 
 jstring 
-java::lang::VMDouble::toString(jdouble value, jboolean isFloat)
+java::lang::Double::toString(jdouble value, jboolean isFloat)
 {
-  if (Double::isNaN (value))
+  if (isNaN (value))
     return JvNewStringLatin1 ("NaN", sizeof ("NaN") - 1);
     
-  if (value == Double::POSITIVE_INFINITY)
+  if (value == POSITIVE_INFINITY)
     return JvNewStringLatin1 ("Infinity", sizeof ("Infinity") - 1);
     
-  if (value == Double::NEGATIVE_INFINITY)
+  if (value == NEGATIVE_INFINITY)
     return JvNewStringLatin1 ("-Infinity", sizeof ("-Infinity") - 1);
     
   char buffer[50], result[50];
@@ -159,7 +158,7 @@ java::lang::VMDouble::toString(jdouble value, jboolean isFloat)
 }
 
 jdouble 
-java::lang::VMDouble::parseDouble(jstring str)
+java::lang::Double::parseDouble(jstring str)
 {
   int length = str->length();
 
@@ -195,11 +194,11 @@ java::lang::VMDouble::parseDouble(jstring str)
 	{
 	  if (! strcmp (data, "NaN") || ! strcmp (data, "+NaN")
 	      || ! strcmp (data, "-NaN"))
-	    return Double::NaN;
+	    return NaN;
 	  else if (! strcmp (data, "Infinity") || ! strcmp (data, "+Infinity"))
-	    return Double::POSITIVE_INFINITY;
+	    return POSITIVE_INFINITY;
 	  else if (! strcmp (data, "-Infinity"))
-	    return Double::NEGATIVE_INFINITY;
+	    return NEGATIVE_INFINITY;
 	}
 
       struct _Jv_reent reent;  
@@ -211,4 +210,10 @@ java::lang::VMDouble::parseDouble(jstring str)
 	return val;
     }
   throw new NumberFormatException(str);
+}
+
+void
+java::lang::Double::initIDs()
+{
+  // Not used in libgcj
 }

@@ -1,5 +1,5 @@
 /* Class.java -- Representation of a Java class.
-   Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004, 2005, 2006
+   Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004
    Free Software Foundation
 
 This file is part of GNU Classpath.
@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -42,14 +42,10 @@ import java.io.InputStream;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.GenericDeclaration;
 import java.lang.reflect.Member;
 import java.lang.reflect.Method;
-import java.lang.reflect.Type;
-import java.lang.reflect.TypeVariable;
 import java.net.URL;
 import java.security.ProtectionDomain;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 
@@ -58,11 +54,9 @@ import java.util.HashSet;
  * objects with identical names and ClassLoaders. Primitive types, array
  * types, and void also have a Class object.
  *
- * <p>Arrays with identical type and number of dimensions share the same class.
- * The array class ClassLoader is the same as the ClassLoader of the element
- * type of the array (which can be null to indicate the bootstrap classloader).
- * The name of an array class is <code>[&lt;signature format&gt;;</code>.
- * <p> For example,
+ * <p>Arrays with identical type and number of dimensions share the same
+ * class (and null "system" ClassLoader, incidentally).  The name of an
+ * array class is <code>[&lt;signature format&gt;;</code> ... for example,
  * String[]'s class is <code>[Ljava.lang.String;</code>. boolean, byte,
  * short, char, int, long, float and double have the "type name" of
  * Z,B,S,C,I,J,F,D for the purposes of array classes.  If it's a
@@ -82,7 +76,7 @@ import java.util.HashSet;
  * @since 1.0
  * @see ClassLoader
  */
-public final class Class implements Type, GenericDeclaration, Serializable
+public final class Class implements Serializable
 {
   /**
    * Class is non-instantiable from Java code; only the VM can create
@@ -113,14 +107,6 @@ public final class Class implements Type, GenericDeclaration, Serializable
    */
   public static native Class forName (String className)
     throws ClassNotFoundException;
-
-  // A private internal method that is called by compiler-generated code.
-  private static Class forName (String className, Class caller)
-    throws ClassNotFoundException
-  {
-    return forName(className, true, caller.getClassLoaderInternal());
-  }
-
 
   /**
    * Use the specified classloader to load and link a class. If the loader
@@ -162,31 +148,13 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * @throws SecurityException if the security check fails
    * @since 1.1
    */
-  public Class[] getClasses()
-  {
-    memberAccessCheck(Member.PUBLIC);
-    return internalGetClasses();
-  }
-
-  /**
-   * Like <code>getClasses()</code> but without the security checks.
-   */
-  private Class[] internalGetClasses()
-  {
-    ArrayList list = new ArrayList();
-    list.addAll(Arrays.asList(getDeclaredClasses(true)));
-    Class superClass = getSuperclass();
-    if (superClass != null)
-      list.addAll(Arrays.asList(superClass.internalGetClasses()));
-    return (Class[])list.toArray(new Class[list.size()]);
-  }
+  public native Class[] getClasses ();
   
   /**
-   * Get the ClassLoader that loaded this class.  If the class was loaded
-   * by the bootstrap classloader, this method will return null.
-   * If there is a security manager, and the caller's class loader is not
-   * an ancestor of the requested one, a security check of
-   * <code>RuntimePermission("getClassLoader")</code>
+   * Get the ClassLoader that loaded this class.  If it was loaded by the
+   * system classloader, this method will return null. If there is a security
+   * manager, and the caller's class loader does not match the requested
+   * one, a security check of <code>RuntimePermission("getClassLoader")</code>
    * must first succeed. Primitive types and void return null.
    *
    * @return the ClassLoader that loaded this class
@@ -195,16 +163,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * @see RuntimePermission
    */
   public native ClassLoader getClassLoader ();
-
-  // A private internal method that is called by compiler-generated code.
-  private final native ClassLoader getClassLoader (Class caller);
-
-  /**
-   *  Internal method that circumvents the usual security checks when 
-   *  getting the class loader.
-   */
-  private native ClassLoader getClassLoaderInternal ();
-
+  
   /**
    * If this is an array, get the Class representing the type of array.
    * Examples: "[[Ljava.lang.String;" would return "[Ljava.lang.String;", and
@@ -234,6 +193,10 @@ public final class Class implements Type, GenericDeclaration, Serializable
   public native Constructor getConstructor(Class[] args)
     throws NoSuchMethodException;
 
+  // This is used to implement getConstructors and
+  // getDeclaredConstructors.
+  private native Constructor[] _getConstructors (boolean declared);
+
   /**
    * Get all the public constructors of this class. This returns an array of
    * length 0 if there are no constructors, including for primitive types,
@@ -248,8 +211,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
    */
   public Constructor[] getConstructors()
   {
-    memberAccessCheck(Member.PUBLIC);
-    return getDeclaredConstructors(true);
+    return _getConstructors(false);
   }
 
   /**
@@ -281,13 +243,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * @throws SecurityException if the security check fails
    * @since 1.1
    */
-  public Class[] getDeclaredClasses()
-  {
-    memberAccessCheck(Member.DECLARED);
-    return getDeclaredClasses(false);
-  }
-
-  native Class[] getDeclaredClasses (boolean publicOnly);
+  public native Class[] getDeclaredClasses();
 
   /**
    * Get all the declared constructors of this class. This returns an array of
@@ -303,11 +259,8 @@ public final class Class implements Type, GenericDeclaration, Serializable
    */
   public Constructor[] getDeclaredConstructors()
   {
-    memberAccessCheck(Member.DECLARED);
-    return getDeclaredConstructors(false);
+    return _getConstructors(true);
   }
-
-  native Constructor[] getDeclaredConstructors (boolean publicOnly);
 
   /**
    * Get a field declared in this class, where name is its simple name. The
@@ -350,8 +303,8 @@ public final class Class implements Type, GenericDeclaration, Serializable
   /**
    * Get a method declared in this class, where name is its simple name. The
    * implicit methods of Object are not available from arrays or interfaces.
-   * Constructors (named "&lt;init&gt;" in the class file) and class initializers
-   * (name "&lt;clinit&gt;") are not available.  The Virtual Machine allows
+   * Constructors (named "<init>" in the class file) and class initializers
+   * (name "<clinit>") are not available.  The Virtual Machine allows
    * multiple methods with the same signature but differing return types; in
    * such a case the most specific return types are favored, then the final
    * choice is arbitrary. If the method takes no argument, an array of zero
@@ -475,18 +428,25 @@ public final class Class implements Type, GenericDeclaration, Serializable
   /**
    * Returns the <code>Package</code> in which this class is defined
    * Returns null when this information is not available from the
-   * classloader of this class.
+   * classloader of this class or when the classloader of this class
+   * is null.
    *
    * @return the package for this class, if it is available
    * @since 1.2
    */
   public Package getPackage()
   {
-    ClassLoader cl = getClassLoaderInternal();
+    ClassLoader cl = getClassLoader();
     if (cl != null)
-      return cl.getPackage(getPackagePortion(getName()));
-    else
-      return VMClassLoader.getPackage(getPackagePortion(getName()));
+      {
+        String name = getName();
+	String pkg = "";
+	int idx = name.lastIndexOf('.');
+	if (idx >= 0)
+	  pkg = name.substring(0, idx);
+	return cl.getPackage(pkg);
+      }
+    return null;
   }
 
   /**
@@ -508,8 +468,8 @@ public final class Class implements Type, GenericDeclaration, Serializable
   /**
    * Get a public method declared or inherited in this class, where name is
    * its simple name. The implicit methods of Object are not available from
-   * interfaces.  Constructors (named "&lt;init&gt;" in the class file) and class
-   * initializers (name "&lt;clinit&gt;") are not available.  The Virtual
+   * interfaces.  Constructors (named "<init>" in the class file) and class
+   * initializers (name "<clinit>") are not available.  The Virtual
    * Machine allows multiple methods with the same signature but differing
    * return types, and the class can inherit multiple methods of the same
    * return type; in such a case the most specific return types are favored,
@@ -577,16 +537,8 @@ public final class Class implements Type, GenericDeclaration, Serializable
   
   /**
    * Get the name of this class, separated by dots for package separators.
-   * If the class represents a primitive type, or void, then the
-   * name of the type as it appears in the Java programming language
-   * is returned.  For instance, <code>Byte.TYPE.getName()</code>
-   * returns "byte".
-   *
-   * Arrays are specially encoded as shown on this table.
+   * Primitive types and arrays are encoded as:
    * <pre>
-   * array type          [<em>element type</em>
-   *                     (note that the element type is encoded per
-   *                      this table)
    * boolean             Z
    * byte                B
    * char                C
@@ -596,9 +548,9 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * float               F
    * double              D
    * void                V
+   * array type          [<em>element type</em>
    * class or interface, alone: &lt;dotted name&gt;
    * class or interface, as element type: L&lt;dotted name&gt;;
-   * </pre>
    *
    * @return the name of this class
    */
@@ -610,9 +562,9 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * the system classloader, ClassLoader.getSystemResource() is used instead.
    *
    * <p>If the name you supply is absolute (it starts with a <code>/</code>),
-   * then the leading <code>/</code> is removed and it is passed on to
-   * getResource(). If it is relative, the package name is prepended, and
-   * <code>.</code>'s are replaced with <code>/</code>.
+   * then it is passed on to getResource() as is.  If it is relative, the
+   * package name is prepended, and <code>.</code>'s are replaced with
+   * <code>/</code>.
    *
    * <p>The URL returned is system- and classloader-dependent, and could
    * change across implementations.
@@ -625,7 +577,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
   public URL getResource(String resourceName)
   {
     String name = resourcePath(resourceName);
-    ClassLoader loader = getClassLoaderInternal();
+    ClassLoader loader = getClassLoader();
     if (loader == null)
       return ClassLoader.getSystemResource(name);
     return loader.getResource(name);
@@ -638,9 +590,9 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * instead.
    *
    * <p>If the name you supply is absolute (it starts with a <code>/</code>),
-   * then the leading <code>/</code> is removed and it is passed on to
-   * getResource(). If it is relative, the package name is prepended, and
-   * <code>.</code>'s are replaced with <code>/</code>.
+   * then it is passed on to getResource() as is.  If it is relative, the
+   * package name is prepended, and <code>.</code>'s are replaced with
+   * <code>/</code>.
    *
    * <p>The URL returned is system- and classloader-dependent, and could
    * change across implementations.
@@ -653,7 +605,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
   public InputStream getResourceAsStream(String resourceName)
   {
     String name = resourcePath(resourceName);
-    ClassLoader loader = getClassLoaderInternal();
+    ClassLoader loader = getClassLoader();
     if (loader == null)
       return ClassLoader.getSystemResourceAsStream(name);
     return loader.getResourceAsStream(name);
@@ -661,19 +613,17 @@ public final class Class implements Type, GenericDeclaration, Serializable
 
   private String resourcePath(String resourceName)
   {
-    if (resourceName.length() > 0)
-      {
-	if (resourceName.charAt(0) != '/')
-	  {
-	    String pkg = getPackagePortion(getName());
-	    if (pkg.length() > 0)
-	      resourceName = pkg.replace('.','/') + '/' + resourceName;
-	  }
-	else
-	  {
-	    resourceName = resourceName.substring(1);
-	  }
-      }
+    if (resourceName.startsWith("/"))
+      return resourceName.substring(1);
+
+    Class c = this;
+    while (c.isArray())
+      c = c.getComponentType();
+
+    String packageName = c.getName().replace('.', '/');
+    int end = packageName.lastIndexOf('/');
+    if (end != -1)
+      return packageName.substring(0, end + 1) + resourceName;
     return resourceName;
   }
 
@@ -793,8 +743,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
    * Returns the protection domain of this class. If the classloader did not
    * record the protection domain when creating this class the unknown
    * protection domain is returned which has a <code>null</code> code source
-   * and all permissions. A security check may be performed, with
-   * <code>RuntimePermission("getProtectionDomain")</code>.
+   * and all permissions.
    *
    * @return the protection domain
    * @throws SecurityException if the security manager exists and the caller
@@ -848,7 +797,7 @@ public final class Class implements Type, GenericDeclaration, Serializable
    */
   public boolean desiredAssertionStatus()
   {
-    ClassLoader c = getClassLoaderInternal();
+    ClassLoader c = getClassLoader();
     Object status;
     if (c == null)
       return VMClassLoader.defaultAssertionStatus();
@@ -928,105 +877,4 @@ public final class Class implements Type, GenericDeclaration, Serializable
 	  sm.checkPackageAccess(pkg.getName());
       }
   }
-
-  /**
-   * Returns the simple name for this class, as used in the source
-   * code.  For normal classes, this is the content returned by
-   * <code>getName()</code> which follows the last ".".  Anonymous
-   * classes have no name, and so the result of calling this method is
-   * "".  The simple name of an array consists of the simple name of
-   * its component type, followed by "[]".  Thus, an array with the
-   * component type of an anonymous class has a simple name of simply
-   * "[]".
-   *
-   * @return the simple name for this class.
-   * @since 1.5
-   */
-  public String getSimpleName()
-  {
-    // FIXME write real implementation
-    return "";
-  }
-
-  /**
-   * Returns the class which immediately encloses this class.  If this class
-   * is a top-level class, this method returns <code>null</code>.
-   *
-   * @return the immediate enclosing class, or <code>null</code> if this is
-   *         a top-level class.
-   * @since 1.5
-   */
-   /* FIXME[GENERICS]: Should return Class<?> */
-  public Class getEnclosingClass()
-  {
-    // FIXME write real implementation
-    return null;
-  }
-
-  /**
-   * Returns the constructor which immediately encloses this class.  If
-   * this class is a top-level class, or a local or anonymous class
-   * immediately enclosed by a type definition, instance initializer
-   * or static initializer, then <code>null</code> is returned.
-   *
-   * @return the immediate enclosing constructor if this class is
-   *         declared within a constructor.  Otherwise, <code>null</code>
-   *         is returned.
-   * @since 1.5
-   */
-   /* FIXME[GENERICS]: Should return Constructor<?> */
-  public Constructor getEnclosingConstructor()
-  {
-    // FIXME write real implementation
-    return null;
-  }
-
-  /**
-   * Returns the method which immediately encloses this class.  If
-   * this class is a top-level class, or a local or anonymous class
-   * immediately enclosed by a type definition, instance initializer
-   * or static initializer, then <code>null</code> is returned.
-   *
-   * @return the immediate enclosing method if this class is
-   *         declared within a method.  Otherwise, <code>null</code>
-   *         is returned.
-   * @since 1.5
-   */
-  public Method getEnclosingMethod()
-  {
-    // FIXME write real implementation
-    return null;
-  }
-
-  /**
-   * Returns an array of <code>TypeVariable</code> objects that represents
-   * the type variables declared by this class, in declaration order.
-   * An array of size zero is returned if this class has no type
-   * variables.
-   *
-   * @return the type variables associated with this class.
-   * @throws GenericSignatureFormatError if the generic signature does
-   *         not conform to the format specified in the Virtual Machine
-   *         specification, version 3.
-   * @since 1.5
-   */
-   /* FIXME[GENERICS]: Should return TypeVariable<Class<T>> */
-  public TypeVariable[] getTypeParameters()
-  {
-    // FIXME - provide real implementation.
-    return new TypeVariable[0];
-  }
-
-  /**
-   * Returns true if this class is an <code>Enum</code>.
-   *
-   * @return true if this is an enumeration class.
-   * @since 1.5
-   */
-  public boolean isEnum()
-  {
-    // FIXME - provide real implementation.
-    return false;
-  }
-
 }

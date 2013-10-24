@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* { dg-do compile } */
 /* { dg-options "-O2 -fdump-tree-fab" } */
 
@@ -34,4 +35,3 @@ test (va_list ap1, va_list ap2, va_list ap3, va_list ap4, va_list ap5,
 /* { dg-final { scan-tree-dump "vi4.*vprintf.*\"%s\".*vi5" "fab"} } */
 /* { dg-final { scan-tree-dump "vi5.*vprintf.*\"%c\".*vi6" "fab"} } */
 /* { dg-final { scan-tree-dump "vi6.*vprintf.*\"%s\\\\n\".*vi7" "fab"} } */
-/* { dg-final { cleanup-tree-dump "fab" } } */

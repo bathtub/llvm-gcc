@@ -1,5 +1,6 @@
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 /* { dg-do run } */
-/* { dg-options "-std=c99 -fextended-identifiers" } */
+/* { dg-options "-std=c99" } */
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,3 +15,4 @@ int main (void)
   
   return 0;
 }
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */

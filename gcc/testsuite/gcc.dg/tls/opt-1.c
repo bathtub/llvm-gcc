@@ -1,8 +1,7 @@
 /* { dg-do compile } */
 /* { dg-options "-O2 -fPIC" } */
-/* { dg-options "-O2 -fPIC -mtune=i686" { target { { i?86-*-* x86_64-*-* } && ilp32 } } } */
-/* { dg-require-effective-target tls } */
-/* { dg-require-effective-target fpic } */
+/* { dg-options "-O2 -fPIC -mtune=i686" { target i?86-*-* } } */
+/* { dg-skip-if "" { i?86-*-* } { "-m64" } { "" } } */
 
 extern __thread int thr;
 

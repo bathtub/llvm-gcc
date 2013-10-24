@@ -1,7 +1,4 @@
-// Causes timeout for the MMIX simulator on a 3GHz P4 and we can't
-// have "compile" for some targets and "run" for others.
-// { dg-do run { target { ! mmix-*-* } } }
-// { dg-options "-mstructure-size-boundary=8" { target arm-*-* } }
+// { dg-do run }
 
 // Copyright (C) 2004 Free Software Foundation, Inc.
 // Contributed by Nathan Sidwell 8 Dec 2004 <nathan@codesourcery.com>
@@ -9,9 +6,6 @@
 // PR 16681 too much memory used
 // Origin:  Matt LaFary <lafary@activmedia.com>
 
-// NOTE: This test assumes that 4M instances of struct ELT can fit into
-//       a 5MB array.  This isn't true, e.g., with the default
-//       arm-none-elf options.
 
 struct elt 
 {

@@ -2,7 +2,7 @@
    negative displacements.  */
 
 /* { dg-do compile { target s390-*-* } } */
-/* { dg-options "-O2 -mesa" } */
+/* { dg-options "-O2" } */
 
 int test (int *addr)
 {

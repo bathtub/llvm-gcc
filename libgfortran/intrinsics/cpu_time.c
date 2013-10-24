@@ -24,8 +24,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <sys/types.h>
@@ -86,46 +86,8 @@ Boston, MA 02110-1301, USA.  */
 static inline void __cpu_time_1 (long *, long *) ATTRIBUTE_ALWAYS_INLINE;
 
 /* Helper function for the actual implementation of the CPU_TIME
-   intrinsic.  Returns a CPU time in microseconds or -1 if no CPU time
+   intrnsic.  Returns a CPU time in microseconds or -1 if no CPU time
    could be computed.  */
-
-#ifdef __MINGW32__
-
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-
-static void
-__cpu_time_1 (long *sec, long *usec)
-{
-  union {
-    FILETIME ft;
-    unsigned long long ulltime;
-  } kernel_time,  user_time;
-
-  FILETIME unused1, unused2;
-  unsigned long long total_time;
-
-  /* No support for Win9x.  The high order bit of the DWORD
-     returned by GetVersion is 0 for NT and higher. */
-  if (GetVersion () >= 0x80000000)
-    {
-      *sec = -1;
-      *usec = 0;
-      return;
-    }
-
-  /* The FILETIME structs filled in by GetProcessTimes represent
-     time in 100 nanosecond units. */
-  GetProcessTimes (GetCurrentProcess (), &unused1, &unused2,
-              	   &kernel_time.ft, &user_time.ft);
-      
-  total_time = (kernel_time.ulltime + user_time.ulltime)/10; 
-  *sec = total_time / 1000000;
-  *usec = total_time % 1000000;
-}
-
-#else
-
 static inline void
 __cpu_time_1 (long *sec, long *usec)
 {
@@ -148,8 +110,6 @@ __cpu_time_1 (long *sec, long *usec)
 #endif  /* HAVE_GETRUSAGE */
 }
 
-#endif
-
 extern void cpu_time_4 (GFC_REAL_4 *);
 iexport_proto(cpu_time_4);
 
@@ -170,30 +130,6 @@ void cpu_time_8 (GFC_REAL_8 *time)
   __cpu_time_1 (&sec, &usec);
   *time = sec + usec * (GFC_REAL_8)1.e-6;
 }
-
-#ifdef HAVE_GFC_REAL_10
-extern void cpu_time_10 (GFC_REAL_10 *);
-export_proto(cpu_time_10);
-
-void cpu_time_10 (GFC_REAL_10 *time)
-{
-  long sec, usec;
-  __cpu_time_1 (&sec, &usec);
-  *time = sec + usec * (GFC_REAL_10)1.e-6;
-}
-#endif
-
-#ifdef HAVE_GFC_REAL_16
-extern void cpu_time_16 (GFC_REAL_16 *);
-export_proto(cpu_time_16);
-
-void cpu_time_16 (GFC_REAL_16 *time)
-{
-  long sec, usec;
-  __cpu_time_1 (&sec, &usec);
-  *time = sec + usec * (GFC_REAL_16)1.e-6;
-}
-#endif
 
 extern void second_sub (GFC_REAL_4 *);
 export_proto(second_sub);

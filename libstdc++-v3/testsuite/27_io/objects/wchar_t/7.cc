@@ -3,7 +3,7 @@
 
 // 2003-05-01 Petur Runolfsson  <peturr02@ru.is>
 
-// Copyright (C) 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2005 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -18,7 +18,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // 27.3 Standard iostream objects
@@ -30,14 +30,10 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-// No asserts, avoid leaking the semaphore if a VERIFY fails.
-#undef _GLIBCXX_ASSERT
-
 #include <testsuite_hooks.h>
 
 // Check that wcout.flush() is called when last ios_base::Init is destroyed.
-bool test07()
+void test07()
 {
   using namespace std;
   using namespace __gnu_test;
@@ -50,7 +46,7 @@ bool test07()
   unlink(name);  
   mkfifo(name, S_IRWXU);
   semaphore s1;
-
+  
   int child = fork();
   VERIFY( child != -1 );
 
@@ -67,18 +63,17 @@ bool test07()
   
   wfilebuf fbin;
   fbin.open(name, ios_base::in);
-  s1.signal();
+  s1.signal ();
   wfilebuf::int_type c = fbin.sbumpc();
   VERIFY( c != wfilebuf::traits_type::eof() );
   VERIFY( c == wfilebuf::traits_type::to_int_type(L'a') );
 
   fbin.close();
-
-  return test;
 }
 
 int
 main()
 {
-  return !test07();
+  test07();
+  return 0;
 }

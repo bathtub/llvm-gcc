@@ -1,7 +1,7 @@
 
 // natFileChannelImplPosix.cc - Native part of FileChannelImpl class.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -37,7 +37,6 @@ details.  */
 #include <java/lang/NullPointerException.h>
 #include <java/lang/System.h>
 #include <java/lang/String.h>
-#include <java/lang/StringBuffer.h>
 #include <java/lang/Thread.h>
 #include <java/nio/ByteBuffer.h>
 #include <java/nio/MappedByteBufferImpl.h>
@@ -169,14 +168,16 @@ FileChannelImpl::open (jstring path, jint jflags)
     }
   if (fd == -1)
     {
+      char msg[MAXPATHLEN + 200];
       // We choose the formatting here for JDK compatibility, believe
       // it or not.
-      ::java::lang::StringBuffer *msg = new ::java::lang::StringBuffer (path);
-      msg->append (JvNewStringUTF (" ("));
-      msg->append (JvNewStringUTF (strerror (errno)));
-      msg->append (JvNewStringUTF (")"));
-      throw new ::java::io::FileNotFoundException (msg->toString ());
+      sprintf (msg, "%.*s (%.*s)",
+	       MAXPATHLEN + 150, buf,
+	       40, strerror (errno));
+      throw new ::java::io::FileNotFoundException (JvNewStringLatin1 (msg));
     }
+
+  _Jv_platform_close_on_exec (fd);
 
   return fd;
 }
@@ -229,7 +230,6 @@ FileChannelImpl::write (jbyteArray b, jint offset, jint len)
 	    }
 	  if (errno != EINTR)
 	    throw new IOException (JvNewStringLatin1 (strerror (errno)));
-	  continue;
 	}
 
       written += r;

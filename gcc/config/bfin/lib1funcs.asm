@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* As a special exception, if you link this library with files
    compiled with GCC to produce an executable, this does not cause
@@ -64,16 +64,17 @@ ___divsi3:
 .type ___modsi3, STT_FUNC;
 
 ___modsi3:
-	[--SP] = RETS;
-	[--SP] = R0;
-	[--SP] = R1;
-	CALL ___divsi3;
-	R2 = [SP++];
-	R1 = [SP++];
+        [--SP] = RETS;
+	/* P1 and P2 are preserved by divsi3 and udivsi3.  */
+	P1 = R0;
+	P2 = R1;
+        CALL ___divsi3;
+	R1 = P1;
+	R2 = P2;
 	R2 *= R0;
 	R0 = R1 - R2;
 	RETS = [SP++];
-	RTS; 
+        RTS; 
 #endif
 
 #ifdef L_udivsi3
@@ -110,10 +111,10 @@ ___udivsi3:
 .type ___umodsi3, STT_FUNC;
 
 ___umodsi3:
-	[--SP] = RETS;
-	CALL ___udivsi3;
+        P1 = RETS;
+        CALL ___udivsi3;
 	R0 = R3;
-	RETS = [SP++]; 
-	RTS;
+	RETS = P1; 
+        RTS;
 #endif
 

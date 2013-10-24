@@ -15,4 +15,3 @@ B<int> b;
 
 int main () {}
 
-// { dg-final { cleanup-repo-files } }

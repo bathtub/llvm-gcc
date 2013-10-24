@@ -15,8 +15,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 /*
@@ -51,7 +51,11 @@ NOTES
 #include "libiberty.h"
 #include <sys/types.h>		/* size_t */
 
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 
 # if HAVE_STRING_H
 #  include <string.h>
@@ -65,9 +69,11 @@ NOTES
 #include <stdlib.h>
 #endif
 
-static inline unsigned long vconcat_length (const char *, va_list);
+static inline unsigned long vconcat_length PARAMS ((const char *, va_list));
 static inline unsigned long
-vconcat_length (const char *first, va_list args)
+vconcat_length (first, args)
+     const char *first;
+     va_list args;
 {
   unsigned long length = 0;
   const char *arg;
@@ -78,8 +84,12 @@ vconcat_length (const char *first, va_list args)
   return length;
 }
 
+static inline char *vconcat_copy PARAMS ((char *, const char *, va_list));
 static inline char *
-vconcat_copy (char *dst, const char *first, va_list args)
+vconcat_copy (dst, first, args)
+     char *dst;
+     const char *first;
+     va_list args;
 {
   char *end = dst;
   const char *arg;
@@ -98,7 +108,7 @@ vconcat_copy (char *dst, const char *first, va_list args)
 /* @undocumented concat_length */
 
 unsigned long
-concat_length (const char *first, ...)
+concat_length VPARAMS ((const char *first, ...))
 {
   unsigned long length;
 
@@ -113,7 +123,7 @@ concat_length (const char *first, ...)
 /* @undocumented concat_copy */
 
 char *
-concat_copy (char *dst, const char *first, ...)
+concat_copy VPARAMS ((char *dst, const char *first, ...))
 {
   char *save_dst;
 
@@ -127,18 +137,12 @@ concat_copy (char *dst, const char *first, ...)
   return save_dst;
 }
 
-#ifdef __cplusplus
-extern "C" {
-#endif /* __cplusplus */
 char *libiberty_concat_ptr;
-#ifdef __cplusplus
-}
-#endif /* __cplusplus */
 
 /* @undocumented concat_copy2 */
 
 char *
-concat_copy2 (const char *first, ...)
+concat_copy2 VPARAMS ((const char *first, ...))
 {
   VA_OPEN (args, first);
   VA_FIXEDARG (args, const char *, first);
@@ -149,14 +153,14 @@ concat_copy2 (const char *first, ...)
 }
 
 char *
-concat (const char *first, ...)
+concat VPARAMS ((const char *first, ...))
 {
   char *newstr;
 
   /* First compute the size of the result and get sufficient memory.  */
   VA_OPEN (args, first);
   VA_FIXEDARG (args, const char *, first);
-  newstr = XNEWVEC (char, vconcat_length (first, args) + 1);
+  newstr = (char *) xmalloc (vconcat_length (first, args) + 1);
   VA_CLOSE (args);
 
   /* Now copy the individual pieces to the result string. */
@@ -186,7 +190,7 @@ loop:
 */
 
 char *
-reconcat (char *optr, const char *first, ...)
+reconcat VPARAMS ((char *optr, const char *first, ...))
 {
   char *newstr;
 
@@ -194,7 +198,7 @@ reconcat (char *optr, const char *first, ...)
   VA_OPEN (args, first);
   VA_FIXEDARG (args, char *, optr);
   VA_FIXEDARG (args, const char *, first);
-  newstr = XNEWVEC (char, vconcat_length (first, args) + 1);
+  newstr = (char *) xmalloc (vconcat_length (first, args) + 1);
   VA_CLOSE (args);
 
   /* Now copy the individual pieces to the result string. */
@@ -217,7 +221,7 @@ reconcat (char *optr, const char *first, ...)
 #include <stdio.h>
 
 int
-main (void)
+main ()
 {
   printf ("\"\" = \"%s\"\n", concat (NULLP));
   printf ("\"a\" = \"%s\"\n", concat ("a", NULLP));

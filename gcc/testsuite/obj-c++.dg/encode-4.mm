@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Test Objective-C method encodings. */
 
 /* The _encoded_ parameter offsets for Objective-C methods are 
@@ -16,9 +17,9 @@
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-do run } */
 
-
 #include <objc/objc.h>
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 #ifdef __NEXT_RUNTIME__
 #define METHOD Method
@@ -31,9 +32,10 @@
 #define CLASS_GETINSTANCEMETHOD class_get_instance_method
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-
+extern "C" {
+  extern int sscanf(const char *str, const char *format, ...);
+  extern void abort(void);
+}
 #define CHECK_IF(expr) if(!(expr)) abort()
 
 @interface Foo: Object
@@ -84,8 +86,14 @@ int main(void) {
 
   meth = CLASS_GETINSTANCEMETHOD(fooClass, @selector(setRect:withInt:));
   offs2 = 9999;
+/* APPLE LOCAL radar 4923914 */
+#   if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_5 || __OBJC2__)
+  sscanf(method_getTypeEncoding(meth), "@%u@%u:%u{_XXRect={?=ff}{?=ff}}%ui%u",
+      &offs1, &offs2, &offs3, &offs4, &offs5);
+#else
   sscanf(meth->method_types, "@%u@%u:%u{_XXRect={?=ff}{?=ff}}%ui%u", &offs1, &offs2, &offs3,
       &offs4, &offs5);
+#endif
   CHECK_IF(!offs2);
   [foo setRect:my_rect withInt:123];
 
@@ -95,8 +103,14 @@ int main(void) {
     string = "v%u@%u:%uc%uf%ud%uq%u";
   else
     string = "v%u@%u:%uc%uf%ud%ul%u";
+/* APPLE LOCAL radar 4923914 */
+#   if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_5 || __OBJC2__)
+  sscanf(method_getTypeEncoding(meth), string, &offs1, &offs2, &offs3,
+	 &offs4, &offs5, &offs6, &offs7);
+#else
   sscanf(meth->method_types, string, &offs1, &offs2, &offs3,  
 	 &offs4, &offs5, &offs6, &offs7);
+#endif
   CHECK_IF(!offs2);
   [foo char:'c' float:2.3 double:3.5 long:2345L];
 

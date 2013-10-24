@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 /* This header defines all the internal data structures and functions
    that need to be visible across files.  It should not be used outside
@@ -115,7 +115,8 @@ extern unsigned char *_cpp_unaligned_alloc (cpp_reader *, size_t);
 #define BUFF_LIMIT(BUFF) ((BUFF)->limit)
 
 /* #include types.  */
-enum include_type {IT_INCLUDE, IT_INCLUDE_NEXT, IT_IMPORT, IT_CMDLINE};
+/* APPLE LOCAL pch distcc --mrs */
+enum include_type {IT_INCLUDE, IT_INCLUDE_PCH, IT_INCLUDE_NEXT, IT_IMPORT, IT_CMDLINE};
 
 union utoken
 {
@@ -171,6 +172,11 @@ struct cpp_context
 
   /* True if utoken element is token, else ptoken.  */
   bool direct_p;
+
+  /* APPLE LOCAL begin CW asm blocks */
+  /* True if this expansion is at the beginning of a line.  */
+  bool bol_p;
+  /* APPLE LOCAL end CW asm blocks */
 };
 
 struct lexer_state
@@ -205,6 +211,9 @@ struct lexer_state
   /* Nonzero to prevent macro expansion.  */
   unsigned char prevent_expansion;
 
+  /* Nonzero when handling a deferred pragma.  */
+  unsigned char in_deferred_pragma;
+
   /* Nonzero when parsing arguments to a function-like macro.  */
   unsigned char parsing_args;
 
@@ -214,12 +223,6 @@ struct lexer_state
 
   /* Nonzero to skip evaluating part of an expression.  */
   unsigned int skip_eval;
-
-  /* Nonzero when handling a deferred pragma.  */
-  unsigned char in_deferred_pragma;
-
-  /* Nonzero if the deferred pragma being handled allows macro expansion.  */
-  unsigned char pragma_allow_expansion;
 };
 
 /* Special nodes - identifiers with predefined significance.  */
@@ -263,10 +266,6 @@ struct cpp_buffer
   /* Pointer into the file table; non-NULL if this is a file buffer.
      Used for include_next and to record control macros.  */
   struct _cpp_file *file;
-
-  /* Saved value of __TIMESTAMP__ macro - date and time of last modification
-     of the assotiated file.  */
-  const unsigned char *timestamp;
 
   /* Value of if_stack at start of this file.
      Used to prohibit unmatched #endif (etc) in an include file.  */
@@ -348,6 +347,9 @@ struct cpp_reader
   struct _cpp_file *all_files;
 
   struct _cpp_file *main_file;
+  /* APPLE LOCAL begin predictive compilation */
+  bool   is_main_file;
+  /* APPLE LOCAL end predictive compilation */
 
   /* File and directory hash table.  */
   struct htab *file_hash;
@@ -372,6 +374,12 @@ struct cpp_reader
   cpp_token *cur_token;
   tokenrun base_run, *cur_run;
   unsigned int lookaheads;
+  /* APPLE LOCAL begin 4137741 */
+  /* Buffer of pending CPP_EINCL tokens.  */
+  cpp_token *beg_eincl, *end_eincl;
+  tokenrun base_eincl, *cur_eincl;
+  bool have_eincl;
+  /* APPLE LOCAL end 4137741 */
 
   /* Nonzero prevents the lexer from re-using the token runs.  */
   unsigned int keep_tokens;
@@ -479,6 +487,10 @@ extern unsigned char _cpp_trigraph_map[UCHAR_MAX + 1];
 
 /* Macros.  */
 
+/* APPLE LOCAL begin warning in system headers */
+#define CPP_IN_SYSTEM_HEADER(PFILE) ((PFILE)->line_table && (PFILE)->line_table->maps && (PFILE)->line_table->maps->sysp)
+/* APPLE LOCAL end warning in system headers */
+
 static inline int cpp_in_system_header (cpp_reader *);
 static inline int
 cpp_in_system_header (cpp_reader *pfile)
@@ -503,18 +515,15 @@ extern bool _cpp_arguments_ok (cpp_reader *, cpp_macro *, const cpp_hashnode *,
 			       unsigned int);
 extern const unsigned char *_cpp_builtin_macro_text (cpp_reader *,
 						     cpp_hashnode *);
-extern int _cpp_warn_if_unused_macro (cpp_reader *, cpp_hashnode *, void *);
-extern void _cpp_push_token_context (cpp_reader *, cpp_hashnode *,
-				     const cpp_token *, unsigned int);
-
+int _cpp_warn_if_unused_macro (cpp_reader *, cpp_hashnode *, void *);
 /* In identifiers.c */
 extern void _cpp_init_hashtable (cpp_reader *, hash_table *);
 extern void _cpp_destroy_hashtable (cpp_reader *);
 
 /* In files.c */
 typedef struct _cpp_file _cpp_file;
-extern _cpp_file *_cpp_find_file (cpp_reader *, const char *, cpp_dir *,
-				  bool, int);
+extern _cpp_file *_cpp_find_file (cpp_reader *, const char *fname,
+				  cpp_dir *start_dir, bool fake);
 extern bool _cpp_find_failed (_cpp_file *);
 extern void _cpp_mark_file_once_only (cpp_reader *, struct _cpp_file *);
 extern void _cpp_fake_include (cpp_reader *, const char *);
@@ -528,7 +537,6 @@ extern void _cpp_cleanup_files (cpp_reader *);
 extern void _cpp_pop_file_buffer (cpp_reader *, struct _cpp_file *);
 extern bool _cpp_save_file_entries (cpp_reader *pfile, FILE *f);
 extern bool _cpp_read_file_entries (cpp_reader *, FILE *);
-extern struct stat *_cpp_get_file_stat (_cpp_file *);
 
 /* In expr.c */
 extern bool _cpp_parse_expr (cpp_reader *);
@@ -544,6 +552,8 @@ extern const cpp_token *_cpp_lex_token (cpp_reader *);
 extern cpp_token *_cpp_lex_direct (cpp_reader *);
 extern int _cpp_equiv_tokens (const cpp_token *, const cpp_token *);
 extern void _cpp_init_tokenrun (tokenrun *, unsigned int);
+/* APPLE LOCAL 4137741 */
+extern tokenrun *_cpp_next_tokenrun (tokenrun *);
 
 /* In init.c.  */
 extern void _cpp_maybe_push_include_file (cpp_reader *);
@@ -575,6 +585,7 @@ extern unsigned char *_cpp_copy_replacement_text (const cpp_macro *,
 extern size_t _cpp_replacement_text_len (const cpp_macro *);
 
 /* In charset.c.  */
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 
 /* The normalization state at this point in the sequence.
    It starts initialized to all zeros, and at the end
@@ -600,14 +611,17 @@ struct normalize_state
 extern cppchar_t _cpp_valid_ucn (cpp_reader *, const unsigned char **,
 				 const unsigned char *, int,
 				 struct normalize_state *state);
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 extern void _cpp_destroy_iconv (cpp_reader *);
 extern unsigned char *_cpp_convert_input (cpp_reader *, const char *,
 					  unsigned char *, size_t, size_t,
 					  off_t *);
 extern const char *_cpp_default_encoding (void);
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 extern cpp_hashnode * _cpp_interpret_identifier (cpp_reader *pfile,
 						 const unsigned char *id,
 						 size_t len);
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 
 /* Utility routines and macros.  */
 #define DSC(str) (const unsigned char *)str, sizeof str - 1

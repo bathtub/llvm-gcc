@@ -1,6 +1,5 @@
 /* InetAddress.java -- Class to model an Internet address
-   Copyright (C) 1998, 1999, 2002, 2004, 2005, 2006
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2002, 2004  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -16,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -39,6 +38,8 @@ exception statement from your version. */
 
 package java.net;
 
+import gnu.classpath.Configuration;
+
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -57,7 +58,6 @@ import java.io.Serializable;
  *
  * @author Aaron M. Renn (arenn@urbanophile.com)
  * @author Per Bothner
- * @author Gary Benson (gbenson@redhat.com)
  *
  * @specnote This class is not final since JK 1.4
  */
@@ -66,50 +66,27 @@ public class InetAddress implements Serializable
   private static final long serialVersionUID = 3286316764910316507L;
 
   /**
-   * Stores static localhost address object.
-   */
-  static InetAddress LOCALHOST;
-  static
-  {
-    try
-      {
-	LOCALHOST = getByAddress("localhost", new byte[] {127, 0, 0, 1});
-	// Some soon-to-be-removed native code synchronizes on this.
-	loopbackAddress = LOCALHOST;
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
-  }    
-
-  /**
    * Dummy InetAddress, used to bind socket to any (all) network interfaces.
    */
   static InetAddress ANY_IF;
+    
+  private static final byte[] loopbackAddress = { 127, 0, 0, 1 };
+
+  private static final InetAddress loopback 
+    = new Inet4Address(loopbackAddress, "localhost");
+
+  private static InetAddress localhost = null;
+
   static
   {
-    byte[] addr;
-    try
-      {
-	addr = VMInetAddress.lookupInaddrAny();
-      }
-    catch (UnknownHostException e)
-      {
-	// Make one up and hope it works.
-	addr = new byte[] {0, 0, 0, 0};
-      }
-    try
-      {
-	ANY_IF = getByAddress(addr);
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
-    ANY_IF.hostName = ANY_IF.getHostName();
+    // load the shared library needed for name resolution
+    if (Configuration.INIT_LOAD_LIBRARY)
+      System.loadLibrary("javanet");
+    
+    byte[] zeros = { 0, 0, 0, 0 };
+    ANY_IF = new Inet4Address(zeros, "0.0.0.0");
   }
-  
+
   /**
    * The Serialized Form specifies that an int 'address' is saved/restored.
    * This class uses a byte array internally so we'll just do the conversion
@@ -128,28 +105,29 @@ public class InetAddress implements Serializable
   String hostName;
 
   /**
-   * Needed for serialization.
+   * The field 'family' seems to be the AF_ value.
+   * FIXME: Much of the code in the other java.net classes does not make
+   * use of this family field.  A better implementation would be to make
+   * use of getaddrinfo() and have other methods just check the family
+   * field rather than examining the length of the address each time.
    */
-  private int family;
+  int family;
 
   /**
-   * Constructor.  Prior to the introduction of IPv6 support in 1.4,
-   * methods such as InetAddress.getByName() would return InetAddress
-   * objects.  From 1.4 such methods returned either Inet4Address or
-   * Inet6Address objects, but for compatibility Inet4Address objects
-   * are serialized as InetAddresses.  As such, there are only two
-   * places where it is appropriate to invoke this constructor: within
-   * subclasses constructors and within Inet4Address.writeReplace().
+   * Initializes this object's addr instance variable from the passed in
+   * int array.  Note that this constructor is protected and is called
+   * only by static methods in this class.
    *
    * @param ipaddr The IP number of this address as an array of bytes
    * @param hostname The hostname of this IP address.
-   * @param family The address family of this IP address.
    */
-  InetAddress(byte[] ipaddr, String hostname, int family)
+  InetAddress(byte[] ipaddr, String hostname)
   {
     addr = (null == ipaddr) ? null : (byte[]) ipaddr.clone();
     hostName = hostname;
-    this.family = family;
+    
+    if (ipaddr != null)
+      family = getFamily(ipaddr);
   }
 
   /**
@@ -157,263 +135,153 @@ public class InetAddress implements Serializable
    * An address is multicast if the high four bits are "1110".  These are
    * also known as "Class D" addresses.
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @return true if mulitcast, false if not
    *
    * @since 1.1
    */
   public boolean isMulticastAddress()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMulticastAddress();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // Mask against high order bits of 1110
+    if (addr.length == 4)
+      return (addr[0] & 0xF0) == 0xE0;
+
+    // Mask against high order bits of 11111111
+    if (addr.length == 16)
+      return addr [0] == (byte) 0xFF;
+    
+    return false;
   }
 
   /**
    * Utility routine to check if the InetAddress in a wildcard address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isAnyLocalAddress()
   {
-    // This is inefficient, but certain methods on Win32 create
-    // InetAddress objects using "new InetAddress" rather than
-    // "InetAddress.getByAddress" so we provide a method body.
-    // This code is never executed on Posix systems.
-    try
-      {
-	return getByAddress(hostName, addr).isAnyLocalAddress();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    return equals(ANY_IF);
   }
 
   /**
    * Utility routine to check if the InetAddress is a loopback address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isLoopbackAddress()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isLoopbackAddress();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    return addr[0] == 0x7F;
   }
 
   /**
    * Utility routine to check if InetAddress is a link local address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isLinkLocalAddress()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isLinkLocalAddress();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // XXX: This seems to not exist with IPv4 addresses
+    return false;
   }
 
   /**
    * Utility routine to check if InetAddress is a site local address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isSiteLocalAddress()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isSiteLocalAddress();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // 10.0.0.0/8
+    if (addr[0] == 0x0A)
+      return true;
+
+    // XXX: Suns JDK 1.4.1 (on Linux) seems to have a bug here:
+    // it says 172.16.0.0 - 172.255.255.255 are site local addresses
+    // 172.16.0.0/12
+    if (addr[0] == 0xAC && (addr[1] & 0xF0) == 0x01)
+      return true;
+
+    // 192.168.0.0/16
+    if (addr[0] == 0xC0 && addr[1] == 0xA8)
+      return true;
+
+    // XXX: Do we need to check more addresses here ?
+    return false;
   }
 
   /**
    * Utility routine to check if InetAddress is a global multicast address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isMCGlobal()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMCGlobal();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // XXX: This seems to not exist with IPv4 addresses
+    return false;
   }
 
   /**
-   * Utility routine to check if InetAddress is a node local multicast address.
+   * Utility reoutine to check if InetAddress is a node local multicast address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isMCNodeLocal()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMCNodeLocal();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // XXX: This seems to not exist with IPv4 addresses
+    return false;
   }
 
   /**
-   * Utility routine to check if InetAddress is a link local multicast address.
+   * Utility reoutine to check if InetAddress is a link local multicast address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isMCLinkLocal()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMCLinkLocal();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    if (! isMulticastAddress())
+      return false;
+
+    return (addr[0] == 0xE0 && addr[1] == 0x00 && addr[2] == 0x00);
   }
 
   /**
-   * Utility routine to check if InetAddress is a site local multicast address.
+   * Utility routine to check if InetAddress is a site local multicast address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isMCSiteLocal()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMCSiteLocal();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // XXX: This seems to not exist with IPv4 addresses
+    return false;
   }
 
   /**
-   * Utility routine to check if InetAddress is a organization local
-   * multicast address.
+   * Utility reoutine to check if InetAddress is a organization local
+   * multicast address
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @since 1.4
    */
   public boolean isMCOrgLocal()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).isMCOrgLocal();
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
+    // This is the IPv4 implementation.
+    // Any class derived from InetAddress should override this.
+    // XXX: This seems to not exist with IPv4 addresses
+    return false;
   }
 
   /**
@@ -424,25 +292,13 @@ public class InetAddress implements Serializable
    */
   public String getHostName()
   {
-    if (hostName == null)
-      hostName = getCanonicalHostName();
+    if (hostName != null)
+      return hostName;
 
+    // Lookup hostname and set field.
+    lookup (null, this, false);
+    
     return hostName;
-  }
-
-  /**
-   * Returns the canonical hostname represented by this InetAddress
-   */
-  String internalGetCanonicalHostName()
-  {
-    try
-      {
-	return ResolverCache.getHostByAddr(addr);
-      }
-    catch (UnknownHostException e)
-      {
-	return getHostAddress();
-      }
   }
 
   /**
@@ -452,14 +308,12 @@ public class InetAddress implements Serializable
    */
   public String getCanonicalHostName()
   {
-    String hostname = internalGetCanonicalHostName();
-
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
       {
         try
 	  {
-            sm.checkConnect(hostname, -1);
+            sm.checkConnect(hostName, -1);
 	  }
 	catch (SecurityException e)
 	  {
@@ -467,7 +321,16 @@ public class InetAddress implements Serializable
 	  }
       }
 
-    return hostname;
+    // Try to find the FDQN now
+    InetAddress address;
+    byte[] ipaddr = getAddress();
+
+    if (ipaddr.length == 16)
+      address = new Inet6Address(getAddress(), null);
+    else
+      address = new Inet4Address(getAddress(), null);
+
+    return address.getHostName();
   }
 
   /**
@@ -482,32 +345,91 @@ public class InetAddress implements Serializable
     return (byte[]) addr.clone();
   }
 
+  /* Helper function due to a CNI limitation.  */
+  private static InetAddress[] allocArray (int count)
+  {
+    return new InetAddress [count];
+  }
+
+  /* Helper function due to a CNI limitation.  */
+  private static SecurityException checkConnect (String hostname)
+  {
+    SecurityManager s = System.getSecurityManager();
+    
+    if (s == null)
+      return null;
+    
+    try
+      {
+	s.checkConnect (hostname, -1);
+	return null;
+      }
+    catch (SecurityException ex)
+      {
+	return ex;
+      }
+  }
+
   /**
-   * Returns the IP address of this object as a String.
+   * Returns the IP address of this object as a String.  The address is in
+   * the dotted octet notation, for example, "127.0.0.1".
    *
-   * <p>This method cannot be abstract for backward compatibility reasons. By
-   * default it always throws {@link UnsupportedOperationException} unless
-   * overridden.</p>
-   * 
    * @return The IP address of this object in String form
    *
    * @since 1.0.2
    */
   public String getHostAddress()
   {
-    // This method is masked on Posix systems, where all InetAddress
-    // objects are created using InetAddress.getByAddress() which 
-    // returns either Inet4Address or Inet6Address objects.  Certain
-    // native methods on Win32 use "new InetAddress" in which case
-    // this method will be visible.
-    try
-      {
-	return getByAddress(hostName, addr).getHostAddress();
+    StringBuffer sb = new StringBuffer(40);
+
+    int len = addr.length;
+    int i = 0;
+    
+    if (len == 16)
+      { // An IPv6 address.
+	for ( ; ; i += 2)
+	  {
+	    if (i >= 16)
+	      return sb.toString();
+	    
+	    int x = ((addr [i] & 0xFF) << 8) | (addr [i + 1] & 0xFF);
+	    boolean empty = sb.length() == 0;
+	    
+	    if (empty)
+	      {
+		if (i == 10 && x == 0xFFFF)
+		  { // IPv4-mapped IPv6 address.
+		    sb.append (":FFFF:");
+		    break;  // Continue as IPv4 address;
+		  }
+		else if (i == 12)
+		  { // IPv4-compatible IPv6 address.
+		    sb.append (':');
+		    break;  // Continue as IPv4 address.
+		  }
+		else if (i > 0)
+		  sb.append ("::");
+	      }
+	    else
+	      sb.append (':');
+	    
+	    if (x != 0 || i >= 14)
+	      sb.append (Integer.toHexString (x).toUpperCase());
+	  }
       }
-    catch (UnknownHostException e)
+    
+    for ( ; ; )
       {
-	throw new RuntimeException("should never happen", e);
+        sb.append(addr[i] & 0xff);
+        i++;
+	
+        if (i == len)
+          break;
+	
+        sb.append('.');
       }
+
+    return sb.toString();
   }
 
   /**
@@ -525,7 +447,7 @@ public class InetAddress implements Serializable
     int i = len > 4 ? len - 4 : 0;
 
     for (; i < len; i++)
-      hash = (hash << 8) | (addr[i] & 0xff);
+      hash = (hash << 8) | (addr[i] & 0xFF);
 
     return hash;
   }
@@ -573,7 +495,7 @@ public class InetAddress implements Serializable
   public String toString()
   {
     String addr = getHostAddress();
-    String host = (hostName != null) ? hostName : "";
+    String host = (hostName != null) ? hostName : addr;
     return host + "/" + addr;
   }
 
@@ -613,51 +535,21 @@ public class InetAddress implements Serializable
       return new Inet4Address(addr, host);
 
     if (addr.length == 16)
-      {
-	for (int i = 0; i < 12; i++)
-	  {
-	    if (addr[i] != (i < 10 ? 0 : (byte) 0xFF))
-	      return new Inet6Address(addr, host);
-	  }
-	  
-	byte[] ip4addr = new byte[4];
-	ip4addr[0] = addr[12];
-	ip4addr[1] = addr[13];
-	ip4addr[2] = addr[14];
-	ip4addr[3] = addr[15];
-	return new Inet4Address(ip4addr, host);
-      }
+      return new Inet6Address(addr, host);
 
     throw new UnknownHostException("IP address has illegal length");
   }
 
   /**
-   * Returns an InetAddress object representing the IP address of
-   * the given literal IP address in dotted decimal format such as
-   * "127.0.0.1".  This is used by SocketPermission.setHostPort()
-   * to parse literal IP addresses without performing a DNS lookup.
-   *
-   * @param literal The literal IP address to create the InetAddress
-   * object from
-   *
-   * @return The address of the host as an InetAddress object, or
-   * null if the IP address is invalid.
+   * If host is a valid numeric IP address, return the numeric address.
+   * Otherwise, return null.
    */
-  static InetAddress getByLiteral(String literal)
-  {
-    byte[] address = VMInetAddress.aton(literal);
-    if (address == null)
-      return null;
-    
-    try
-      {
-	return getByAddress(address);
-      }
-    catch (UnknownHostException e)
-      {
-	throw new RuntimeException("should never happen", e);
-      }
-  }
+  private static native byte[] aton (String host);
+
+  private static native InetAddress[] lookup (String hostname,
+		                              InetAddress addr, boolean all);
+
+  private static native int getFamily (byte[] address);
 
   /**
    * Returns an InetAddress object representing the IP address of the given
@@ -680,8 +572,42 @@ public class InetAddress implements Serializable
   public static InetAddress getByName(String hostname)
     throws UnknownHostException
   {
-    InetAddress[] addresses = getAllByName(hostname);
-    return addresses[0];
+    // If null or the empty string is supplied, the loopback address
+    // is returned. Note that this is permitted without a security check.
+    if (hostname == null || hostname.length() == 0)
+      return loopback;
+
+    SecurityManager s = System.getSecurityManager();
+    if (s != null)
+      s.checkConnect(hostname, -1);
+
+    // Assume that the host string is an IP address
+    byte[] address = aton(hostname);
+    if (address != null)
+      {
+        if (address.length == 4)
+          return new Inet4Address (address, null);
+        else if (address.length == 16)
+          {
+	    if ((address [10] == 0xFF) && (address [11] == 0xFF))
+	      {
+		byte[] ip4addr = new byte [4];
+		ip4addr [0] = address [12];
+		ip4addr [1] = address [13];
+		ip4addr [2] = address [14];
+		ip4addr [3] = address [15];
+		return new Inet4Address (ip4addr, null);
+	      }
+            return new Inet6Address (address, null);
+	  }
+	else
+          throw new UnknownHostException ("Address has invalid length");
+      }
+
+    // Try to resolve the host by DNS
+    InetAddress result = new InetAddress(null, null);
+    lookup (hostname, result, false);
+    return result;
   }
 
   /**
@@ -705,31 +631,36 @@ public class InetAddress implements Serializable
     throws UnknownHostException
   {
     // If null or the empty string is supplied, the loopback address
-    // is returned.
+    // is returned. Note that this is permitted without a security check.
     if (hostname == null || hostname.length() == 0)
-      return new InetAddress[] {LOCALHOST};
+      return new InetAddress[] {loopback};
+
+    SecurityManager s = System.getSecurityManager();
+    if (s != null)
+      s.checkConnect(hostname, -1);
 
     // Check if hostname is an IP address
-    InetAddress address = getByLiteral(hostname);
+    byte[] address = aton (hostname);
     if (address != null)
-      return new InetAddress[] {address};
+      {
+	InetAddress[] result = new InetAddress [1];
+	result [0] = new InetAddress (address, null);
+	return result;
+      }
 
-    // Perform security check before resolving
-    SecurityManager sm = System.getSecurityManager();
-    if (sm != null)
-      sm.checkConnect(hostname, -1);
-
-    // Resolve the hostname
-    byte[][] iplist = ResolverCache.getHostByName(hostname);
-    if (iplist.length == 0)
-      throw new UnknownHostException(hostname);
-
-    InetAddress[] addresses = new InetAddress[iplist.length];
-    for (int i = 0; i < iplist.length; i++)
-      addresses[i] = getByAddress(hostname, iplist[i]);
-
-    return addresses;
+    // Try to resolve the hostname by DNS
+    return lookup (hostname, null, true);
   }
+
+  /**
+   * This native method looks up the hostname of the local machine
+   * we are on.  If the actual hostname cannot be determined, then the
+   * value "localhost" will be used.  This native method wrappers the
+   * "gethostname" function.
+   *
+   * @return The local hostname.
+   */
+  private static native String getLocalHostname();
 
   /**
    * Returns an InetAddress object representing the address of the current
@@ -742,24 +673,71 @@ public class InetAddress implements Serializable
    */
   public static InetAddress getLocalHost() throws UnknownHostException
   {
-    String hostname = VMInetAddress.getLocalHostname();
-    try
+    SecurityManager s = System.getSecurityManager();
+    
+    // Experimentation shows that JDK1.2 does cache the result.
+    // However, if there is a security manager, and the cached result
+    // is other than "localhost", we need to check again.
+    if (localhost == null
+	|| (s != null && ! localhost.isLoopbackAddress()))
+      getLocalHost (s);
+    
+    return localhost;
+  }
+
+  private static synchronized void getLocalHost (SecurityManager s)
+    throws UnknownHostException
+  {
+    // Check the localhost cache again, now that we've synchronized.
+    if (s == null && localhost != null)
+      return;
+    
+    String hostname = getLocalHostname();
+    
+    if (s != null)
       {
-	return getByName(hostname);
+	// "The Java Class Libraries" suggests that if the security
+	// manager disallows getting the local host name, then
+	// we use the loopback host.
+	// However, the JDK 1.2 API claims to throw SecurityException,
+	// which seems to suggest SecurityException is *not* caught.
+	// In this case, experimentation shows that former is correct.
+	try
+	  {
+	    // This is wrong, if the name returned from getLocalHostname()
+	    // is not a fully qualified name.  FIXME.
+	    s.checkConnect (hostname, -1);
+	  }
+	catch (SecurityException ex)
+	  {
+	    hostname = null;
+	  }
       }
-    catch (SecurityException e)
+    
+    if (hostname != null && hostname.length() != 0)
       {
-	return LOCALHOST;
+	try
+	  {
+	    localhost = new InetAddress (null, null);
+	    lookup (hostname, localhost, false);
+	  }
+	catch (Exception ex)
+	  {
+	  }
       }
+    else
+      throw new UnknownHostException();
+    
+    if (localhost == null)
+      localhost = new InetAddress (loopbackAddress, "localhost");
   }
 
   /**
-   * Inet4Address objects are serialized as InetAddress objects.
-   * This deserializes them back into Inet4Address objects.
+   * Needed for serialization
    */
-  private Object readResolve() throws ObjectStreamException
+  private void readResolve() throws ObjectStreamException
   {
-    return new Inet4Address(addr, hostName);
+    // FIXME: implement this
   }
 
   private void readObject(ObjectInputStream ois)
@@ -771,6 +749,13 @@ public class InetAddress implements Serializable
 
     for (int i = 2; i >= 0; --i)
       addr[i] = (byte) (address >>= 8);
+
+    // Ignore family from serialized data.  Since the saved address is 32 bits
+    // the deserialized object will have an IPv4 address i.e. AF_INET family.
+    // FIXME: An alternative is to call the aton method on the deserialized
+    // hostname to get a new address.  The Serialized Form doc is silent
+    // on how these fields are used.
+    family = getFamily (addr);
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException
@@ -781,39 +766,8 @@ public class InetAddress implements Serializable
     int i = len - 4;
 
     for (; i < len; i++)
-      address = address << 8 | (addr[i] & 0xff);
+      address = address << 8 | (((int) addr[i]) & 0xFF);
 
     oos.defaultWriteObject();
-  }
-
-  // The native methods remain here for now;
-  // methods in VMInetAddress map onto them.
-  static native byte[] aton(String hostname);
-  static native InetAddress[] lookup (String hostname,
-				      InetAddress ipaddr, boolean all);
-  static native int getFamily (byte[] ipaddr);
-  static native String getLocalHostname();
-
-  // Some soon-to-be-removed native code synchronizes on this.
-  static InetAddress loopbackAddress;
-  
-  // Some soon-to-be-removed code uses this old and broken method.
-  InetAddress(byte[] ipaddr, String hostname)
-  {
-    addr = (null == ipaddr) ? null : (byte[]) ipaddr.clone();
-    hostName = hostname;
-
-    if (ipaddr != null)
-      family = getFamily(ipaddr);
-  }
-
-  // Some soon-to-be-removed native code uses these old methods.
-  private static InetAddress[] allocArray (int count)
-  {
-    return new InetAddress [count];
-  }  
-  private static SecurityException checkConnect (String hostname)
-  {
-    return null;
   }
 }

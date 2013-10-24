@@ -1,4 +1,6 @@
-/* { dg-do run } */
+/* APPLE LOCAL file mainline 2005-10-20 4308031 */
+/* { dg-do run { target "*-*-darwin*" } } */
+/* { dg-options "-framework Foundation -framework CoreFoundation" } */
 
 /* This tests that exceptions work.  It used to fail because
    objc_msgSend was marked with DECL_NOTHROW. 
@@ -6,19 +8,12 @@
    that file includes objc/objc-runtime.h which explicitly prototypes
    objc_msgSend without 'nothrow'.  */
 
+#include <Foundation/Foundation.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-
-@interface Object {
-  Class isa;  
-}
-+ alloc;
-- init;
-@end
-
 // ObjectiveC class header
-@interface ObjCclass : Object {
+@interface ObjCclass : NSObject {
 }
 -(void)method1;
 -(void)method2;

@@ -4,13 +4,16 @@
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-options "-freplace-objc-classes" } */
 /* { dg-do compile { target *-*-darwin* } } */
+/* APPLE LOCAL radar 4894756 */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
 
 #ifndef __NEXT_RUNTIME__
 #error Feature not currently supported by the GNU runtime
 #endif
 
 #include <objc/objc.h>
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 extern void abort(void);
 
@@ -35,4 +38,4 @@ extern void abort(void);
 }
 @end
 
-/* { dg-final { scan-assembler "\t.section __OBJC, __image_info.*\n\t.align.*\nL_OBJC_IMAGE_INFO.*:\n\t.long\t0\n\t.long\t1" } } */
+/* { dg-final { scan-assembler "\t.section __OBJC, __image_info.*\n\t.align.*\nL_OBJC_IMAGE_INFO.*:\n\t.long\t0\n\t.long\t1\n\t.objc_module_info\n" } } */

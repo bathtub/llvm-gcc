@@ -1,6 +1,6 @@
 // The template and inlines for the -*- C++ -*- internal _Array helper class.
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2003, 2004, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2000, 2003, 2004, 2005
 //  Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,12 +28,12 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
+// Written by Gabriel Dos Reis <Gabriel.Dos-Reis@DPTMaths.ENS-Cachan.Fr>
+
 /** @file valarray_array.h
  *  This is an internal header file, included by other library headers.
  *  You should not attempt to use it directly.
  */
-
-// Written by Gabriel Dos Reis <Gabriel.Dos-Reis@DPTMaths.ENS-Cachan.Fr>
 
 #ifndef _VALARRAY_ARRAY_H
 #define _VALARRAY_ARRAY_H 1
@@ -46,8 +46,8 @@
 #include <cstring>
 #include <new>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   //
   // Helper functions on raw pointers
   //
@@ -98,7 +98,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     inline void
     __valarray_default_construct(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
     {
-      _Array_default_ctor<_Tp, __is_pod<_Tp>::__value>::_S_do_it(__b, __e);
+      _Array_default_ctor<_Tp, __is_fundamental<_Tp>::__value>::
+	_S_do_it(__b, __e);
     }
 
   // Turn a raw-memory into an array of _Tp filled with __t
@@ -133,7 +134,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     __valarray_fill_construct(_Tp* __restrict__ __b, _Tp* __restrict__ __e,
 			      const _Tp __t)
     {
-      _Array_init_ctor<_Tp, __is_pod<_Tp>::__value>::_S_do_it(__b, __e, __t);
+      _Array_init_ctor<_Tp, __is_fundamental<_Tp>::__value>::
+	_S_do_it(__b, __e, __t);
     }
 
   //
@@ -169,7 +171,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 			      const _Tp* __restrict__ __e,
 			      _Tp* __restrict__ __o)
     {
-      _Array_copy_ctor<_Tp, __is_pod<_Tp>::__value>::_S_do_it(__b, __e, __o);
+      _Array_copy_ctor<_Tp, __is_fundamental<_Tp>::__value>::
+	_S_do_it(__b, __e, __o);
     }
 
   // copy-construct raw array [__o, *) from strided array __a[<__n : __s>]
@@ -178,7 +181,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     __valarray_copy_construct (const _Tp* __restrict__ __a, size_t __n,
 			       size_t __s, _Tp* __restrict__ __o)
     {
-      if (__is_pod<_Tp>::__value)
+      if (__is_fundamental<_Tp>::__value)
 	while (__n--)
 	  {
 	    *__o++ = *__a;
@@ -199,7 +202,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 			       const size_t* __restrict__ __i,
 			       _Tp* __restrict__ __o, size_t __n)
     {
-      if (__is_pod<_Tp>::__value)
+      if (__is_fundamental<_Tp>::__value)
 	while (__n--)
 	  *__o++ = __a[*__i++];
       else
@@ -212,7 +215,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     inline void
     __valarray_destroy_elements(_Tp* __restrict__ __b, _Tp* __restrict__ __e)
     {
-      if (!__is_pod<_Tp>::__value)
+      if (!__is_fundamental<_Tp>::__value)
 	while (__b != __e)
 	  {
 	    __b->~_Tp();
@@ -276,7 +279,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     __valarray_copy(const _Tp* __restrict__ __a, size_t __n,
 		    _Tp* __restrict__ __b)
     {
-      _Array_copier<_Tp, __is_pod<_Tp>::__value>::_S_do_it(__a, __n, __b);
+      _Array_copier<_Tp, __is_fundamental<_Tp>::__value>::
+	_S_do_it(__a, __n, __b);
     }
 
   // Copy strided array __a[<__n : __s>] in plain __b[<__n>]
@@ -423,22 +427,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       
       _Tp* const __restrict__ _M_data;
     };
-
-
-  // Copy-construct plain array __b[<__n>] from indexed array __a[__i[<__n>]]
-  template<typename _Tp>
-    inline void
-    __valarray_copy_construct(_Array<_Tp> __a, _Array<size_t> __i,
-			      _Array<_Tp> __b, size_t __n)
-    { std::__valarray_copy_construct(__a._M_data, __i._M_data,
-				     __b._M_data, __n); }
-
-  // Copy-construct plain array __b[<__n>] from strided array __a[<__n : __s>]
-  template<typename _Tp>
-    inline void
-    __valarray_copy_construct(_Array<_Tp> __a, size_t __n, size_t __s,
-			      _Array<_Tp> __b)
-    { std::__valarray_copy_construct(__a._M_data, __n, __s, __b._M_data); }
 
   template<typename _Tp>
     inline void
@@ -693,9 +681,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    _DEFINE_ARRAY_FUNCTION(<<, __shift_left)
    _DEFINE_ARRAY_FUNCTION(>>, __shift_right)
 
-#undef _DEFINE_ARRAY_FUNCTION
-
-_GLIBCXX_END_NAMESPACE
+#undef _DEFINE_VALARRAY_FUNCTION
+} // namespace std
 
 #ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/valarray_array.tcc>

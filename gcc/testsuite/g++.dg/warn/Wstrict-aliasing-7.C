@@ -1,5 +1,6 @@
-/* { dg-do compile } */
-/* { dg-options "-Wstrict-aliasing -O2" } */
+/* APPLE LOCAL file ARM 4683958 (-fstrict-aliasing added explictly) */
+/* { dg-do compile { target arm*-*-darwin* } } */
+/* { dg-options "-Wstrict-aliasing -O2 -fstrict-aliasing" } */
 
 int a[2];
 

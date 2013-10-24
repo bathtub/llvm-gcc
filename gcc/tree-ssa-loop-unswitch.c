@@ -1,5 +1,5 @@
 /* Loop unswitching.
-   Copyright (C) 2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 2004 Free Software Foundation, Inc.
    
 This file is part of GCC.
    
@@ -15,8 +15,8 @@ for more details.
    
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -80,7 +80,7 @@ static tree tree_may_unswitch_on (basic_block, struct loop *);
 
 /* Main entry point.  Perform loop unswitching on all suitable LOOPS.  */
 
-unsigned int
+void
 tree_ssa_unswitch_loops (struct loops *loops)
 {
   int i, num;
@@ -101,11 +101,17 @@ tree_ssa_unswitch_loops (struct loops *loops)
 	continue;
 
       changed |= tree_unswitch_single_loop (loops, loop, 0);
+#ifdef ENABLE_CHECKING
+      verify_dominators (CDI_DOMINATORS);
+      verify_loop_structure (loops);
+#endif
     }
 
+#if 0
+  /* The necessary infrastructure is not in yet.  */
   if (changed)
-    return TODO_cleanup_cfg;
-  return 0;
+    cleanup_tree_cfg_loop ();
+#endif
 }
 
 /* Checks whether we can unswitch LOOP on condition at end of BB -- one of its
@@ -114,9 +120,10 @@ tree_ssa_unswitch_loops (struct loops *loops)
 static tree
 tree_may_unswitch_on (basic_block bb, struct loop *loop)
 {
-  tree stmt, def, cond, use;
+  tree stmt, def, cond;
   basic_block def_bb;
-  ssa_op_iter iter;
+  use_optype uses;
+  unsigned i;
 
   /* BB must end in a simple conditional jump.  */
   stmt = last_stmt (bb);
@@ -124,9 +131,11 @@ tree_may_unswitch_on (basic_block bb, struct loop *loop)
     return NULL_TREE;
 
   /* Condition must be invariant.  */
-  FOR_EACH_SSA_TREE_OPERAND (use, stmt, iter, SSA_OP_USE)
+  get_stmt_operands (stmt);
+  uses = STMT_USE_OPS (stmt);
+  for (i = 0; i < NUM_USES (uses); i++)
     {
-      def = SSA_NAME_DEF_STMT (use);
+      def = SSA_NAME_DEF_STMT (USE_OP (uses, i));
       def_bb = bb_for_stmt (def);
       if (def_bb
 	  && flow_bb_inside_loop_p (loop, def_bb))
@@ -163,10 +172,10 @@ simplify_using_entry_checks (struct loop *loop, tree cond)
 		? boolean_true_node
 		: boolean_false_node);
 
-      if (!single_pred_p (e->src))
+      if (EDGE_COUNT (e->src->preds) > 1)
 	return cond;
 
-      e = single_pred_edge (e->src);
+      e = EDGE_PRED (e->src, 0);
       if (e->src == ENTRY_BLOCK_PTR)
 	return cond;
     }
@@ -243,31 +252,21 @@ tree_unswitch_single_loop (struct loops *loops, struct loop *loop, int num)
       else
 	break;
 
-      update_stmt (stmt);
+      modify_stmt (stmt);
       i++;
     }
 
   if (dump_file && (dump_flags & TDF_DETAILS))
     fprintf (dump_file, ";; Unswitching loop\n");
 
-  initialize_original_copy_tables ();
   /* Unswitch the loop on this condition.  */
   nloop = tree_unswitch_loop (loops, loop, bbs[i], cond);
   if (!nloop)
-    {
-      free_original_copy_tables ();
-      free (bbs);
-      return changed;
-    }
-
-  /* Update the SSA form after unswitching.  */
-  update_ssa (TODO_update_ssa);
-  free_original_copy_tables ();
+    return changed;
 
   /* Invoke itself on modified loops.  */
   tree_unswitch_single_loop (loops, nloop, num + 1);
   tree_unswitch_single_loop (loops, loop, num + 1);
-  free (bbs);
   return true;
 }
 
@@ -287,6 +286,6 @@ tree_unswitch_loop (struct loops *loops, struct loop *loop,
   gcc_assert (EDGE_COUNT (unswitch_on->succs) == 2);
   gcc_assert (loop->inner == NULL);
 
-  return loop_version (loops, loop, unshare_expr (cond), 
-		       &condition_bb, false);
+  return tree_ssa_loop_version (loops, loop, unshare_expr (cond), 
+				&condition_bb);
 }

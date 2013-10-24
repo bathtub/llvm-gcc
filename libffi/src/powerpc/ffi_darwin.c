@@ -79,7 +79,9 @@ enum { ASM_NEEDS_REGISTERS = 4 };
 
    */
 
+/*@-exportheader@*/
 void ffi_prep_args(extended_cif *ecif, unsigned *const stack)
+/*@=exportheader@*/
 {
   const unsigned bytes = ecif->cif->bytes;
   const unsigned flags = ecif->cif->flags;
@@ -373,12 +375,25 @@ ffi_status ffi_prep_cif_machdep(ffi_cif *cif)
   return FFI_OK;
 }
 
-extern void ffi_call_AIX(extended_cif *, unsigned, unsigned, unsigned *,
-			 void (*fn)(), void (*fn2)());
-extern void ffi_call_DARWIN(extended_cif *, unsigned, unsigned, unsigned *,
-			    void (*fn)(), void (*fn2)());
+/*@-declundef@*/
+/*@-exportheader@*/
+extern void ffi_call_AIX(/*@out@*/ extended_cif *,
+			 unsigned, unsigned,
+			 /*@out@*/ unsigned *,
+			 void (*fn)(),
+			 void (*fn2)());
+extern void ffi_call_DARWIN(/*@out@*/ extended_cif *,
+			    unsigned, unsigned,
+			    /*@out@*/ unsigned *,
+			    void (*fn)(),
+			    void (*fn2)());
+/*@=declundef@*/
+/*@=exportheader@*/
 
-void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
+void ffi_call(/*@dependent@*/ ffi_cif *cif,
+	      void (*fn)(),
+	      /*@out@*/ void *rvalue,
+	      /*@dependent@*/ void **avalue)
 {
   extended_cif ecif;
 
@@ -391,7 +406,9 @@ void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
   if ((rvalue == NULL) &&
       (cif->rtype->type == FFI_TYPE_STRUCT))
     {
+      /*@-sysunrecog@*/
       ecif.rvalue = alloca(cif->rtype->size);
+      /*@=sysunrecog@*/
     }
   else
     ecif.rvalue = rvalue;
@@ -399,12 +416,16 @@ void ffi_call(ffi_cif *cif, void (*fn)(), void *rvalue, void **avalue)
   switch (cif->abi)
     {
     case FFI_AIX:
-      ffi_call_AIX(&ecif, -cif->bytes, cif->flags, ecif.rvalue, fn,
-		   ffi_prep_args);
+      /*@-usedef@*/
+      ffi_call_AIX(&ecif, -cif->bytes,
+		   cif->flags, ecif.rvalue, fn, ffi_prep_args);
+      /*@=usedef@*/
       break;
     case FFI_DARWIN:
-      ffi_call_DARWIN(&ecif, -cif->bytes, cif->flags, ecif.rvalue, fn,
-		      ffi_prep_args);
+      /*@-usedef@*/
+      ffi_call_DARWIN(&ecif, -cif->bytes,
+		      cif->flags, ecif.rvalue, fn, ffi_prep_args);
+      /*@=usedef@*/
       break;
     default:
       FFI_ASSERT(0);

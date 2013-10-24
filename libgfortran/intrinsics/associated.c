@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "libgfortran.h"
 
@@ -39,8 +39,6 @@ associated (const gfc_array_void *pointer, const gfc_array_void *target)
 {
   int n, rank;
 
-  if (GFC_DESCRIPTOR_DATA (pointer) == NULL)
-    return 0;
   if (GFC_DESCRIPTOR_DATA (pointer) != GFC_DESCRIPTOR_DATA (target))
     return 0;
   if (GFC_DESCRIPTOR_DTYPE (pointer) != GFC_DESCRIPTOR_DTYPE (target))
@@ -54,8 +52,6 @@ associated (const gfc_array_void *pointer, const gfc_array_void *target)
       if ((pointer->dim[n].ubound - pointer->dim[n].lbound)
           != (target->dim[n].ubound - target->dim[n].lbound))
         return 0;
-      if (pointer->dim[n].ubound < pointer->dim[n].lbound)
-	return 0;
     }
 
   return 1;

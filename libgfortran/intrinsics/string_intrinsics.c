@@ -1,5 +1,5 @@
 /* String intrinsics helper functions.
-   Copyright 2002, 2005 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 /* Unlike what the name of this file suggests, we don't actually
@@ -43,6 +43,9 @@ Boston, MA 02110-1301, USA.  */
 
 
 /* String functions.  */
+
+extern void copy_string (GFC_INTEGER_4, char *, GFC_INTEGER_4, const char *);
+export_proto(copy_string);
 
 extern void concat_string (GFC_INTEGER_4, char *,
 			   GFC_INTEGER_4, const char *,
@@ -76,6 +79,28 @@ export_proto(string_trim);
 extern void string_repeat (char *, GFC_INTEGER_4, const char *, GFC_INTEGER_4);
 export_proto(string_repeat);
 
+/* The two areas may overlap so we use memmove.  */
+
+void
+copy_string (GFC_INTEGER_4 destlen, char * dest,
+	     GFC_INTEGER_4 srclen, const char * src)
+{
+  if (srclen >= destlen)
+    {
+      /* This will truncate if too long.  */
+      memmove (dest, src, destlen);
+      /*memcpy (dest, src, destlen);*/
+    }
+  else
+    {
+      memmove (dest, src, srclen);
+      /*memcpy (dest, src, srclen);*/
+      /* Pad with spaces.  */
+      memset (&dest[srclen], ' ', destlen - srclen);
+    }
+}
+
+
 /* Strings of unequal length are extended with pad characters.  */
 
 GFC_INTEGER_4
@@ -83,10 +108,10 @@ compare_string (GFC_INTEGER_4 len1, const char * s1,
 		GFC_INTEGER_4 len2, const char * s2)
 {
   int res;
-  const unsigned char *s;
+  const char *s;
   int len;
 
-  res = memcmp (s1, s2, (len1 < len2) ? len1 : len2);
+  res = strncmp (s1, s2, (len1 < len2) ? len1 : len2);
   if (res != 0)
     return res;
 
@@ -96,13 +121,13 @@ compare_string (GFC_INTEGER_4 len1, const char * s1,
   if (len1 < len2)
     {
       len = len2 - len1;
-      s = (unsigned char *) &s2[len1];
+      s = &s2[len1];
       res = -1;
     }
   else
     {
       len = len1 - len2;
-      s = (unsigned char *) &s1[len2];
+      s = &s1[len2];
       res = 1;
     }
 
@@ -279,32 +304,35 @@ GFC_INTEGER_4
 string_scan (GFC_INTEGER_4 slen, const char * str, GFC_INTEGER_4 setlen,
              const char * set, GFC_LOGICAL_4 back)
 {
-  int i, j;
+  int start;
+  int last;
+  int i;
+  int delta;
 
   if (slen == 0 || setlen == 0)
     return 0;
 
   if (back)
     {
-      for (i = slen - 1; i >= 0; i--)
-	{
-	  for (j = 0; j < setlen; j++)
-	    {
-	      if (str[i] == set[j])
-		return (i + 1);
-	    }
-	}
+      last =  0;
+      start = slen - 1;
+      delta = -1;
     }
   else
     {
-      for (i = 0; i < slen; i++)
-	{
-	  for (j = 0; j < setlen; j++)
-	    {
-	      if (str[i] == set[j])
-		return (i + 1);
-	    }
-	}
+      last = slen - 1;
+      start = 0;
+      delta = 1;
+    }
+
+  i = 0;
+  for (; start != last; start += delta)
+    {
+      for (i = 0; i < setlen; i++)
+        {
+          if (str[start] == set[i])
+            return (start + 1);
+        }
     }
 
   return 0;
@@ -312,8 +340,8 @@ string_scan (GFC_INTEGER_4 slen, const char * str, GFC_INTEGER_4 setlen,
 
 
 /* Verify that a set of characters contains all the characters in a
-   string by identifying the position of the first character in a
-   characters that does not appear in a given set of characters.  */
+   string by indentifying the position of the first character in a
+   characters that dose not appear in a given set of characters.  */
 
 GFC_INTEGER_4
 string_verify (GFC_INTEGER_4 slen, const char * str, GFC_INTEGER_4 setlen,
@@ -362,8 +390,14 @@ string_repeat (char * dest, GFC_INTEGER_4 slen,
 {
   int i;
 
-  /* We don't need to check that ncopies is non-negative here, because
-     the front-end already generates code for that check.  */
+  /* See if ncopies is valid.  */
+  if (ncopies < 0)
+    {
+      /* The error is already reported.  */
+      runtime_error ("Augument NCOPIES is negative.");
+    }
+
+  /* Copy characters.  */
   for (i = 0; i < ncopies; i++) 
     {
       memmove (dest + (i * slen), src, slen);

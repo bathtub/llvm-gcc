@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* { dg-do compile } */
 /* { dg-options "-O2 -fdump-tree-fab" } */
 
@@ -39,4 +40,3 @@ void test (void)
 /* { dg-final { scan-tree-dump "vi7 = 0\[^\(\)\]*vi8 = 0" "fab"} } */
 /* { dg-final { scan-tree-dump "vi8.*putchar.*vi9" "fab"} } */
 /* { dg-final { scan-tree-dump "vi9.*puts.*\"hello\\\\n\".*via" "fab"} } */
-/* { dg-final { cleanup-tree-dump "fab" } } */

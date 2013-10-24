@@ -58,7 +58,10 @@ extern int errno;
  * alphabets and digits are each contiguous.
  */
 unsigned long
-strtoul(const char *nptr, char **endptr, register int base)
+strtoul(nptr, endptr, base)
+	const char *nptr;
+	char **endptr;
+	register int base;
 {
 	register const char *s = nptr;
 	register unsigned long acc;

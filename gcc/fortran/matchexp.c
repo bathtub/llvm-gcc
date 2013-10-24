@@ -1,6 +1,5 @@
 /* Expression parser.
-   Copyright (C) 2000, 2001, 2002, 2004, 2005, 2006 Free Software Foundation,
-   Inc.
+   Copyright (C) 2000, 2001, 2002, 2004, 2005 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of GCC.
@@ -17,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 
 #include "config.h"
@@ -27,7 +26,7 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "arith.h"
 #include "match.h"
 
-static char expression_syntax[] = N_("Syntax error in expression at %C");
+static char expression_syntax[] = "Syntax error in expression at %C";
 
 
 /* Match a user-defined operator name.  This is a normal name with a
@@ -123,34 +122,12 @@ next_operator (gfc_intrinsic_op t)
 }
 
 
-/* Call the INTRINSIC_PARENTHESES function.  This is both
-   used explicitly, as below, or by resolve.c to generate
-   temporaries.  */
-gfc_expr *
-gfc_get_parentheses (gfc_expr *e)
-{
-  gfc_expr *e2;
-
-  e2 = gfc_get_expr();
-  e2->expr_type = EXPR_OP;
-  e2->ts = e->ts;
-  e2->rank = e->rank;
-  e2->where = e->where;
-  e2->value.op.operator = INTRINSIC_PARENTHESES;
-  e2->value.op.op1 = e;
-  e2->value.op.op2 = NULL;
-  return e2;
-}
-
-
 /* Match a primary expression.  */
 
 static match
 match_primary (gfc_expr ** result)
 {
   match m;
-  gfc_expr *e;
-  locus where;
 
   m = gfc_match_literal_constant (result, 0);
   if (m != MATCH_NO)
@@ -164,13 +141,11 @@ match_primary (gfc_expr ** result)
   if (m != MATCH_NO)
     return m;
 
-  /* Match an expression in parentheses.  */
-  where = gfc_current_locus;
-
+  /* Match an expression in parenthesis.  */
   if (gfc_match_char ('(') != MATCH_YES)
     return MATCH_NO;
 
-  m = gfc_match_expr (&e);
+  m = gfc_match_expr (result);
   if (m == MATCH_NO)
     goto syntax;
   if (m == MATCH_ERROR)
@@ -179,15 +154,6 @@ match_primary (gfc_expr ** result)
   m = gfc_match_char (')');
   if (m == MATCH_NO)
     gfc_error ("Expected a right parenthesis in expression at %C");
-
-  /* Now we have the expression inside the parentheses, build the
-     expression pointing to it. By 7.1.7.2 the integrity of
-     parentheses is only conserved in numerical calculations, so we
-     don't bother to keep the parentheses otherwise.  */
-  if(!gfc_numeric_ts(&e->ts))
-    *result = e;
-  else
-    *result = gfc_get_parentheses (e);
 
   if (m != MATCH_YES)
     {
@@ -886,7 +852,6 @@ gfc_match_expr (gfc_expr ** result)
 
   for (;;)
     {
-      uop = NULL;
       m = match_defined_operator (&uop);
       if (m == MATCH_NO)
 	break;

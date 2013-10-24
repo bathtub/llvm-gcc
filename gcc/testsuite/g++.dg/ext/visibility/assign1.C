@@ -6,12 +6,11 @@ struct B {
   B& operator=(const B&);
 };
 
-struct __attribute__((visibility("hidden"))) D : public B {
+struct D : public B {
   // The implicit assignment operator should be hidden.
-};
+} __attribute__((visibility("hidden")));
 
-__attribute__((visibility("hidden"))) D d1;
-__attribute__((visibility("hidden"))) D d2;
+D d1, d2;
 
 void f() {
   d1 = d2;

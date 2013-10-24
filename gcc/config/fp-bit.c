@@ -1,33 +1,37 @@
 /* This is a software floating point library which can be used
    for targets without hardware floating point. 
-   Copyright (C) 1994, 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2003,
-   2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 1994, 1995, 1996, 1997, 1998, 2000, 2001, 2002, 2003, 2004
+   Free Software Foundation, Inc.
 
-This file is part of GCC.
-
-GCC is free software; you can redistribute it and/or modify it under
-the terms of the GNU General Public License as published by the Free
-Software Foundation; either version 2, or (at your option) any later
-version.
+This file is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2, or (at your option) any
+later version.
 
 In addition to the permissions in the GNU General Public License, the
 Free Software Foundation gives you unlimited permission to link the
-compiled version of this file into combinations with other programs,
-and to distribute those combinations without any restriction coming
-from the use of this file.  (The General Public License restrictions
-do apply in other respects; for example, they cover modification of
-the file, and distribution when not linked into a combine
-executable.)
+compiled version of this file with other programs, and to distribute
+those programs without any restriction coming from the use of this
+file.  (The General Public License restrictions do apply in other
+respects; for example, they cover modification of the file, and
+distribution when not linked into another program.)
 
-GCC is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or
-FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
-for more details.
+This file is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+along with this program; see the file COPYING.  If not, write to
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
+
+/* As a special exception, if you link this library with other files,
+   some of which are compiled with GCC, to produce an executable,
+   this library does not by itself cause the resulting executable
+   to be covered by the GNU General Public License.
+   This exception does not however invalidate any other reasons why
+   the executable file might be covered by the GNU General Public License.  */
 
 /* This implements IEEE 754 format arithmetic, but does not provide a
    mechanism for setting the rounding mode, or for generating or handling
@@ -156,15 +160,14 @@ INLINE
 static int
 isnan ( fp_number_type *  x)
 {
-  return __builtin_expect (x->class == CLASS_SNAN || x->class == CLASS_QNAN,
-			   0);
+  return x->class == CLASS_SNAN || x->class == CLASS_QNAN;
 }
 
 INLINE
 static int
 isinf ( fp_number_type *  x)
 {
-  return __builtin_expect (x->class == CLASS_INFINITY, 0);
+  return x->class == CLASS_INFINITY;
 }
 
 #endif /* NO_NANS */
@@ -181,22 +184,6 @@ static void
 flip_sign ( fp_number_type *  x)
 {
   x->sign = !x->sign;
-}
-
-/* Count leading zeroes in N.  */
-INLINE
-static int
-clzusi (USItype n)
-{
-  extern int __clzsi2 (USItype);
-  if (sizeof (USItype) == sizeof (unsigned int))
-    return __builtin_clz (n);
-  else if (sizeof (USItype) == sizeof (unsigned long))
-    return __builtin_clzl (n);
-  else if (sizeof (USItype) == sizeof (unsigned long long))
-    return __builtin_clzll (n);
-  else
-    return __clzsi2 (n);
 }
 
 extern FLO_type pack_d ( fp_number_type * );
@@ -246,7 +233,7 @@ pack_d ( fp_number_type *  src)
     }
   else
     {
-      if (__builtin_expect (src->normal_exp < NORMAL_EXPMIN, 0))
+      if (src->normal_exp < NORMAL_EXPMIN)
 	{
 #ifdef NO_DENORMALS
 	  /* Go straight to a zero representation if denormals are not
@@ -293,7 +280,7 @@ pack_d ( fp_number_type *  src)
 #endif /* NO_DENORMALS */
 	}
       else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS)
-	       && __builtin_expect (src->normal_exp > EXPBIAS, 0))
+	       && src->normal_exp > EXPBIAS)
 	{
 	  exp = EXPMAX;
 	  fraction = 0;
@@ -557,8 +544,7 @@ unpack_d (FLO_union_type * src, fp_number_type * dst)
 	  dst->fraction.ll = fraction;
 	}
     }
-  else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS)
-	   && __builtin_expect (exp == EXPMAX, 0))
+  else if (!LARGEST_EXPONENT_IS_NORMAL (FRAC_NBITS) && exp == EXPMAX)
     {
       /* Huge exponent*/
       if (fraction == 0)
@@ -647,7 +633,6 @@ _fpadd_parts (fp_number_type * a,
      they're the same */
   {
     int diff;
-    int sdiff;
 
     a_normal_exp = a->normal_exp;
     b_normal_exp = b->normal_exp;
@@ -655,21 +640,21 @@ _fpadd_parts (fp_number_type * a,
     b_fraction = b->fraction.ll;
 
     diff = a_normal_exp - b_normal_exp;
-    sdiff = diff;
 
     if (diff < 0)
       diff = -diff;
     if (diff < FRAC_NBITS)
       {
-	if (sdiff > 0)
+	/* ??? This does shifts one bit at a time.  Optimize.  */
+	while (a_normal_exp > b_normal_exp)
 	  {
-	    b_normal_exp += diff;
-	    LSHIFT (b_fraction, diff);
+	    b_normal_exp++;
+	    LSHIFT (b_fraction);
 	  }
-	else if (sdiff < 0)
+	while (b_normal_exp > a_normal_exp)
 	  {
-	    a_normal_exp += diff;
-	    LSHIFT (a_fraction, diff);
+	    a_normal_exp++;
+	    LSHIFT (a_fraction);
 	  }
       }
     else
@@ -730,7 +715,7 @@ _fpadd_parts (fp_number_type * a,
 
   if (tmp->fraction.ll >= IMPLICIT_2)
     {
-      LSHIFT (tmp->fraction.ll, 1);
+      LSHIFT (tmp->fraction.ll);
       tmp->normal_exp++;
     }
   return tmp;
@@ -962,7 +947,7 @@ multiply (FLO_type arg_a, FLO_type arg_b)
 
   return pack_d (res);
 }
-#endif /* L_mul_sf || L_mul_df || L_mul_tf */
+#endif /* L_mul_sf || L_mul_df */
 
 #if defined(L_div_sf) || defined(L_div_df) || defined(L_div_tf)
 static inline __attribute__ ((__always_inline__)) fp_number_type *
@@ -1349,8 +1334,6 @@ si_to_float (SItype arg_a)
     }
   else
     {
-      USItype uarg;
-      int shift;
       in.normal_exp = FRACBITS + NGARDS;
       if (in.sign) 
 	{
@@ -1360,17 +1343,15 @@ si_to_float (SItype arg_a)
 	    {
 	      return (FLO_type)(- MAX_SI_INT - 1);
 	    }
-	  uarg = (-arg_a);
+	  in.fraction.ll = (-arg_a);
 	}
       else
-	uarg = arg_a;
+	in.fraction.ll = arg_a;
 
-      in.fraction.ll = uarg;
-      shift = clzusi (uarg) - (BITS_PER_SI - 1 - FRACBITS - NGARDS);
-      if (shift > 0)
+      while (in.fraction.ll < ((fractype)1 << (FRACBITS + NGARDS)))
 	{
-	  in.fraction.ll <<= shift;
-	  in.normal_exp -= shift;
+	  in.fraction.ll <<= 1;
+	  in.normal_exp -= 1;
 	}
     }
   return pack_d (&in);
@@ -1390,23 +1371,19 @@ usi_to_float (USItype arg_a)
     }
   else
     {
-      int shift;
       in.class = CLASS_NUMBER;
       in.normal_exp = FRACBITS + NGARDS;
       in.fraction.ll = arg_a;
 
-      shift = clzusi (arg_a) - (BITS_PER_SI - 1 - FRACBITS - NGARDS);
-      if (shift < 0)
+      while (in.fraction.ll > ((fractype)1 << (FRACBITS + NGARDS)))
+        {
+          in.fraction.ll >>= 1;
+          in.normal_exp += 1;
+        }
+      while (in.fraction.ll < ((fractype)1 << (FRACBITS + NGARDS)))
 	{
-	  fractype guard = in.fraction.ll & (((fractype)1 << -shift) - 1);
-	  in.fraction.ll >>= -shift;
-	  in.fraction.ll |= (guard != 0);
-	  in.normal_exp -= shift;
-	}
-      else if (shift > 0)
-	{
-	  in.fraction.ll <<= shift;
-	  in.normal_exp -= shift;
+	  in.fraction.ll <<= 1;
+	  in.normal_exp -= 1;
 	}
     }
   return pack_d (&in);

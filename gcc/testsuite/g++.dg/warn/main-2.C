@@ -1,3 +1,4 @@
+// APPLE LOCAL file mainline rdar 4458294
 // { dg-do compile }
 // Make sure that the type of f1 does not change 
 // after the error of main about not returning 
@@ -16,4 +17,3 @@ main()  /* { dg-error "must return" } */
 void f1()  
 {     
 }  
-

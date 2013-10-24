@@ -1,6 +1,6 @@
 // Bitmap Allocator. Out of line function definitions. -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006 Free Software Foundation, Inc.
+// Copyright (C) 2004, 2005 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -29,22 +29,23 @@
 
 #include <ext/bitmap_allocator.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
-
-  namespace __detail
+namespace __gnu_cxx
+{
+  namespace balloc
   {
-    template class __mini_vector<
-      std::pair<bitmap_allocator<char>::_Alloc_block*,
-		bitmap_allocator<char>::_Alloc_block*> >;
+    template class __mini_vector<std::pair
+    <bitmap_allocator<char>::_Alloc_block*, 
+     bitmap_allocator<char>::_Alloc_block*> >;
 
-    template class __mini_vector<
-      std::pair<bitmap_allocator<wchar_t>::_Alloc_block*,
-		bitmap_allocator<wchar_t>::_Alloc_block*> >;
+    template class __mini_vector<std::pair
+    <bitmap_allocator<wchar_t>::_Alloc_block*, 
+     bitmap_allocator<wchar_t>::_Alloc_block*> >;
 
     template class __mini_vector<size_t*>;
 
-    template size_t** __lower_bound(size_t**, size_t**, size_t const&, 
-				    free_list::_LT_pointer_compare);
+    template size_t** __lower_bound
+    (size_t**, size_t**, 
+     size_t const&, free_list::_LT_pointer_compare);
   }
 
   size_t*
@@ -52,24 +53,25 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   _M_get(size_t __sz) throw(std::bad_alloc)
   {
 #if defined __GTHREADS
-    __mutex_type& __bfl_mutex = _M_get_mutex();
+    _Lock __bfl_lock(_M_get_mutex());
+    __bfl_lock._M_lock();
 #endif
-    const vector_type& __free_list = _M_get_free_list();
-    using __gnu_cxx::__detail::__lower_bound;
-    iterator __tmp = __lower_bound(__free_list.begin(), __free_list.end(), 
-				   __sz, _LT_pointer_compare());
+    iterator __temp = 
+      __gnu_cxx::balloc::__lower_bound
+      (_M_get_free_list().begin(), _M_get_free_list().end(), 
+       __sz, _LT_pointer_compare());
 
-    if (__tmp == __free_list.end() || !_M_should_i_give(**__tmp, __sz))
+    if (__temp == _M_get_free_list().end() || !_M_should_i_give(**__temp, __sz))
       {
 	// We release the lock here, because operator new is
 	// guaranteed to be thread-safe by the underlying
 	// implementation.
 #if defined __GTHREADS
-	__bfl_mutex.unlock();
+	__bfl_lock._M_unlock();
 #endif
 	// Try twice to get the memory: once directly, and the 2nd
-	// time after clearing the free list. If both fail, then throw
-	// std::bad_alloc().
+	// time after clearing the free list. If both fail, then
+	// throw std::bad_alloc().
 	int __ctr = 2;
 	while (__ctr)
 	  {
@@ -93,21 +95,21 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       }
     else
       {
-	size_t* __ret = *__tmp;
-	_M_get_free_list().erase(__tmp);
+	size_t* __ret = *__temp;
+	_M_get_free_list().erase(__temp);
 #if defined __GTHREADS
-	__bfl_mutex.unlock();
+	__bfl_lock._M_unlock();
 #endif
 	return __ret + 1;
       }
   }
 
-  void
+  void 
   free_list::
   _M_clear()
   {
 #if defined __GTHREADS
-    __gnu_cxx::__scoped_lock __bfl_lock(_M_get_mutex());
+    _Auto_Lock __bfl_lock(_M_get_mutex());
 #endif
     vector_type& __free_list = _M_get_free_list();
     iterator __iter = __free_list.begin();
@@ -122,5 +124,4 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
   // Instantiations.
   template class bitmap_allocator<char>;
   template class bitmap_allocator<wchar_t>;
-
-_GLIBCXX_END_NAMESPACE
+} // namespace __gnu_cxx

@@ -1,7 +1,6 @@
 /* Test assignments and comparisons involving category protocols.  */
 /* Author: Nicola Pero <nicola@brainstorm.co.uk>.  */
 /* { dg-do compile } */
-
 #include <objc/objc.h>
 
 @protocol MyProtocol
@@ -24,8 +23,10 @@ int main()
   MyClass *obj_cp = nil;
   MyOtherClass *obj_cp2 = nil;
 
+  /* APPLE LOCAL begin mainline */
   obj_cp = obj_p;  /* { dg-warning "distinct Objective\\-C type" } */
   obj_cp2 = obj_p; /* { dg-warning "distinct Objective\\-C type" } */
+  /* APPLE LOCAL end mainline */
   obj_p = obj_cp;  /* Ok */
   obj_p = obj_cp2; /* Ok */
 

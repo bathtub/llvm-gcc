@@ -7,4 +7,5 @@ struct X
    template <int i> struct Y {};
 };
 
-typedef X::template Y<0> y; // { dg-error "template|invalid" }
+typedef X::template Y<0> y; // { dg-error "template" }
+// { dg-bogus "with no type" "" { xfail *-*-* } 10 }

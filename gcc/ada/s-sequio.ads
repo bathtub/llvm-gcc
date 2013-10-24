@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --                 S Y S T E M . S E Q U E N T I A L _ I O                  --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---           Copyright (C) 1992-2006, Free Software Foundation, Inc.        --
+--        Copyright (C) 1992,1993,1994 Free Software Foundation, Inc.       --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -46,7 +46,8 @@ package System.Sequential_IO is
    --  No additional fields required for Sequential_IO
 
    function AFCB_Allocate
-     (Control_Block : Sequential_AFCB) return FCB.AFCB_Ptr;
+     (Control_Block : Sequential_AFCB)
+      return          FCB.AFCB_Ptr;
 
    procedure AFCB_Close (File : access Sequential_AFCB);
    procedure AFCB_Free  (File : access Sequential_AFCB);
@@ -59,7 +60,7 @@ package System.Sequential_IO is
 
    procedure Write
      (File : in out Sequential_AFCB;
-      Item : Ada.Streams.Stream_Element_Array);
+      Item : in Ada.Streams.Stream_Element_Array);
    --  Required overriding of Write, not actually used for Sequential_IO
 
    type File_Type is access all Sequential_AFCB;
@@ -67,14 +68,14 @@ package System.Sequential_IO is
 
    procedure Create
      (File : in out File_Type;
-      Mode : FCB.File_Mode := FCB.Out_File;
-      Name : String := "";
-      Form : String := "");
+      Mode : in FCB.File_Mode := FCB.Out_File;
+      Name : in String := "";
+      Form : in String := "");
 
    procedure Open
      (File : in out File_Type;
-      Mode : FCB.File_Mode;
-      Name : String;
-      Form : String := "");
+      Mode : in FCB.File_Mode;
+      Name : in String;
+      Form : in String := "");
 
 end System.Sequential_IO;

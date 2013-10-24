@@ -1,4 +1,4 @@
-/* Copyright (C) 2002, 2003, 2005 Free Software Foundation, Inc.
+/* Copyright (C) 2002-2003 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -24,8 +24,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with Libgfortran; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 #include "config.h"
@@ -43,44 +43,24 @@ Boston, MA 02110-1301, USA.  */
  * actually place the value into memory.  */
 
 void
-set_integer (void *dest, GFC_INTEGER_LARGEST value, int length)
+set_integer (void *dest, int64_t value, int length)
 {
   switch (length)
     {
-#ifdef HAVE_GFC_INTEGER_16
-    case 16:
-      {
-	GFC_INTEGER_16 tmp = value;
-	memcpy (dest, (void *) &tmp, length);
-      }
-      break;
-#endif
     case 8:
-      {
-	GFC_INTEGER_8 tmp = value;
-	memcpy (dest, (void *) &tmp, length);
-      }
+      *((int64_t *) dest) = value;
       break;
     case 4:
-      {
-	GFC_INTEGER_4 tmp = value;
-	memcpy (dest, (void *) &tmp, length);
-      }
+      *((int32_t *) dest) = value;
       break;
     case 2:
-      {
-	GFC_INTEGER_2 tmp = value;
-	memcpy (dest, (void *) &tmp, length);
-      }
+      *((int16_t *) dest) = value;
       break;
     case 1:
-      {
-	GFC_INTEGER_1 tmp = value;
-	memcpy (dest, (void *) &tmp, length);
-      }
+      *((int8_t *) dest) = value;
       break;
     default:
-      internal_error (NULL, "Bad integer kind");
+      internal_error ("Bad integer kind");
     }
 }
 
@@ -88,24 +68,13 @@ set_integer (void *dest, GFC_INTEGER_LARGEST value, int length)
 /* max_value()-- Given a length (kind), return the maximum signed or
  * unsigned value */
 
-GFC_UINTEGER_LARGEST
+uint64_t
 max_value (int length, int signed_flag)
 {
-  GFC_UINTEGER_LARGEST value;
-  int n;
+  uint64_t value;
 
   switch (length)
     {
-#if defined HAVE_GFC_REAL_16 || defined HAVE_GFC_REAL_10
-    case 16:
-    case 10:
-      value = 1;
-      for (n = 1; n < 4 * length; n++)
-        value = (value << 2) + 3;
-      if (! signed_flag)
-        value = 2*value+1;
-      break;
-#endif
     case 8:
       value = signed_flag ? 0x7fffffffffffffff : 0xffffffffffffffff;
       break;
@@ -119,7 +88,7 @@ max_value (int length, int signed_flag)
       value = signed_flag ? 0x7f : 0xff;
       break;
     default:
-      internal_error (NULL, "Bad integer kind");
+      internal_error ("Bad integer kind");
     }
 
   return value;
@@ -132,52 +101,30 @@ max_value (int length, int signed_flag)
  * infinities.  */
 
 int
-convert_real (st_parameter_dt *dtp, void *dest, const char *buffer, int length)
+convert_real (void *dest, const char *buffer, int length)
 {
   errno = 0;
 
   switch (length)
     {
     case 4:
-      {
-	GFC_REAL_4 tmp =
+      *((float *) dest) =
 #if defined(HAVE_STRTOF)
-	  strtof (buffer, NULL);
+	strtof (buffer, NULL);
 #else
-	  (GFC_REAL_4) strtod (buffer, NULL);
+	(float) strtod (buffer, NULL);
 #endif
-	memcpy (dest, (void *) &tmp, length);
-      }
       break;
     case 8:
-      {
-	GFC_REAL_8 tmp = strtod (buffer, NULL);
-	memcpy (dest, (void *) &tmp, length);
-      }
+      *((double *) dest) = strtod (buffer, NULL);
       break;
-#if defined(HAVE_GFC_REAL_10) && defined (HAVE_STRTOLD)
-    case 10:
-      {
-	GFC_REAL_10 tmp = strtold (buffer, NULL);
-	memcpy (dest, (void *) &tmp, length);
-      }
-      break;
-#endif
-#if defined(HAVE_GFC_REAL_16) && defined (HAVE_STRTOLD)
-    case 16:
-      {
-	GFC_REAL_16 tmp = strtold (buffer, NULL);
-	memcpy (dest, (void *) &tmp, length);
-      }
-      break;
-#endif
     default:
-      internal_error (&dtp->common, "Unsupported real kind during IO");
+      internal_error ("Unsupported real kind during IO");
     }
 
   if (errno != 0 && errno != EINVAL)
     {
-      generate_error (&dtp->common, ERROR_READ_VALUE,
+      generate_error (ERROR_READ_VALUE,
 		      "Range error during floating point read");
       return 1;
     }
@@ -189,13 +136,13 @@ convert_real (st_parameter_dt *dtp, void *dest, const char *buffer, int length)
 /* read_l()-- Read a logical value */
 
 void
-read_l (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
+read_l (fnode * f, char *dest, int length)
 {
   char *p;
   int w;
 
   w = f->u.w;
-  p = read_block (dtp, &w);
+  p = read_block (&w);
   if (p == NULL)
     return;
 
@@ -217,16 +164,15 @@ read_l (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
     {
     case 't':
     case 'T':
-      set_integer (dest, (GFC_INTEGER_LARGEST) 1, length);
+      set_integer (dest, 1, length);
       break;
     case 'f':
     case 'F':
-      set_integer (dest, (GFC_INTEGER_LARGEST) 0, length);
+      set_integer (dest, 0, length);
       break;
     default:
     bad:
-      generate_error (&dtp->common, ERROR_READ_VALUE,
-		      "Bad value on logical read");
+      generate_error (ERROR_READ_VALUE, "Bad value on logical read");
       break;
     }
 }
@@ -235,7 +181,7 @@ read_l (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
 /* read_a()-- Read a character record.  This one is pretty easy. */
 
 void
-read_a (st_parameter_dt *dtp, const fnode *f, char *p, int length)
+read_a (fnode * f, char *p, int length)
 {
   char *source;
   int w, m, n;
@@ -244,9 +190,7 @@ read_a (st_parameter_dt *dtp, const fnode *f, char *p, int length)
   if (w == -1) /* '(A)' edit descriptor  */
     w = length;
 
-  dtp->u.p.sf_read_comma = 0;
-  source = read_block (dtp, &w);
-  dtp->u.p.sf_read_comma = 1;
+  source = read_block (&w);
   if (source == NULL)
     return;
   if (w > length)
@@ -281,7 +225,7 @@ eat_leading_spaces (int *width, char *p)
 
 
 static char
-next_char (st_parameter_dt *dtp, char **p, int *w)
+next_char (char **p, int *w)
 {
   char c, *q;
 
@@ -296,8 +240,8 @@ next_char (st_parameter_dt *dtp, char **p, int *w)
 
   if (c != ' ')
     return c;
-  if (dtp->u.p.blank_status != BLANK_UNSPECIFIED)
-    return ' ';  /* return a blank to signal a null */ 
+  if (g.blank_status == BLANK_ZERO)
+    return '0';
 
   /* At this point, the rest of the field has to be trailing blanks */
 
@@ -317,22 +261,21 @@ next_char (st_parameter_dt *dtp, char **p, int *w)
  * signed values. */
 
 void
-read_decimal (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
+read_decimal (fnode * f, char *dest, int length)
 {
-  GFC_UINTEGER_LARGEST value, maxv, maxv_10;
-  GFC_INTEGER_LARGEST v;
-  int w, negative;
+  unsigned value, maxv, maxv_10;
+  int v, w, negative;
   char c, *p;
 
   w = f->u.w;
-  p = read_block (dtp, &w);
+  p = read_block (&w);
   if (p == NULL)
     return;
 
   p = eat_leading_spaces (&w, p);
   if (w == 0)
     {
-      set_integer (dest, (GFC_INTEGER_LARGEST) 0, length);
+      set_integer (dest, 0, length);
       return;
     }
 
@@ -363,16 +306,10 @@ read_decimal (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
 
   for (;;)
     {
-      c = next_char (dtp, &p, &w);
+      c = next_char (&p, &w);
       if (c == '\0')
 	break;
-	
-      if (c == ' ')
-        {
-	  if (dtp->u.p.blank_status == BLANK_NULL) continue;
-	  if (dtp->u.p.blank_status == BLANK_ZERO) c = '0';
-        }
-        
+
       if (c < '0' || c > '9')
 	goto bad;
 
@@ -387,7 +324,7 @@ read_decimal (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
       value += c;
     }
 
-  v = value;
+  v = (signed int) value;
   if (negative)
     v = -v;
 
@@ -395,12 +332,11 @@ read_decimal (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
   return;
 
  bad:
-  generate_error (&dtp->common, ERROR_READ_VALUE,
-		  "Bad value during integer read");
+  generate_error (ERROR_READ_VALUE, "Bad value during integer read");
   return;
 
  overflow:
-  generate_error (&dtp->common, ERROR_READ_OVERFLOW,
+  generate_error (ERROR_READ_OVERFLOW,
 		  "Value overflowed during integer read");
   return;
 }
@@ -412,23 +348,21 @@ read_decimal (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
  * the top bit is set, the value will be incorrect. */
 
 void
-read_radix (st_parameter_dt *dtp, const fnode *f, char *dest, int length,
-	    int radix)
+read_radix (fnode * f, char *dest, int length, int radix)
 {
-  GFC_UINTEGER_LARGEST value, maxv, maxv_r;
-  GFC_INTEGER_LARGEST v;
-  int w, negative;
+  unsigned value, maxv, maxv_r;
+  int v, w, negative;
   char c, *p;
 
   w = f->u.w;
-  p = read_block (dtp, &w);
+  p = read_block (&w);
   if (p == NULL)
     return;
 
   p = eat_leading_spaces (&w, p);
   if (w == 0)
     {
-      set_integer (dest, (GFC_INTEGER_LARGEST) 0, length);
+      set_integer (dest, 0, length);
       return;
     }
 
@@ -459,14 +393,9 @@ read_radix (st_parameter_dt *dtp, const fnode *f, char *dest, int length,
 
   for (;;)
     {
-      c = next_char (dtp, &p, &w);
+      c = next_char (&p, &w);
       if (c == '\0')
 	break;
-      if (c == ' ')
-        {
-	  if (dtp->u.p.blank_status == BLANK_NULL) continue;
-	  if (dtp->u.p.blank_status == BLANK_ZERO) c = '0';
-        }
 
       switch (radix)
 	{
@@ -531,7 +460,7 @@ read_radix (st_parameter_dt *dtp, const fnode *f, char *dest, int length,
       value += c;
     }
 
-  v = value;
+  v = (signed int) value;
   if (negative)
     v = -v;
 
@@ -539,12 +468,11 @@ read_radix (st_parameter_dt *dtp, const fnode *f, char *dest, int length,
   return;
 
  bad:
-  generate_error (&dtp->common, ERROR_READ_VALUE,
-		  "Bad value during integer read");
+  generate_error (ERROR_READ_VALUE, "Bad value during integer read");
   return;
 
  overflow:
-  generate_error (&dtp->common, ERROR_READ_OVERFLOW,
+  generate_error (ERROR_READ_OVERFLOW,
 		  "Value overflowed during integer read");
   return;
 }
@@ -557,7 +485,7 @@ read_radix (st_parameter_dt *dtp, const fnode *f, char *dest, int length,
    the input.  */
 
 void
-read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
+read_f (fnode * f, char *dest, int length)
 {
   int w, seen_dp, exponent;
   int exponent_sign, val_sign;
@@ -566,12 +494,11 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
   int i;
   char *p, *buffer;
   char *digits;
-  char scratch[SCRATCH_SIZE];
 
   val_sign = 1;
   seen_dp = 0;
   w = f->u.w;
-  p = read_block (dtp, &w);
+  p = read_block (&w);
   if (p == NULL)
     return;
 
@@ -628,7 +555,7 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
 	case '9':
 	case ' ':
 	  ndigits++;
-	  p++;
+	  *p++;
 	  w--;
 	  break;
 
@@ -655,12 +582,11 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
     }
 
   /* No exponent has been seen, so we use the current scale factor */
-  exponent = -dtp->u.p.scale_factor;
+  exponent = -g.scale_factor;
   goto done;
 
  bad_float:
-  generate_error (&dtp->common, ERROR_READ_VALUE,
-		  "Bad value during floating point read");
+  generate_error (ERROR_READ_VALUE, "Bad value during floating point read");
   return;
 
   /* The value read is zero */
@@ -668,27 +594,15 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
   switch (length)
     {
       case 4:
-	*((GFC_REAL_4 *) dest) = 0;
+	*((float *) dest) = 0.0f;
 	break;
 
       case 8:
-	*((GFC_REAL_8 *) dest) = 0;
+	*((double *) dest) = 0.0;
 	break;
-
-#ifdef HAVE_GFC_REAL_10
-      case 10:
-	*((GFC_REAL_10 *) dest) = 0;
-	break;
-#endif
-
-#ifdef HAVE_GFC_REAL_16
-      case 16:
-	*((GFC_REAL_16 *) dest) = 0;
-	break;
-#endif
 
       default:
-	internal_error (&dtp->common, "Unsupported real kind during IO");
+	internal_error ("Unsupported real kind during IO");
     }
   return;
 
@@ -726,46 +640,21 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
   p++;
   w--;
 
-  if (dtp->u.p.blank_status == BLANK_UNSPECIFIED) /* Normal processing of exponent */
+  while (w > 0 && isdigit (*p))
     {
-      while (w > 0 && isdigit (*p))
-        {
-          exponent = 10 * exponent + *p - '0';
-          p++;
-          w--;
-        }
-        
-      /* Only allow trailing blanks */
+      exponent = 10 * exponent + *p - '0';
+      p++;
+      w--;
+    }
 
-      while (w > 0)
-        {
-          if (*p != ' ')
-  	  goto bad_float;
-          p++;
-          w--;
-        }
-    }    
-  else  /* BZ or BN status is enabled */
+  /* Only allow trailing blanks */
+
+  while (w > 0)
     {
-      while (w > 0)
-        {
-          if (*p == ' ')
-            {
-	      if (dtp->u.p.blank_status == BLANK_ZERO) *p = '0';
-	      if (dtp->u.p.blank_status == BLANK_NULL)
-                {
-                  p++;
-                  w--;
-                  continue;
-                }
-            }
-          else if (!isdigit (*p))
-            goto bad_float;
-
-          exponent = 10 * exponent + *p - '0';
-          p++;
-          w--;
-        }
+      if (*p != ' ')
+	goto bad_float;
+      p++;
+      w--;
     }
 
   exponent = exponent * exponent_sign;
@@ -803,22 +692,16 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
     buffer = get_mem (i);
 
   /* Reformat the string into a temporary buffer.  As we're using atof it's
-     easiest to just leave the decimal point in place.  */
+     easiest to just leave the dcimal point in place.  */
   p = buffer;
   if (val_sign < 0)
     *(p++) = '-';
   for (; ndigits > 0; ndigits--)
     {
-      if (*digits == ' ')
-        {
-	  if (dtp->u.p.blank_status == BLANK_ZERO) *digits = '0';
-	  if (dtp->u.p.blank_status == BLANK_NULL)
-            {
-              digits++;
-              continue;
-            } 
-        }
-      *p = *digits;
+      if (*digits == ' ' && g.blank_status == BLANK_ZERO)
+	*p = '0';
+      else
+	*p = *digits;
       p++;
       digits++;
     }
@@ -826,7 +709,7 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
   sprintf (p, "%d", exponent);
 
   /* Do the actual conversion.  */
-  convert_real (dtp, dest, buffer, length);
+  convert_real (dest, buffer, length);
 
   if (buffer != scratch)
      free_mem (buffer);
@@ -839,19 +722,10 @@ read_f (st_parameter_dt *dtp, const fnode *f, char *dest, int length)
  * and never look at it. */
 
 void
-read_x (st_parameter_dt *dtp, int n)
+read_x (fnode * f)
 {
-  if (!is_stream_io (dtp))
-    {
-      if ((dtp->u.p.current_unit->flags.pad == PAD_NO || is_internal_unit (dtp))
-	  && dtp->u.p.current_unit->bytes_left < n)
-	n = dtp->u.p.current_unit->bytes_left;
+  int n;
 
-      dtp->u.p.sf_read_comma = 0;
-      if (n > 0)
-	read_sf (dtp, &n, 1);
-      dtp->u.p.sf_read_comma = 1;
-    }
-  else
-    dtp->u.p.current_unit->strm_pos += (gfc_offset) n;
+  n = f->u.n;
+  read_block (&n);
 }

@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -266,7 +266,7 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * This is a two element <code>String</code> array indexed by
    * <code>Calendar.AM</code> and <code>Calendar.PM</code>
    *
-   * @param value The new list of AM/PM display strings.
+   * @param ampms The new list of AM/PM display strings.
    */
   public void setAmPmStrings (String[] value)
   {
@@ -279,11 +279,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * This is a two element <code>String</code>
    * array indexed by <code>Calendar.BC</code> and <code>Calendar.AD</code>.
    *
-   * @param labels The new list of era display strings.
+   * @param eras The new list of era disply strings.
    */
-  public void setEras (String[] labels)
+  public void setEras (String[] value)
   {
-    eras = labels;
+    eras = value;
   }
 
   /**
@@ -317,11 +317,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
     * <li>17 - time zone (z)</li>
     * </ul>
     *
-    * @param chars The new format pattern characters
+    * @param localPatternChars The new format patter characters
     */
-  public void setLocalPatternChars (String chars)
+  public void setLocalPatternChars (String value)
   {
-    localPatternChars = chars;
+    localPatternChars = value;
   }
 
   /**
@@ -331,11 +331,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
     * <code>Calendar.UNDECEMBER</code>.  Note that there are thirteen
     * elements because some calendars have thriteen months.
     *
-    * @param labels The list of month display strings.
+    * @param months The list of month display strings.
     */
-  public void setMonths (String[] labels)
+  public void setMonths (String[] value)
   {
-    months = labels;
+    months = value;
   }
 
   /**
@@ -346,11 +346,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * through <code>Calendar.UNDECEMBER</code>.  Note that there are thirteen
    * elements because some calendars have thirteen months.
    *
-   * @param labels The new list of abbreviated month display strings.
+   * @param shortMonths The new list of abbreviated month display strings.
    */
-  public void setShortMonths (String[] labels)
+  public void setShortMonths (String[] value)
   {
-    shortMonths = labels;
+    shortMonths = value;
   }
 
   /**
@@ -361,11 +361,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * through <code>Calendar.SATURDAY</code>.  Note that the first element
    * of this array is ignored.
    *
-   * @param labels This list of abbreviated weekday display strings.
+   * @param shortWeekdays This list of abbreviated weekday display strings.
    */
-  public void setShortWeekdays (String[] labels)
+  public void setShortWeekdays (String[] value)
   {
-    shortWeekdays = labels;
+    shortWeekdays = value;
   }
 
   /**
@@ -375,11 +375,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * through <code>Calendar.SATURDAY</code>.  Note that the first element
    * of this array is ignored.
    *
-   * @param labels This list of weekday display strings.
+   * @param weekdays This list of weekday display strings.
    */
-  public void setWeekdays (String[] labels)
+  public void setWeekdays (String[] value)
   {
-    weekdays = labels;
+    weekdays = value;
   }
 
   /**
@@ -395,11 +395,11 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
    * <li>4 - the short name of the time zone (daylight savings time).</li>
    * </ul>
    *
-   * @params zones The list of time zone display strings.
+   * @return The list of time zone display strings.
    */
-  public void setZoneStrings (String[][] zones)
+  public void setZoneStrings (String[][] value)
   {
-    zoneStrings = zones;
+    zoneStrings = value;
   }
 
   /* Does a "deep" equality test - recurses into arrays. */
@@ -469,7 +469,7 @@ public class DateFormatSymbols implements java.io.Serializable, Cloneable
   /**
    * Returns a new copy of this object.
    *
-   * @return A copy of this object
+   * @param A copy of this object
    */
   public Object clone ()
   {

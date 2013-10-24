@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Static variables, even if local, require indirect access through a stub
    if -mfix-and-continue is enabled.  */
 
@@ -6,7 +7,8 @@
 /* { dg-do assemble { target *-*-darwin* } } */
 /* { dg-options "-mfix-and-continue" } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @interface Foo: Object
 + (Object *)indexableFileTypes;

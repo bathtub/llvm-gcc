@@ -9,6 +9,5 @@
        INQUIRE(UNIT=9,NEXTREC=NREC)
        IF (NREC.NE.2) CALL ABORT
 !      PRINT*,NREC
-       CLOSE(UNIT=9,STATUS='DELETE')
        END
 

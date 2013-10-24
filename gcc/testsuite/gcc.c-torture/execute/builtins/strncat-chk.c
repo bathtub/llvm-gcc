@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Copyright (C) 2004, 2005  Free Software Foundation.
 
    Ensure builtin __strncat_chk performs correctly.  */

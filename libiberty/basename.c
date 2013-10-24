@@ -12,9 +12,6 @@ Behavior is undefined if the pathname ends in a directory separator.
 
 */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
 #include "ansidecl.h"
 #include "libiberty.h"
 #include "safe-ctype.h"
@@ -40,7 +37,8 @@ Behavior is undefined if the pathname ends in a directory separator.
 #endif /* DIR_SEPARATOR_2 */
 
 char *
-basename (const char *name)
+basename (name)
+     const char *name;
 {
   const char *base;
 

@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "libgfortran.h"'
@@ -37,8 +37,6 @@ include(iparm.m4)dnl
    Powers" of Donald E. Knuth, "Seminumerical Algorithms", Vol. 2, "The Art
    of Computer Programming", 3rd Edition, 1998.  */
 
-`#if defined (HAVE_'rtype_name`) && defined (HAVE_'atype_name`)'
-
 rtype_name `pow_'rtype_code`_'atype_code (rtype_name a, atype_name b);
 export_proto(pow_`'rtype_code`_'atype_code);
 
@@ -46,8 +44,7 @@ rtype_name
 `pow_'rtype_code`_'atype_code (rtype_name a, atype_name b)
 {
   rtype_name pow, x;
-  atype_name n;
-  `GFC_UINTEGER_'atype_kind` u;'
+  atype_name n, u;
   
   n = b;
   x = a;
@@ -63,14 +60,11 @@ ifelse(rtype_letter,i,`dnl
 	    return (n & 1) ? -1 : 1;
 	  return (x == 0) ? 1 / x : 0;
 ',`
-	  u = -n;
+	  n = -n;
 	  x = pow / x;
 ')dnl
 	}
-      else
-	{
-	   u = n;
-	}
+      u = n;
       for (;;)
 	{
 	  if (u & 1)
@@ -84,5 +78,3 @@ ifelse(rtype_letter,i,`dnl
     }
   return pow;
 }
-
-#endif

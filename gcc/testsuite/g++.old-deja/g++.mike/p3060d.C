@@ -7,7 +7,7 @@ extern "C" int printf(const char *, ...);
 
 class Object;
 
-typedef void (Object::*VoidObjMemberFunc)(Object *tracker, void *ap);
+typedef void (Object::*VoidObjMemberFunc)(Object *, ...);
 
 class Object {
 public:

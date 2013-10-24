@@ -1,5 +1,6 @@
 /* { dg-do run { target m68k-*-* sparc-*-* } } */
-/* { dg-options { -O2 } } */
+/* { dg-options { -m68000 -O2 } { target m68k-*-* } } */
+/* { dg-options { -O2 } { target sparc-*-* } } */
 
 extern void abort (void);
 

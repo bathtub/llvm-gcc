@@ -132,11 +132,9 @@ public class IntegerGraphicsState extends AbstractGraphicsState
 
   public Shape getClip()
   {
-    if (clip == null)
-      return null;
     if (clip instanceof Rectangle)
       {
-	Rectangle clipRect = (Rectangle) ((Rectangle) clip).clone();
+	Rectangle clipRect = (Rectangle) clip;
 	clipRect.x -= tx;
 	clipRect.y -= ty;
 	return clipRect;
@@ -151,8 +149,6 @@ public class IntegerGraphicsState extends AbstractGraphicsState
 
   public Rectangle getClipBounds()
   {
-    if (clip == null)
-      return null;
     Rectangle clipRect = clip.getBounds();
     
     clipRect.x -= tx;

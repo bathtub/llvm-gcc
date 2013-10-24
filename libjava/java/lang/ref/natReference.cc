@@ -363,8 +363,8 @@ void
       // finalizer for ourselves as well.
       _Jv_RegisterFinalizer (this, finalize_reference);
       _Jv_RegisterFinalizer (referent, finalize_referred_to_object);
-      gnu::gcj::RawData **p = &referent;
-     _Jv_GCRegisterDisappearingLink ((jobject *) p);
+      jobject *objp = reinterpret_cast<jobject *> (&referent);
+      _Jv_GCRegisterDisappearingLink (objp);
       add_to_hash (this);
     }
 }

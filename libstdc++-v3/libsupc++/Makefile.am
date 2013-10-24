@@ -1,7 +1,6 @@
 ## Makefile for the GNU C++ Support library.
 ##
-## Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005
-## Free Software Foundation, Inc.
+## Copyright (C) 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
 ##
 ## Process this file with automake to produce Makefile.in.
 ##
@@ -19,8 +18,8 @@
 ##
 ## You should have received a copy of the GNU General Public License
 ## along with GCC; see the file COPYING.  If not, write to
-## the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-## Boston, MA 02110-1301, USA.
+## the Free Software Foundation, 59 Temple Place - Suite 330,
+## Boston, MA 02111-1307, USA.
 
 include $(top_srcdir)/fragment.am
 
@@ -46,9 +45,7 @@ sources = \
 	del_opv.cc \
 	del_opvnt.cc \
 	eh_alloc.cc \
-	eh_arm.cc \
 	eh_aux_runtime.cc \
-	eh_call.cc \
 	eh_catch.cc \
 	eh_exception.cc \
 	eh_globals.cc \
@@ -137,9 +134,7 @@ cp-demangle.o: cp-demangle.c
 # CXX undo the affect of disable-shared.
 LTCXXCOMPILE = $(LIBTOOL) --tag CXX --tag disable-shared \
 	       --mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
-	       $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) 
-
-LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
+	       $(AM_CPPFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(AM_CXXFLAGS)
 
 # 3) We'd have a problem when building the shared libstdc++ object if
 # the rules automake generates would be used.  We cannot allow g++ to
@@ -149,7 +144,7 @@ LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 # compilation driver.
 CXXLINK = $(LIBTOOL) --tag CXX --tag disable-shared \
 	  --mode=link $(CXX) \
-	  $(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
+	  $(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LDFLAGS) -o $@
 
 # We have to have rules modified from the default to counteract SUN make
 # prepending each of $(glibcxxinstall_HEADERS) with VPATH below.

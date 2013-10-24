@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                 GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                 --
+--                GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS               --
 --                                                                          --
 --     S Y S T E M . T A S K _ P R I M I T I V E S . O P E R A T I O N S    --
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---         Copyright (C) 1992-2005, Free Software Foundation, Inc.          --
+--         Copyright (C) 1992-2004, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -40,6 +40,10 @@ pragma Polling (Off);
 --  Turn off polling, we do not want ATC polling to take place during
 --  tasking operations. It causes infinite loops and other problems.
 
+with System.Tasking;
+--  used for Ada_Task_Control_Block
+--           Task_Id
+
 with System.Error_Reporting;
 --  used for Shutdown
 
@@ -50,6 +54,9 @@ package body System.Task_Primitives.Operations is
 
    pragma Warnings (Off);
    --  Turn off warnings since so many unreferenced parameters
+
+   No_Tasking : Boolean;
+   --  Comment required here ???
 
    ----------------
    -- Abort_Task --
@@ -79,15 +86,6 @@ package body System.Task_Primitives.Operations is
    begin
       return True;
    end Check_No_Locks;
-
-   -------------------
-   -- Current_State --
-   -------------------
-
-   function Current_State (S : Suspension_Object) return Boolean is
-   begin
-      return False;
-   end Current_State;
 
    ----------------------
    -- Environment_Task --
@@ -130,15 +128,6 @@ package body System.Task_Primitives.Operations is
    begin
       null;
    end Exit_Task;
-
-   --------------
-   -- Finalize --
-   --------------
-
-   procedure Finalize (S : in out Suspension_Object) is
-   begin
-      null;
-   end Finalize;
 
    -------------------
    -- Finalize_Lock --
@@ -186,14 +175,6 @@ package body System.Task_Primitives.Operations is
    ----------------
 
    procedure Initialize (Environment_Task : Task_Id) is
-      No_Tasking : Boolean;
-   begin
-      No_Tasking :=
-        System.Error_Reporting.Shutdown
-          ("Tasking not implemented on this configuration");
-   end Initialize;
-
-   procedure Initialize (S : in out Suspension_Object) is
    begin
       null;
    end Initialize;
@@ -308,15 +289,6 @@ package body System.Task_Primitives.Operations is
       return Null_Task;
    end Self;
 
-   ---------------
-   -- Set_False --
-   ---------------
-
-   procedure Set_False (S : in out Suspension_Object) is
-   begin
-      null;
-   end Set_False;
-
    ------------------
    -- Set_Priority --
    ------------------
@@ -329,15 +301,6 @@ package body System.Task_Primitives.Operations is
    begin
       null;
    end Set_Priority;
-
-   --------------
-   -- Set_True --
-   --------------
-
-   procedure Set_True (S : in out Suspension_Object) is
-   begin
-      null;
-   end Set_True;
 
    -----------
    -- Sleep --
@@ -368,15 +331,6 @@ package body System.Task_Primitives.Operations is
    begin
       return False;
    end Suspend_Task;
-
-   ------------------------
-   -- Suspend_Until_True --
-   ------------------------
-
-   procedure Suspend_Until_True (S : in out Suspension_Object) is
-   begin
-      null;
-   end Suspend_Until_True;
 
    -----------------
    -- Timed_Delay --
@@ -475,4 +429,11 @@ package body System.Task_Primitives.Operations is
       null;
    end Yield;
 
+begin
+   --  Can't raise an exception because target independent packages try to
+   --  do an Abort_Defer, which gets a memory fault.
+
+   No_Tasking :=
+     System.Error_Reporting.Shutdown
+       ("Tasking not implemented on this configuration");
 end System.Task_Primitives.Operations;

@@ -1,7 +1,6 @@
 // Allocators -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006
-// Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -16,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -52,14 +51,11 @@
 #include <cstdlib>
 #include <new>
 #include <bits/functexcept.h>
-#include <ext/atomicity.h>
-#include <ext/concurrence.h>
+#include <bits/atomicity.h>
+#include <bits/concurrence.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
-
-  using std::size_t;
-  using std::ptrdiff_t;
-
+namespace __gnu_cxx
+{
   /**
    *  @brief  Base class for __pool_alloc.
    *
@@ -106,7 +102,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
       _Obj* volatile*
       _M_get_free_list(size_t __bytes);
     
-      __mutex&
+      mutex_type&
       _M_get_mutex();
 
       // Returns an object of size __n, and optionally adds to size __n
@@ -205,10 +201,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	  // to efficiently support threading found in basic_string.h.
 	  if (_S_force_new == 0)
 	    {
-	      if (std::getenv("GLIBCXX_FORCE_NEW"))
-		__atomic_add_dispatch(&_S_force_new, 1);
+	      if (getenv("GLIBCXX_FORCE_NEW"))
+		__atomic_add(&_S_force_new, 1);
 	      else
-		__atomic_add_dispatch(&_S_force_new, -1);
+		__atomic_add(&_S_force_new, -1);
 	    }
 
 	  const size_t __bytes = __n * sizeof(_Tp);	      
@@ -218,7 +214,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	    {
 	      _Obj* volatile* __free_list = _M_get_free_list(__bytes);
 	      
-	      __scoped_lock sentry(_M_get_mutex());
+	      lock sentry(_M_get_mutex());
 	      _Obj* __restrict__ __result = *__free_list;
 	      if (__builtin_expect(__result == 0, 0))
 		__ret = static_cast<_Tp*>(_M_refill(_M_round_up(__bytes)));
@@ -248,13 +244,12 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 	      _Obj* volatile* __free_list = _M_get_free_list(__bytes);
 	      _Obj* __q = reinterpret_cast<_Obj*>(__p);
 
-	      __scoped_lock sentry(_M_get_mutex());
+	      lock sentry(_M_get_mutex());
 	      __q ->_M_free_list_link = *__free_list;
 	      *__free_list = __q;
 	    }
 	}
     }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace __gnu_cxx
 
 #endif

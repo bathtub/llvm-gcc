@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -113,10 +113,7 @@ public class ObjectInputStream extends InputStream
    * <code>private void readObject (ObjectInputStream)</code>.
    *
    * If an exception is thrown from this method, the stream is left in
-   * an undefined state. This method can also throw Errors and 
-   * RuntimeExceptions if caused by existing readResolve() user code.
-   * 
-   * @return The object read from the underlying stream.
+   * an undefined state.
    *
    * @exception ClassNotFoundException The class that an object being
    * read in belongs to cannot be found.
@@ -202,6 +199,7 @@ public class ObjectInputStream extends InputStream
 	      for (int i = 0; i < n_intf; i++)
 		{
 		  intfs[i] = this.realInputStream.readUTF();
+		  System.out.println(intfs[i]);
 		}
 	      
 	      boolean oldmode = setBlockDataMode(true);
@@ -209,21 +207,6 @@ public class ObjectInputStream extends InputStream
 	      setBlockDataMode(oldmode);
 	      
 	      ObjectStreamClass osc = lookupClass(cl);
-	      if (osc.firstNonSerializableParentConstructor == null)
-		{
-		  osc.realClassIsSerializable = true;
-		  osc.fields = osc.fieldMapping = new ObjectStreamField[0];
-		  try
-		    {
-		      osc.firstNonSerializableParentConstructor =
-		        Object.class.getConstructor(new Class[0]);
-		    }
-		  catch (NoSuchMethodException x)
-		    {
-		      throw (InternalError)
-			new InternalError("Object ctor missing").initCause(x);
-		    }
-		}
 	      assignNewHandle(osc);
 	      
 	      if (!is_consumed)
@@ -800,11 +783,21 @@ public class ObjectInputStream extends InputStream
   }
 
   /**
-   * Returns the most recent user defined ClassLoader on the execution stack
-   * or null if none is found.
+   * This method invokes the method currentClassLoader for the
+   * current security manager (or build an empty one if it is not
+   * present).
+   *
+   * @return The most recent non-system ClassLoader on the execution stack.
+   * @see java.lang.SecurityManager#currentClassLoader()
    */
-  // GCJ LOCAL: native method.
-  private native ClassLoader currentLoader();
+  private ClassLoader currentLoader()
+  {
+    SecurityManager sm = System.getSecurityManager();
+    if (sm == null)
+      sm = new SecurityManager () {};
+    
+    return currentClassLoader(sm);
+  }
 
   /**
    * Lookup a class stored in the local hashtable. If it is not
@@ -890,7 +883,12 @@ public class ObjectInputStream extends InputStream
   protected Class resolveProxyClass(String[] intfs)
     throws IOException, ClassNotFoundException
   {
-    ClassLoader cl = currentLoader();
+    SecurityManager sm = System.getSecurityManager();
+    
+    if (sm == null)
+      sm = new SecurityManager() {};
+    
+    ClassLoader cl = currentClassLoader(sm);
     
     Class[] clss = new Class[intfs.length];
     if(cl == null)
@@ -1575,15 +1573,8 @@ public class ObjectInputStream extends InputStream
 	catch (IllegalAccessException ignore)
 	  {
 	  }
-	catch (InvocationTargetException exception)
+	catch (InvocationTargetException ignore)
 	  {
-	    Throwable cause = exception.getCause();
-	    if (cause instanceof ObjectStreamException)
-	      throw (ObjectStreamException) cause;
-	    else if (cause instanceof RuntimeException)
-	      throw (RuntimeException) cause;
-	    else if (cause instanceof Error)
-	      throw (Error) cause;
 	  }
       }
 
@@ -1874,6 +1865,15 @@ public class ObjectInputStream extends InputStream
 	this.validators.removeAllElements();
       }
   }
+
+  /**
+   * This native method is used to get access to the protected method
+   * of the same name in SecurityManger.
+   *
+   * @param sm SecurityManager instance which should be called.
+   * @return The current class loader in the calling stack.
+   */
+  private static native ClassLoader currentClassLoader (SecurityManager sm);
 
   private void callReadMethod (Method readObject, Class klass, Object obj)
     throws ClassNotFoundException, IOException

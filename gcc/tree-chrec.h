@@ -1,6 +1,6 @@
 /* Chains of recurrences.
-   Copyright (C) 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
-   Contributed by Sebastian Pop <pop@cri.ensmp.fr>
+   Copyright (C) 2003, 2004 Free Software Foundation, Inc.
+   Contributed by Sebastian Pop <s.pop@laposte.net>
 
 This file is part of GCC.
 
@@ -16,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #ifndef GCC_TREE_CHREC_H
 #define GCC_TREE_CHREC_H
@@ -67,8 +67,9 @@ tree_is_chrec (tree expr)
 extern tree chrec_fold_plus (tree, tree, tree);
 extern tree chrec_fold_minus (tree, tree, tree);
 extern tree chrec_fold_multiply (tree, tree, tree);
-extern tree chrec_convert (tree, tree, tree);
-extern tree chrec_convert_aggressive (tree, tree);
+extern tree chrec_convert (tree, tree);
+extern tree count_ev_in_wider_type (tree, tree);
+extern tree chrec_type (tree);
 
 /* Operations.  */
 extern tree chrec_apply (unsigned, tree, tree);
@@ -81,7 +82,6 @@ extern tree reset_evolution_in_loop (unsigned, tree, tree);
 extern tree chrec_merge (tree, tree);
 
 /* Observers.  */
-extern bool eq_evolutions_p (tree, tree);
 extern bool is_multivariate_chrec (tree);
 extern bool chrec_is_positive (tree, bool *);
 extern bool chrec_contains_symbols (tree);
@@ -105,10 +105,8 @@ build_polynomial_chrec (unsigned loop_num,
       || right == chrec_dont_know)
     return chrec_dont_know;
 
-  gcc_assert (TREE_TYPE (left) == TREE_TYPE (right));
-
-  return build3 (POLYNOMIAL_CHREC, TREE_TYPE (left), 
-		 build_int_cst (NULL_TREE, loop_num), left, right);
+  return build (POLYNOMIAL_CHREC, TREE_TYPE (left), 
+		build_int_cst (NULL_TREE, loop_num), left, right);
 }
 
 
@@ -148,7 +146,6 @@ evolution_function_is_constant_p (tree chrec)
     }
 }
 
-extern bool evolution_function_is_invariant_p (tree, int);
 /* Determine whether the given tree is an affine evolution function or not.  */
 
 static inline bool 
@@ -160,10 +157,8 @@ evolution_function_is_affine_p (tree chrec)
   switch (TREE_CODE (chrec))
     {
     case POLYNOMIAL_CHREC:
-      if (evolution_function_is_invariant_p (CHREC_LEFT (chrec), 
-					     CHREC_VARIABLE (chrec))
-	  && evolution_function_is_invariant_p (CHREC_RIGHT (chrec),
-						CHREC_VARIABLE (chrec)))
+      if (evolution_function_is_constant_p (CHREC_LEFT (chrec))
+	  && evolution_function_is_constant_p (CHREC_RIGHT (chrec)))
 	return true;
       else
 	return false;
@@ -208,17 +203,5 @@ no_evolution_in_loop_p (tree chrec, unsigned loop_num, bool *res)
   *res = !tree_is_chrec (scev);
   return true;
 }
-
-/* Returns the type of the chrec.  */
-
-static inline tree
-chrec_type (tree chrec)
-{
-  if (automatically_generated_chrec_p (chrec))
-    return NULL_TREE;
-
-  return TREE_TYPE (chrec);
-}
-
 
 #endif  /* GCC_TREE_CHREC_H  */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 2001, 2002, 2003, 2004, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -26,16 +26,21 @@ details.  */
    verification. */
 #define INVALID_STATE ((state *) -1)
 
-static void ATTRIBUTE_PRINTF_1
-debug_print (const char *fmt ATTRIBUTE_UNUSED, ...)
-{
 #ifdef VERIFY_DEBUG
+static void
+debug_print (const char *fmt, ...)
+{
   va_list ap;
   va_start (ap, fmt);
   vfprintf (stderr, fmt, ap);
   va_end (ap);
-#endif /* VERIFY_DEBUG */
 }
+#else
+static void
+debug_print (const char *fmt ATTRIBUTE_UNUSED, ...)
+{
+}    
+#endif /* VERIFY_DEBUG */
 
 /* This started as a fairly ordinary verifier, and for the most part
    it remains so.  It works in the obvious way, by modeling the effect
@@ -1946,7 +1951,7 @@ check_pool_index (int index)
 static type
 check_class_constant (int index)
 {
-  type t = { 0, 0, 0 };
+  type t;
   vfy_constants *pool;
 
   check_pool_index (index);
@@ -1963,7 +1968,7 @@ check_class_constant (int index)
 static type
 check_constant (int index)
 {
-  type t = { 0, 0, 0 };
+  type t;
   vfy_constants *pool;
 
   check_pool_index (index);
@@ -1975,10 +1980,6 @@ check_constant (int index)
     init_type_from_tag (&t, int_type);
   else if (vfy_tag (pool, index) == JV_CONSTANT_Float)
     init_type_from_tag (&t, float_type);
-  else if (vfy_tag (pool, index) == JV_CONSTANT_Class
-	   || vfy_tag (pool, index) == JV_CONSTANT_ResolvedClass)
-    /* FIXME: should only allow this for 1.5 bytecode.  */
-    init_type_from_class (&t, vfy_class_type ());
   else
     verify_fail_pc ("String, int, or float constant expected", vfr->start_PC);
   return t;
@@ -1987,7 +1988,7 @@ check_constant (int index)
 static type
 check_wide_constant (int index)
 {
-  type t = { 0, 0, 0 };
+  type t;
   vfy_constants *pool;
 
   check_pool_index (index);
@@ -2255,12 +2256,10 @@ verify_instructions_0 (void)
       else
 	{
 	  /* We only have to do this checking in the situation where
-	     control flow falls through from the previous instruction.
-	     Otherwise merging is done at the time we push the branch.
-	     Note that we'll catch the off-the-end problem just
-	     below.  */
-	  if (vfr->PC < vfr->current_method->code_length
-	      && vfr->states[vfr->PC] != NULL)
+	     control flow falls through from the previous
+	     instruction.  Otherwise merging is done at the time we
+	     push the branch.  */
+	  if (vfr->states[vfr->PC] != NULL)
 	    {
 	      /* We've already visited this instruction.  So merge
 	         the states together.  It is simplest, but not most
@@ -2891,11 +2890,9 @@ verify_instructions_0 (void)
 	  invalidate_pc ();
 	  break;
 	case op_return:
-	  /* We only need to check this when the return type is void,
-	     because all instance initializers return void.  We also
-	     need to special-case Object constructors, as they can't
-	     call a superclass <init>.  */
-	  if (this_is_init && vfr->current_class != vfy_object_type ())
+	  /* We only need to check this when the return type is
+	     void, because all instance initializers return void.  */
+	  if (this_is_init)
 	    state_check_this_initialized (vfr->current_state);
 	  check_return_type (make_type (void_type));
 	  invalidate_pc ();
@@ -3184,7 +3181,7 @@ collapse_type (type *t)
       return vfy_object_type ();
     }
 
-  gcc_unreachable ();
+  abort ();
 }
 
 static void
@@ -3226,7 +3223,8 @@ verify_instructions (void)
 				   vfy_unsuitable_type ());
 	    }
 	}
-      gcc_assert (slot == curr->stackdepth);
+      if (slot != curr->stackdepth)
+	abort ();
     }
 }
 

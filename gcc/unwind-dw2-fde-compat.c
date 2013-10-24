@@ -1,5 +1,5 @@
 /* Backward compatibility unwind routines.
-   Copyright (C) 2004, 2005
+   Copyright (C) 2004
    Free Software Foundation, Inc.
 
    This file is part of GCC.
@@ -25,12 +25,10 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to the Free
-   Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-   02110-1301, USA.  */
+   Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+   02111-1307, USA.  */
 
 #if defined (USE_GAS_SYMVER) && defined (USE_LIBUNWIND_EXCEPTIONS)
-#include "tconfig.h"
-#include "tsystem.h"
 #include "unwind.h"
 #include "unwind-dw2-fde.h"
 #include "unwind-compat.h"

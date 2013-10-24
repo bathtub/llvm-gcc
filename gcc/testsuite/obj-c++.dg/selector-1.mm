@@ -1,8 +1,9 @@
+/* APPLE LOCAL file mainline */
 /* Test whether including C++ keywords such as 'and', 'or',
    'not', etc., is allowed inside ObjC selectors (as it must be).  */
 /* Author: Ziemowit Laski <zlaski@apple.com>.  */
-
 /* { dg-do compile } */
+
 
 @interface Int1 
 + (int)and_eq:(int)arg1 and:(int)arg2;
@@ -28,3 +29,4 @@
 /* { dg-final { scan-assembler  "\\-\\\[Int1 bitand:bitor:\\]|i_Int1__bitand_bitor" } } */
 /* { dg-final { scan-assembler  "\\-\\\[Int1 compl:xor_eq:\\]|i_Int1__compl_xor_eq" } } */
 /* { dg-final { scan-assembler  "\\-\\\[Int1 not_eq\\]|i_Int1__not_eq" } } */
+

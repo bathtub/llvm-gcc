@@ -1,6 +1,6 @@
 // Compatibility symbols for previous versions -*- C++ -*-
 
-// Copyright (C) 2005, 2006
+// Copyright (C) 2005
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,11 +28,6 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
-/** @file compatibility.h
- *  This is an internal header file, included by other library sources.
- *  You should not attempt to use it directly.
- */
-
 // Switch for symbol version macro.
 #ifndef _GLIBCXX_APPLY_SYMVER 
 #error must define _GLIBCXX_APPLY_SYMVER before including __FILE__
@@ -42,7 +37,7 @@
 _ZNSt19istreambuf_iteratorIcSt11char_traitsIcEEppEv
 _ZNSt19istreambuf_iteratorIwSt11char_traitsIwEEppEv
  */
-namespace 
+namespace __gnu_internal
 {
 _GLIBCXX_APPLY_SYMVER(_ZNSt21istreambuf_iteratorXXIcSt11char_traitsIcEEppEv,
 		      _ZNSt19istreambuf_iteratorIcSt11char_traitsIcEEppEv)
@@ -51,7 +46,7 @@ _GLIBCXX_APPLY_SYMVER(_ZNSt21istreambuf_iteratorXXIcSt11char_traitsIcEEppEv,
 _GLIBCXX_APPLY_SYMVER(_ZNSt21istreambuf_iteratorXXIwSt11char_traitsIwEEppEv,
 		      _ZNSt19istreambuf_iteratorIwSt11char_traitsIwEEppEv)
 #endif
-} // anonymous namespace
+} // namespace std
 
 /* gcc-4.0.0
 _ZNSs4_Rep26_M_set_length_and_sharableEj
@@ -82,7 +77,7 @@ _ZNSt13basic_istreamIwSt11char_traitsIwEE6ignoreEv
 _ZNSt11char_traitsIcE2eqERKcS2_
 _ZNSt11char_traitsIwE2eqERKwS2_
  */
-namespace 
+namespace __gnu_internal
 {
 _GLIBCXX_APPLY_SYMVER(_ZNSt11char_traitsIcE4eqXXERKcS2_,
 		      _ZNSt11char_traitsIcE2eqERKcS2_)
@@ -215,5 +210,5 @@ _GLIBCXX_APPLY_SYMVER(_ZNKSt16basic_ifstreamXXIwSt11char_traitsIwEE7is_openEv,
 _GLIBCXX_APPLY_SYMVER(_ZNKSt16basic_ofstreamXXIwSt11char_traitsIwEE7is_openEv,
 		      _ZNKSt14basic_ofstreamIwSt11char_traitsIwEE7is_openEv)
 #endif
-  } // anonymous namespace
+}
 

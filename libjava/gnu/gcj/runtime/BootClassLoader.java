@@ -23,9 +23,6 @@ public final class BootClassLoader extends HelperClassLoader
 {
   BootClassLoader(String libdir)
   {
-    // The BootClassLoader is the top of the delegation chain. It does not
-    // have a parent.
-    super((ClassLoader) null);
     addDirectoriesFromProperty("java.endorsed.dirs");
     addDirectoriesFromProperty("gnu.gcj.runtime.endorsed.dirs");
 

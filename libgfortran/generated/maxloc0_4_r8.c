@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -36,22 +36,18 @@ Boston, MA 02110-1301, USA.  */
 #include "libgfortran.h"
 
 
-#if defined (HAVE_GFC_REAL_8) && defined (HAVE_GFC_INTEGER_4)
 
-
-extern void maxloc0_4_r8 (gfc_array_i4 * const restrict retarray, 
-	gfc_array_r8 * const restrict array);
+extern void maxloc0_4_r8 (gfc_array_i4 * retarray, gfc_array_r8 *array);
 export_proto(maxloc0_4_r8);
 
 void
-maxloc0_4_r8 (gfc_array_i4 * const restrict retarray, 
-	gfc_array_r8 * const restrict array)
+maxloc0_4_r8 (gfc_array_i4 * retarray, gfc_array_r8 *array)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type sstride[GFC_MAX_DIMENSIONS];
   index_type dstride;
-  const GFC_REAL_8 *base;
+  GFC_REAL_8 *base;
   GFC_INTEGER_4 *dest;
   index_type rank;
   index_type n;
@@ -66,7 +62,7 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
       retarray->dim[0].ubound = rank-1;
       retarray->dim[0].stride = 1;
       retarray->dtype = (retarray->dtype & ~GFC_DTYPE_RANK_MASK) | 1;
-      retarray->offset = 0;
+      retarray->base = 0;
       retarray->data = internal_malloc_size (sizeof (GFC_INTEGER_4) * rank);
     }
   else
@@ -76,7 +72,15 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
 
       if (retarray->dim[0].ubound + 1 - retarray->dim[0].lbound != rank)
         runtime_error ("dimension of return array incorrect");
+
+      if (retarray->dim[0].stride == 0)
+	retarray->dim[0].stride = 1;
     }
+
+  /* TODO:  It should be a front end job to correctly set the strides.  */
+
+  if (array->dim[0].stride == 0)
+    array->dim[0].stride = 1;
 
   dstride = retarray->dim[0].stride;
   dest = retarray->data;
@@ -98,7 +102,7 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
 
   /* Initialize the return value.  */
   for (n = 0; n < rank; n++)
-    dest[n * dstride] = 0;
+    dest[n * dstride] = 1;
   {
 
   GFC_REAL_8 maxval;
@@ -110,7 +114,7 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
       {
         /* Implementation start.  */
 
-  if (*base > maxval || !dest[0])
+  if (*base > maxval)
     {
       maxval = *base;
       for (n = 0; n < rank; n++)
@@ -128,7 +132,7 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           base -= sstride[n] * extent[n];
           n++;
           if (n == rank)
@@ -148,14 +152,12 @@ maxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
 }
 
 
-extern void mmaxloc0_4_r8 (gfc_array_i4 * const restrict, 
-	gfc_array_r8 * const restrict, gfc_array_l4 * const restrict);
+extern void mmaxloc0_4_r8 (gfc_array_i4 *, gfc_array_r8 *, gfc_array_l4 *);
 export_proto(mmaxloc0_4_r8);
 
 void
-mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray, 
-	gfc_array_r8 * const restrict array,
-	gfc_array_l4 * const restrict mask)
+mmaxloc0_4_r8 (gfc_array_i4 * retarray, gfc_array_r8 *array,
+				  gfc_array_l4 * mask)
 {
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
@@ -163,7 +165,7 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
   index_type mstride[GFC_MAX_DIMENSIONS];
   index_type dstride;
   GFC_INTEGER_4 *dest;
-  const GFC_REAL_8 *base;
+  GFC_REAL_8 *base;
   GFC_LOGICAL_4 *mbase;
   int rank;
   index_type n;
@@ -178,7 +180,7 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
       retarray->dim[0].ubound = rank-1;
       retarray->dim[0].stride = 1;
       retarray->dtype = (retarray->dtype & ~GFC_DTYPE_RANK_MASK) | 1;
-      retarray->offset = 0;
+      retarray->base = 0;
       retarray->data = internal_malloc_size (sizeof (GFC_INTEGER_4) * rank);
     }
   else
@@ -188,7 +190,18 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
 
       if (retarray->dim[0].ubound + 1 - retarray->dim[0].lbound != rank)
         runtime_error ("dimension of return array incorrect");
+
+      if (retarray->dim[0].stride == 0)
+	retarray->dim[0].stride = 1;
     }
+
+  /* TODO:  It should be a front end job to correctly set the strides.  */
+
+  if (array->dim[0].stride == 0)
+    array->dim[0].stride = 1;
+
+  if (mask->dim[0].stride == 0)
+    mask->dim[0].stride = 1;
 
   dstride = retarray->dim[0].stride;
   dest = retarray->data;
@@ -222,7 +235,7 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
 
   /* Initialize the return value.  */
   for (n = 0; n < rank; n++)
-    dest[n * dstride] = 0;
+    dest[n * dstride] = 1;
   {
 
   GFC_REAL_8 maxval;
@@ -234,7 +247,7 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
       {
         /* Implementation start.  */
 
-  if (*mbase && (*base > maxval || !dest[0]))
+  if (*mbase && *base > maxval)
     {
       maxval = *base;
       for (n = 0; n < rank; n++)
@@ -253,7 +266,7 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           base -= sstride[n] * extent[n];
           mbase -= mstride[n] * extent[n];
           n++;
@@ -273,54 +286,3 @@ mmaxloc0_4_r8 (gfc_array_i4 * const restrict retarray,
     }
   }
 }
-
-
-extern void smaxloc0_4_r8 (gfc_array_i4 * const restrict, 
-	gfc_array_r8 * const restrict, GFC_LOGICAL_4 *);
-export_proto(smaxloc0_4_r8);
-
-void
-smaxloc0_4_r8 (gfc_array_i4 * const restrict retarray, 
-	gfc_array_r8 * const restrict array,
-	GFC_LOGICAL_4 * mask)
-{
-  index_type rank;
-  index_type dstride;
-  index_type n;
-  GFC_INTEGER_4 *dest;
-
-  if (*mask)
-    {
-      maxloc0_4_r8 (retarray, array);
-      return;
-    }
-
-  rank = GFC_DESCRIPTOR_RANK (array);
-
-  if (rank <= 0)
-    runtime_error ("Rank of array needs to be > 0");
-
-  if (retarray->data == NULL)
-    {
-      retarray->dim[0].lbound = 0;
-      retarray->dim[0].ubound = rank-1;
-      retarray->dim[0].stride = 1;
-      retarray->dtype = (retarray->dtype & ~GFC_DTYPE_RANK_MASK) | 1;
-      retarray->offset = 0;
-      retarray->data = internal_malloc_size (sizeof (GFC_INTEGER_4) * rank);
-    }
-  else
-    {
-      if (GFC_DESCRIPTOR_RANK (retarray) != 1)
-	runtime_error ("rank of return array does not equal 1");
-
-      if (retarray->dim[0].ubound + 1 - retarray->dim[0].lbound != rank)
-        runtime_error ("dimension of return array incorrect");
-    }
-
-  dstride = retarray->dim[0].stride;
-  dest = retarray->data;
-  for (n = 0; n<rank; n++)
-    dest[n * dstride] = 0 ;
-}
-#endif

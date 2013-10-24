@@ -1,7 +1,6 @@
 // Components for manipulating sequences of characters -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -17,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -29,25 +28,25 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
+//
+// ISO C++ 14882: 21 Strings library
+//
+
 /** @file basic_string.h
  *  This is an internal header file, included by other library headers.
  *  You should not attempt to use it directly.
  */
-
-//
-// ISO C++ 14882: 21 Strings library
-//
 
 #ifndef _BASIC_STRING_H
 #define _BASIC_STRING_H 1
 
 #pragma GCC system_header
 
-#include <ext/atomicity.h>
+#include <bits/atomicity.h>
 #include <debug/debug.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   /**
    *  @class basic_string basic_string.h <string>
    *  @brief  Managing sequences of characters and character-like objects.
@@ -110,19 +109,17 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT, typename _Traits, typename _Alloc>
     class basic_string
     {
-      typedef typename _Alloc::template rebind<_CharT>::other _CharT_alloc_type;
-
       // Types:
     public:
       typedef _Traits					    traits_type;
       typedef typename _Traits::char_type		    value_type;
       typedef _Alloc					    allocator_type;
-      typedef typename _CharT_alloc_type::size_type	    size_type;
-      typedef typename _CharT_alloc_type::difference_type   difference_type;
-      typedef typename _CharT_alloc_type::reference	    reference;
-      typedef typename _CharT_alloc_type::const_reference   const_reference;
-      typedef typename _CharT_alloc_type::pointer	    pointer;
-      typedef typename _CharT_alloc_type::const_pointer	    const_pointer;
+      typedef typename _Alloc::size_type		    size_type;
+      typedef typename _Alloc::difference_type		    difference_type;
+      typedef typename _Alloc::reference		    reference;
+      typedef typename _Alloc::const_reference		    const_reference;
+      typedef typename _Alloc::pointer			    pointer;
+      typedef typename _Alloc::const_pointer		    const_pointer;
       typedef __gnu_cxx::__normal_iterator<pointer, basic_string>  iterator;
       typedef __gnu_cxx::__normal_iterator<const_pointer, basic_string>
                                                             const_iterator;
@@ -178,13 +175,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
         static _Rep&
         _S_empty_rep()
-        { 
-	  // NB: Mild hack to avoid strict-aliasing warnings.  Note that
-	  // _S_empty_rep_storage is never modified and the punning should
-	  // be reasonably safe in this case.
-	  void* __p = reinterpret_cast<void*>(&_S_empty_rep_storage);
-	  return *reinterpret_cast<_Rep*>(__p);
-	}
+        { return *reinterpret_cast<_Rep*>(&_S_empty_rep_storage); }
 
         bool
 	_M_is_leaked() const
@@ -233,8 +224,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #ifndef _GLIBCXX_FULLY_DYNAMIC_STRING
 	  if (__builtin_expect(this != &_S_empty_rep(), false))
 #endif
-	    if (__gnu_cxx::__exchange_and_add_dispatch(&this->_M_refcount,
-						       -1) <= 0)
+	    if (__gnu_cxx::__exchange_and_add(&this->_M_refcount, -1) <= 0)
 	      _M_destroy(__a);
 	}  // XXX MT
 
@@ -247,7 +237,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #ifndef _GLIBCXX_FULLY_DYNAMIC_STRING
 	  if (__builtin_expect(this != &_S_empty_rep(), false))
 #endif
-            __gnu_cxx::__atomic_add_dispatch(&this->_M_refcount, 1);
+            __gnu_cxx::__atomic_add(&this->_M_refcount, 1);
 	  return _M_refdata();
 	}  // XXX MT
 
@@ -412,7 +402,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       basic_string();
 
       /**
-       *  @brief  Construct an empty string using allocator @a a.
+       *  @brief  Construct an empty string using allocator a.
        */
       explicit
       basic_string(const _Alloc& __a);
@@ -447,7 +437,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @param  n  Number of characters to copy.
        *  @param  a  Allocator to use (default is default allocator).
        *
-       *  NB: @a s must have at least @a n characters, '\0' has no special
+       *  NB: s must have at least n characters, '\0' has no special
        *  meaning.
        */
       basic_string(const _CharT* __s, size_type __n,
@@ -644,8 +634,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Attempt to preallocate enough memory for specified number of
        *          characters.
-       *  @param  res_arg  Number of characters required.
-       *  @throw  std::length_error  If @a res_arg exceeds @c max_size().
+       *  @param  n  Number of characters required.
+       *  @throw  std::length_error  If @a n exceeds @c max_size().
        *
        *  This function attempts to reserve enough memory for the
        *  %string to hold the specified number of characters.  If the
@@ -678,7 +668,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       // Element access:
       /**
        *  @brief  Subscript access to the data contained in the %string.
-       *  @param  pos  The index of the character to access.
+       *  @param  n  The index of the character to access.
        *  @return  Read-only (constant) reference to the character.
        *
        *  This operator allows for easy, array-style, data access.
@@ -695,7 +685,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       /**
        *  @brief  Subscript access to the data contained in the %string.
-       *  @param  pos  The index of the character to access.
+       *  @param  n  The index of the character to access.
        *  @return  Read/write reference to the character.
        *
        *  This operator allows for easy, array-style, data access.
@@ -773,7 +763,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 
       /**
        *  @brief  Append a character.
-       *  @param c  The character to append.
+       *  @param s  The character to append.
        *  @return  Reference to this string.
        */
       basic_string&
@@ -1099,7 +1089,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	const size_type __pos = __p - _M_ibegin();
 	_M_replace_aux(__pos, size_type(0), size_type(1), __c);
 	_M_rep()->_M_set_leaked();
-	return iterator(_M_data() + __pos);
+	return this->_M_ibegin() + __pos;
       }
 
       /**
@@ -1140,7 +1130,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	const size_type __pos = __position - _M_ibegin();
 	_M_mutate(__pos, size_type(1), size_type(0));
 	_M_rep()->_M_set_leaked();
-	return iterator(_M_data() + __pos);
+	return _M_ibegin() + __pos;
       }
 
       /**
@@ -1160,7 +1150,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
         const size_type __pos = __first - _M_ibegin();
 	_M_mutate(__pos, __last - __first, size_type(0));
 	_M_rep()->_M_set_leaked();
-	return iterator(_M_data() + __pos);
+	return _M_ibegin() + __pos;
       }
 
       /**
@@ -1212,15 +1202,15 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @brief  Replace characters with value of a C substring.
        *  @param pos  Index of first character to replace.
        *  @param n1  Number of characters to be replaced.
-       *  @param s  C string to insert.
-       *  @param n2  Number of characters from @a s to use.
+       *  @param str  C string to insert.
+       *  @param n2  Number of characters from str to use.
        *  @return  Reference to this string.
        *  @throw  std::out_of_range  If @a pos1 > size().
        *  @throw  std::length_error  If new length exceeds @c max_size().
        *
        *  Removes the characters in the range [pos,pos + n1) from this string.
-       *  In place, the first @a n2 characters of @a s are inserted, or all
-       *  of @a s if @a n2 is too large.  If @a pos is beyond end of string,
+       *  In place, the first @a n2 characters of @a str are inserted, or all
+       *  of @a str if @a n2 is too large.  If @a pos is beyond end of string,
        *  out_of_range is thrown.  If the length of result exceeds max_size(),
        *  length_error is thrown.  The value of the string doesn't change if
        *  an error is thrown.
@@ -1233,13 +1223,13 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @brief  Replace characters with value of a C string.
        *  @param pos  Index of first character to replace.
        *  @param n1  Number of characters to be replaced.
-       *  @param s  C string to insert.
+       *  @param str  C string to insert.
        *  @return  Reference to this string.
        *  @throw  std::out_of_range  If @a pos > size().
        *  @throw  std::length_error  If new length exceeds @c max_size().
        *
        *  Removes the characters in the range [pos,pos + n1) from this string.
-       *  In place, the first @a n characters of @a s are inserted.  If @a
+       *  In place, the first @a n characters of @a str are inserted.  If @a
        *  pos is beyond end of string, out_of_range is thrown.  If the length
        *  of result exceeds max_size(), length_error is thrown.  The value of
        *  the string doesn't change if an error is thrown.
@@ -1628,7 +1618,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Find last position of a C string.
        *  @param s  C string to locate.
-       *  @param pos  Index of character to start search at (default end).
+       *  @param pos  Index of character to start search at (default 0).
        *  @return  Index of start of  last occurrence.
        *
        *  Starting from @a pos, searches backward for the value of @a s within
@@ -1645,7 +1635,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       /**
        *  @brief  Find last position of a character.
        *  @param c  Character to locate.
-       *  @param pos  Index of character to search back from (default end).
+       *  @param pos  Index of character to search back from (default 0).
        *  @return  Index of last occurrence.
        *
        *  Starting from @a pos, searches backward for @a c within this string.
@@ -2381,10 +2371,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     operator>>(basic_istream<_CharT, _Traits>& __is,
 	       basic_string<_CharT, _Traits, _Alloc>& __str);
 
-  template<>
-    basic_istream<char>&
-    operator>>(basic_istream<char>& __is, basic_string<char>& __str);
-
   /**
    *  @brief  Write string to a stream.
    *  @param os  Output stream.
@@ -2395,14 +2381,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
    *  writing a C string.
    */
   template<typename _CharT, typename _Traits, typename _Alloc>
-    inline basic_ostream<_CharT, _Traits>&
+    basic_ostream<_CharT, _Traits>&
     operator<<(basic_ostream<_CharT, _Traits>& __os,
-	       const basic_string<_CharT, _Traits, _Alloc>& __str)
-    {
-      // _GLIBCXX_RESOLVE_LIB_DEFECTS
-      // 586. string inserter not a formatted function
-      return __ostream_insert(__os, __str.data(), __str.size());
-    }
+	       const basic_string<_CharT, _Traits, _Alloc>& __str);
 
   /**
    *  @brief  Read a line from stream into a string.
@@ -2437,9 +2418,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT, typename _Traits, typename _Alloc>
     inline basic_istream<_CharT, _Traits>&
     getline(basic_istream<_CharT, _Traits>& __is,
-	    basic_string<_CharT, _Traits, _Alloc>& __str)
-    { return getline(__is, __str, __is.widen('\n')); }
-
+	    basic_string<_CharT, _Traits, _Alloc>& __str);
+    
   template<>
     basic_istream<char>&
     getline(basic_istream<char>& __in, basic_string<char>& __str,
@@ -2451,7 +2431,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     getline(basic_istream<wchar_t>& __in, basic_string<wchar_t>& __str,
 	    wchar_t __delim);
 #endif  
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif /* _BASIC_STRING_H */

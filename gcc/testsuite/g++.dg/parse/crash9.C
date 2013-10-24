@@ -6,4 +6,4 @@
 // contains error.
 
 template <typename> struct A {};
-template <typename> struct A<INVALID> : A<int> { }; // { dg-error "not declared|invalid|token|extra" }
+template <typename> struct A<INVALID> : A<int> { }; // { dg-error "not declared|invalid" }

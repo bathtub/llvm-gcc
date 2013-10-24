@@ -14,7 +14,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -137,11 +137,11 @@ save_idents (cpp_reader *pfile ATTRIBUTE_UNUSED, cpp_hashnode *hn, void *ss_p)
 	  struct cpp_string *sp;
 	  unsigned char *text;
 	  
-	  sp = XNEW (struct cpp_string);
+	  sp = xmalloc (sizeof (struct cpp_string));
 	  *slot = sp;
 
 	  sp->len = NODE_LEN (hn);
-	  sp->text = text = XNEWVEC (unsigned char, NODE_LEN (hn));
+	  sp->text = text = xmalloc (NODE_LEN (hn));
 	  memcpy (text, NODE_NAME (hn), NODE_LEN (hn));
 	}
     }
@@ -193,7 +193,7 @@ int
 cpp_save_state (cpp_reader *r, FILE *f)
 {
   /* Save the list of non-void identifiers for the dependency checking.  */
-  r->savedstate = XNEW (struct cpp_savedstate);
+  r->savedstate = xmalloc (sizeof (struct cpp_savedstate));
   r->savedstate->definedhash = htab_create (100, cpp_string_hash, 
 					    cpp_string_eq, NULL);
   cpp_forall_identifiers (r, save_idents, r->savedstate);
@@ -226,7 +226,7 @@ count_defs (cpp_reader *pfile ATTRIBUTE_UNUSED, cpp_hashnode *hn, void *ss_p)
 	
 	news.len = NODE_LEN (hn);
 	news.text = NODE_NAME (hn);
-	slot = (void **) htab_find (ss->definedhash, &news);
+	slot = htab_find (ss->definedhash, &news);
 	if (slot == NULL)
 	  {
 	    ss->hashsize += NODE_LEN (hn) + 1;
@@ -265,7 +265,7 @@ write_defs (cpp_reader *pfile ATTRIBUTE_UNUSED, cpp_hashnode *hn, void *ss_p)
 	
 	news.len = NODE_LEN (hn);
 	news.text = NODE_NAME (hn);
-	slot = (void **) htab_find (ss->definedhash, &news);
+	slot = htab_find (ss->definedhash, &news);
 	if (slot == NULL)
 	  {
 	    ss->defs[ss->n_defs] = hn;
@@ -310,13 +310,13 @@ cpp_write_pch_deps (cpp_reader *r, FILE *f)
   ss->n_defs = 0;
   cpp_forall_identifiers (r, count_defs, ss);
 
-  ss->defs = XNEWVEC (cpp_hashnode *, ss->n_defs);
+  ss->defs = xmalloc (ss->n_defs * sizeof (cpp_hashnode *));
   ss->n_defs = 0;
   cpp_forall_identifiers (r, write_defs, ss);
 
   /* Sort the list, copy it into a buffer, and write it out.  */
   qsort (ss->defs, ss->n_defs, sizeof (cpp_hashnode *), &comp_hashnodes);
-  definedstrs = ss->definedstrs = XNEWVEC (unsigned char, ss->hashsize);
+  definedstrs = ss->definedstrs = xmalloc (ss->hashsize);
   for (i = 0; i < ss->n_defs; ++i)
     {
       size_t len = NODE_LEN (ss->defs[i]);
@@ -390,7 +390,7 @@ collect_ht_nodes (cpp_reader *pfile ATTRIBUTE_UNUSED, cpp_hashnode *hn,
       if (nl->n_defs == nl->asize)
         {
           nl->asize *= 2;
-          nl->defs = XRESIZEVEC (cpp_hashnode *, nl->defs, nl->asize);
+          nl->defs = xrealloc (nl->defs, nl->asize * sizeof (cpp_hashnode *));
         }
 
       nl->defs[nl->n_defs] = hn;
@@ -418,12 +418,19 @@ cpp_valid_state (cpp_reader *r, const char *name, int fd)
 {
   struct macrodef_struct m;
   size_t namebufsz = 256;
-  unsigned char *namebuf = XNEWVEC (unsigned char, namebufsz);
+  unsigned char *namebuf = xmalloc (namebufsz);
   unsigned char *undeftab = NULL;
   struct ht_node_list nl = { 0, 0, 0 };
   unsigned char *first, *last;
   unsigned int i;
-  
+  /* APPLE LOCAL begin pch distcc --mrs */
+  int skip_validation;
+
+  /* Skip pch validation if we have just validated it.  */
+  skip_validation = CPP_OPTION (r, pch_preprocess)
+    && CPP_OPTION (r, preprocessed);
+  /* APPLE LOCAL end pch distcc --mrs */
+
   /* Read in the list of identifiers that must be defined
      Check that they are defined in the same way.  */
   for (;;)
@@ -450,12 +457,17 @@ cpp_valid_state (cpp_reader *r, const char *name, int fd)
 	{
 	  free (namebuf);
 	  namebufsz = m.definition_length + 256;
-	  namebuf = XNEWVEC (unsigned char, namebufsz);
+	  namebuf = xmalloc (namebufsz);
 	}
 
       if ((size_t)read (fd, namebuf, m.definition_length) 
 	  != m.definition_length)
 	goto error;
+
+      /* APPLE LOCAL begin pch distcc --mrs */
+      if (skip_validation)
+        continue;
+      /* APPLE LOCAL end pch distcc --mrs */
       
       h = cpp_lookup (r, namebuf, m.name_length);
       if (m.flags & NODE_POISONED
@@ -488,14 +500,22 @@ cpp_valid_state (cpp_reader *r, const char *name, int fd)
 
   /* Read in the list of identifiers that must not be defined.
      Check that they really aren't.  */
-  undeftab = XNEWVEC (unsigned char, m.definition_length);
+  undeftab = xmalloc (m.definition_length);
   if ((size_t) read (fd, undeftab, m.definition_length) != m.definition_length)
     goto error;
+
+  /* APPLE LOCAL begin pch distcc --mrs */
+  if (skip_validation)
+    {
+      free (undeftab);
+      return 0;
+    }
+  /* APPLE LOCAL end pch distcc --mrs */
 
   /* Collect identifiers from the current hash table.  */
   nl.n_defs = 0;
   nl.asize = 10;
-  nl.defs = XNEWVEC (cpp_hashnode *, nl.asize);
+  nl.defs = xmalloc (nl.asize * sizeof (cpp_hashnode *));
   cpp_forall_identifiers (r, &collect_ht_nodes, &nl);
   qsort (nl.defs, nl.n_defs, sizeof (cpp_hashnode *), &comp_hashnodes);
  
@@ -577,7 +597,8 @@ save_macros (cpp_reader *r, cpp_hashnode *h, void *data_p)
       if (data->count == data->array_size)
 	{
 	  data->array_size *= 2;
-	  data->defns = XRESIZEVEC (uchar *, data->defns, (data->array_size)); 
+	  data->defns = xrealloc (data->defns, (data->array_size 
+						* sizeof (uchar *)));
 	}
       
       switch (h->type)
@@ -591,8 +612,7 @@ save_macros (cpp_reader *r, cpp_hashnode *h, void *data_p)
 	    const uchar * defn = cpp_macro_definition (r, h);
 	    size_t defnlen = ustrlen (defn);
 
-	    data->defns[data->count] = (uchar *) xmemdup (defn, defnlen,
-                                                          defnlen + 2);
+	    data->defns[data->count] = xmemdup (defn, defnlen, defnlen + 2);
 	    data->defns[data->count][defnlen] = '\n';
 	  }
 	  break;
@@ -611,10 +631,10 @@ save_macros (cpp_reader *r, cpp_hashnode *h, void *data_p)
 void
 cpp_prepare_state (cpp_reader *r, struct save_macro_data **data)
 {
-  struct save_macro_data *d = XNEW (struct save_macro_data);
+  struct save_macro_data *d = xmalloc (sizeof (struct save_macro_data));
   
   d->array_size = 512;
-  d->defns = XNEWVEC (uchar *, d->array_size);
+  d->defns = xmalloc (d->array_size * sizeof (d->defns[0]));
   d->count = 0;
   cpp_forall_identifiers (r, save_macros, d);
   d->saved_pragmas = _cpp_save_pragma_names (r);
@@ -632,6 +652,12 @@ cpp_read_state (cpp_reader *r, const char *name, FILE *f,
   size_t i;
   struct lexer_state old_state;
 
+  /* APPLE LOCAL begin pch distcc --mrs */
+  void (*saved_line_change)  PARAMS ((cpp_reader *, const cpp_token *, int));
+
+  saved_line_change = r->cb.line_change;
+  /* APPLE LOCAL end pch distcc --mrs */
+
   /* Restore spec_nodes, which will be full of references to the old 
      hashtable entries and so will now be invalid.  */
   {
@@ -646,6 +672,8 @@ cpp_read_state (cpp_reader *r, const char *name, FILE *f,
   r->state.in_directive = 1;
   r->state.prevent_expansion = 1;
   r->state.angled_headers = 0;
+  /* APPLE LOCAL pch distcc --mrs */
+  r->cb.line_change = 0;
 
   /* Run through the carefully-saved macros, insert them.  */
   for (i = 0; i < data->count; i++)
@@ -678,6 +706,8 @@ cpp_read_state (cpp_reader *r, const char *name, FILE *f,
       free (data->defns[i]);
     }
   r->state = old_state;
+  /* APPLE LOCAL pch distcc --mrs */
+  r->cb.line_change = saved_line_change;
 
   _cpp_restore_pragma_names (r, data->saved_pragmas);
 

@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 #define TARGET_VERSION fprintf (stderr, " (i386 BeOS/ELF)");
@@ -67,6 +67,11 @@ Boston, MA 02110-1301, USA.  */
 	builtin_define ("__stdcall=__attribute__((__stdcall__))");	\
 	builtin_define ("__cdecl=__attribute__((__cdecl__))");		\
 	builtin_assert ("system=beos");					\
+	if (flag_pic)							\
+	  {								\
+	    builtin_define ("__PIC__");					\
+	    builtin_define ("__pic__");					\
+	  }								\
     }									\
   while (0)
     
@@ -135,7 +140,9 @@ Boston, MA 02110-1301, USA.  */
    for the BeOS include files relative to TOOL_INCLUDE_DIR.  Yes, we
    use ANSI string concatenation here (FIXME) */
 
-#ifndef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifndef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef INCLUDE_DEFAULTS
 #define INCLUDE_DEFAULTS \
     { \
@@ -177,7 +184,9 @@ Boston, MA 02110-1301, USA.  */
     { "/boot/develop/headers", 0, 0, 0 }, \
     { 0, 0, 0, 0 } \
     }
-#else /* CROSS_COMPILE */
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#else /* CROSS_DIRECTORY_STRUCTURE */
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef	INCLUDE_DEFAULTS
 #define INCLUDE_DEFAULTS				\
     { \

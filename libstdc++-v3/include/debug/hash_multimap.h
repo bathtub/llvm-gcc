@@ -1,6 +1,6 @@
 // Debugging hash_multimap implementation -*- C++ -*-
 
-// Copyright (C) 2003, 2005, 2006
+// Copyright (C) 2003
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,30 +28,24 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
-/** @file debug/hash_multimap.h
- *  This file is a GNU debug extension to the Standard C++ Library.
- */
-
 #ifndef _GLIBCXX_DEBUG_HASH_MULTIMAP_H
 #define _GLIBCXX_DEBUG_HASH_MULTIMAP_H 1
 
 #include <debug/safe_sequence.h>
 #include <debug/safe_iterator.h>
 
-namespace __gnu_cxx
-{
-namespace __debug
+namespace __gnu_debug_def
 {
   template<typename _Value, typename _Tp,
 	   typename _HashFcn  = __gnu_cxx::hash<_Value>,
 	   typename _EqualKey = std::equal_to<_Value>,
 	   typename _Alloc =  std::allocator<_Value> >
     class hash_multimap
-    : public _GLIBCXX_EXT::hash_multimap<_Value,_Tp,_HashFcn,_EqualKey,_Alloc>,
+    : public __gnu_cxx::hash_multimap<_Value,_Tp,_HashFcn, _EqualKey,_Alloc>,
       public __gnu_debug::_Safe_sequence<hash_multimap<_Value, _Tp, _HashFcn,
 						       _EqualKey, _Alloc> >
     {
-      typedef _GLIBCXX_EXT::hash_multimap<_Value,_Tp,_HashFcn,_EqualKey,_Alloc>
+      typedef __gnu_cxx::hash_multimap<_Value,_Tp,_HashFcn, _EqualKey,_Alloc>
 							_Base;
       typedef __gnu_debug::_Safe_sequence<hash_multimap> _Safe_base;
 
@@ -185,7 +179,7 @@ namespace __debug
       erase(const key_type& __key)
       {
 	std::pair<iterator, iterator> __victims = this->equal_range(__key);
-	std::size_t __num_victims = 0;
+	size_t __num_victims = 0;
 	while (__victims.first != __victims.second)
 	{
 	  this->erase(__victims.first++);
@@ -262,7 +256,6 @@ namespace __debug
     swap(hash_multimap<_Value, _Tp, _HashFcn, _EqualKey, _Alloc>& __x,
 	 hash_multimap<_Value, _Tp, _HashFcn, _EqualKey, _Alloc>& __y)
     { __x.swap(__y); }
-} // namespace __debug
-} // namespace __gnu_cxx
+} // namespace __gnu_debug_def
 
 #endif

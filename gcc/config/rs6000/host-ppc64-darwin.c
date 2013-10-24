@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* ppc64-darwin host-specific hook definitions.
    Copyright (C) 2006 Free Software Foundation, Inc.
 

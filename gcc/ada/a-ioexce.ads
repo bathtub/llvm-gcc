@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --                     A D A . I O _ E X C E P T I O N S                    --
 --                                                                          --
@@ -14,7 +14,7 @@
 ------------------------------------------------------------------------------
 
 package Ada.IO_Exceptions is
-   pragma Pure;
+pragma Pure (IO_Exceptions);
 
    Status_Error : exception;
    Mode_Error   : exception;

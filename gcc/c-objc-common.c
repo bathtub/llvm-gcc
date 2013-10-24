@@ -15,8 +15,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -40,8 +40,7 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "target.h"
 #include "c-objc-common.h"
 
-static bool c_tree_printer (pretty_printer *, text_info *, const char *,
-			    int, bool, bool, bool);
+static bool c_tree_printer (pretty_printer *, text_info *);
 
 bool
 c_missing_noreturn_ok_p (tree decl)
@@ -62,7 +61,8 @@ c_disregard_inline_limits (tree fn)
     return 1;
 
   return (!flag_really_no_inline && DECL_DECLARED_INLINE_P (fn)
-	  && DECL_EXTERNAL (fn));
+	  /* APPLE LOCAL obey inline */
+	  && (DECL_EXTERNAL (fn) || flag_obey_inline));
 }
 
 int
@@ -78,8 +78,8 @@ c_cannot_inline_tree_fn (tree *fnp)
       && lookup_attribute ("always_inline", DECL_ATTRIBUTES (fn)) == NULL)
     {
       if (do_warning)
-	warning (OPT_Winline, "function %q+F can never be inlined because it "
-		 "is suppressed using -fno-inline", fn);
+	warning ("%Jfunction %qF can never be inlined because it "
+		 "is suppressed using -fno-inline", fn, fn);
       goto cannot_inline;
     }
 
@@ -88,16 +88,16 @@ c_cannot_inline_tree_fn (tree *fnp)
   if (!DECL_DECLARED_INLINE_P (fn) && !targetm.binds_local_p (fn))
     {
       if (do_warning)
-	warning (OPT_Winline, "function %q+F can never be inlined because it "
-		 "might not be bound within this unit of translation", fn);
+	warning ("%Jfunction %qF can never be inlined because it might not "
+		 "be bound within this unit of translation", fn, fn);
       goto cannot_inline;
     }
 
   if (!function_attribute_inlinable_p (fn))
     {
       if (do_warning)
-	warning (OPT_Winline, "function %q+F can never be inlined because it "
-		 "uses attributes conflicting with inlining", fn);
+	warning ("%Jfunction %qF can never be inlined because it uses "
+		 "attributes conflicting with inlining", fn, fn);
       goto cannot_inline;
     }
 
@@ -125,6 +125,12 @@ c_warn_unused_global_decl (tree decl)
 bool
 c_objc_common_init (void)
 {
+  static const enum tree_code stmt_codes[] = {
+    c_common_stmt_codes
+  };
+
+  INIT_STATEMENT_CODES (stmt_codes);
+
   c_init_decl_processing ();
 
   if (c_common_init () == false)
@@ -161,8 +167,7 @@ c_objc_common_init (void)
    Please notice when called, the `%' part was already skipped by the
    diagnostic machinery.  */
 static bool
-c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
-		int precision, bool wide, bool set_locus, bool hash)
+c_tree_printer (pretty_printer *pp, text_info *text)
 {
   tree t = va_arg (*text->args_ptr, tree);
   tree name;
@@ -170,16 +175,10 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
   c_pretty_printer *cpp = (c_pretty_printer *) pp;
   pp->padding = pp_none;
 
-  if (precision != 0 || wide || hash)
-    return false;
-
-  if (set_locus && text->locus)
-    *text->locus = DECL_SOURCE_LOCATION (t);
-
-  switch (*spec)
+  switch (*text->format_spec)
     {
     case 'D':
-      if (DECL_DEBUG_EXPR_IS_FROM (t) && DECL_DEBUG_EXPR (t))
+      if (DECL_DEBUG_EXPR (t) && DECL_DEBUG_EXPR_IS_FROM (t))
 	{
 	  t = DECL_DEBUG_EXPR (t);
 	  if (!DECL_P (t))
@@ -198,7 +197,7 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
     case 'T':
       gcc_assert (TYPE_P (t));
       name = TYPE_NAME (t);
-
+      
       if (name && TREE_CODE (name) == TYPE_DECL)
 	{
 	  if (DECL_NAME (name))
@@ -232,6 +231,35 @@ c_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
   return true;
 }
 
+tree
+c_objc_common_truthvalue_conversion (tree expr)
+{
+ retry:
+  switch (TREE_CODE (TREE_TYPE (expr)))
+    {
+    case ARRAY_TYPE:
+      expr = default_conversion (expr);
+      if (TREE_CODE (TREE_TYPE (expr)) != ARRAY_TYPE)
+	goto retry;
+
+      error ("used array that cannot be converted to pointer where scalar is required");
+      return error_mark_node;
+
+    case RECORD_TYPE:
+      error ("used struct type value where scalar is required");
+      return error_mark_node;
+
+    case UNION_TYPE:
+      error ("used union type value where scalar is required");
+      return error_mark_node;
+    default:
+      break;
+    }
+
+  /* APPLE LOCAL radar 4426814 - radar 5276085 */
+  return c_common_truthvalue_conversion (objc_build_weak_reference_tree (expr));
+}
+
 /* In C and ObjC, all decls have "C" linkage.  */
 bool
 has_c_linkage (tree decl ATTRIBUTE_UNUSED)
@@ -258,6 +286,7 @@ c_types_compatible_p (tree x, tree y)
     return comptypes (TYPE_MAIN_VARIANT (x), TYPE_MAIN_VARIANT (y));
 }
 
+/* APPLE LOCAL begin mainline 2006-05-18 4336222 */
 /* Determine if the type is a vla type for the backend.  */
 
 bool
@@ -265,3 +294,4 @@ c_vla_unspec_p (tree x, tree fn ATTRIBUTE_UNUSED)
 {
   return c_vla_type_p (x);
 }
+/* APPLE LOCAL end mainline 2006-05-18 4336222 */

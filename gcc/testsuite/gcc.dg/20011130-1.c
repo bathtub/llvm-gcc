@@ -1,5 +1,6 @@
 /* { dg-do compile } */
-/* { dg-options "-O3 -g -finline-limit=100" } */
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-O3 -g -finline-limit=100 -fnested-functions" } */
 
 #define WORK(x, y) __asm__ ("" : "=r" (x) : "0" (x)); y += x + 26
 #define SOME_WORK(x, y) WORK(x, y); WORK(x, y); WORK(x, y); WORK(x, y)

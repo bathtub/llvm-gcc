@@ -1,6 +1,6 @@
 // File based streams -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -42,8 +42,8 @@
 
 #pragma GCC system_header
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   template<typename _CharT, typename _Traits>
     void
     basic_filebuf<_CharT, _Traits>::
@@ -203,7 +203,8 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	    return traits_type::to_int_type(*this->gptr());
 
 	  // Get and convert input sequence.
-	  const size_t __buflen = _M_buf_size > 1 ? _M_buf_size - 1 : 1;
+	  const size_t __buflen = _M_buf_size > 1
+	                          ? _M_buf_size - 1 : 1;
 
 	  // Will be set to true if ::read() returns 0 indicating EOF.
 	  bool __got_eof = false;
@@ -740,15 +741,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	{
 	  // Returns pos_type(off_type(-1)) in case of failure.
 	  __ret = pos_type(_M_file.seekoff(__off, __way));
-	  if (__ret != pos_type(off_type(-1)))
-	    {
-	      _M_reading = false;
-	      _M_writing = false;
-	      _M_ext_next = _M_ext_end = _M_ext_buf;
-	      _M_set_buffer(-1);
-	      _M_state_cur = __state;
-	      __ret.state(_M_state_cur);
-	    }
+	  _M_reading = false;
+	  _M_writing = false;
+	  _M_ext_next = _M_ext_end = _M_ext_buf;
+	  _M_set_buffer(-1);
+	  _M_state_cur = __state;
+	  __ret.state(_M_state_cur);
 	}
       return __ret;
     }
@@ -902,7 +900,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   extern template class basic_fstream<wchar_t>;
 #endif
 #endif
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif

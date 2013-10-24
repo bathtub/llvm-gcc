@@ -6,7 +6,7 @@
 # stagestuff	- files to add to $(STAGESTUFF)
 # diff_excludes	- files to ignore when building diffs between two versions.
 
-language="fortran"
+language="f95"
 
 compilers="f951\$(exeext)"
 

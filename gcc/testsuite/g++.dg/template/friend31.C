@@ -10,12 +10,12 @@ template <typename T, typename U> struct F; // { dg-error "previous declaration"
 class W
 {
   template<int i> friend class F;	// { dg-error "template parameter" }
-  int x;                                // { dg-error "private" }
+  int x;
 };
 
 template <typename T, typename U> struct F
 {
-  void Look(W& w) { w.x = 3; }          // { dg-error "within this context" }
+  void Look(W& w) { w.x = 3; }
 };
 
 int main()

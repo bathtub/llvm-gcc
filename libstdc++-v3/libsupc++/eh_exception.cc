@@ -1,6 +1,5 @@
 // -*- C++ -*- std::exception implementation.
-// Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
-// 2003, 2004, 2005, 2006, 2007
+// Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002 
 // Free Software Foundation
 //
 // This file is part of GCC.
@@ -17,8 +16,8 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with GCC; see the file COPYING.  If not, write to
-// the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-// Boston, MA 02110-1301, USA. 
+// the Free Software Foundation, 59 Temple Place - Suite 330,
+// Boston, MA 02111-1307, USA. 
 
 // As a special exception, you may use this file as part of a free software
 // library without restriction.  Specifically, if other files instantiate
@@ -28,6 +27,7 @@
 // the GNU General Public License.  This exception does not however
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
+
 
 #include "typeinfo"
 #include "exception"
@@ -40,14 +40,5 @@ std::bad_exception::~bad_exception() throw() { }
 const char* 
 std::exception::what() const throw()
 {
-  // NB: Another elegant option would be returning typeid(*this).name()
-  // and not overriding what() in bad_exception, bad_alloc, etc.  In
-  // that case, however, mangled names would be returned, PR 14493.
-  return "std::exception";
-}
-
-const char* 
-std::bad_exception::what() const throw()
-{
-  return "std::bad_exception";
+  return typeid (*this).name ();
 }

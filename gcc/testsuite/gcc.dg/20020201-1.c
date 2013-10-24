@@ -38,5 +38,3 @@ main ()
 {
   doit ();
 }
-
-/* { dg-final { cleanup-coverage-files } } */

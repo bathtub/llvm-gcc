@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Darwin pragma for __attribute__ ((ms_struct)).  */
 
 /* { dg-do compile { target *-*-darwin* } } */

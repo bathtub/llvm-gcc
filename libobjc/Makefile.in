@@ -1,6 +1,6 @@
 # Makefile for GNU Objective C runtime library.
-# Copyright 1993, 1995, 1996, 1997, 1998, 1999, 2001, 2002, 2003, 2004,
-# 2005, 2006 Free Software Foundation, Inc.
+# Copyright 1993, 1995, 1996, 1997, 1998, 1999, 2001, 2002, 2003, 2004
+# Free Software Foundation, Inc.
 
 #This file is part of GCC.
 
@@ -16,8 +16,8 @@
 
 #You should have received a copy of the GNU General Public License
 #along with GCC; see the file COPYING.  If not, write to
-#the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-#Boston, MA 02110-1301, USA.  */
+#the Free Software Foundation, 59 Temple Place - Suite 330,
+#Boston, MA 02111-1307, USA.  */
 
 #This was cribbed from the libchill, libiberty and libstdc++
 #Makefile.in files.  Some of this stuff may be unnecessary and
@@ -33,18 +33,15 @@ VPATH = @glibcpp_srcdir@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 target_noncanonical = @target_noncanonical@
-gcc_version := $(shell cat $(srcdir)/../gcc/BASE-VER)
-host_subdir = @host_subdir@
+gcc_version = @gcc_version@
 top_srcdir = @top_srcdir@
-multi_basedir = @multi_basedir@
+toplevel_srcdir = @toplevel_srcdir@
 toolexecdir = @toolexecdir@
 # Toolexecdir is used only by toolexeclibdir
 toolexeclibdir = @toolexeclibdir@
 
 includedirname = @includedirname@
 libext = @libext@
-
-extra_ldflags_libobjc = @extra_ldflags_libobjc@
 
 top_builddir = .
 
@@ -74,8 +71,9 @@ RANLIB = @RANLIB@
 CC = @CC@
 CFLAGS = @CFLAGS@
 WARN_CFLAGS = -W -Wall -Wwrite-strings -Wstrict-prototypes
+GTHREAD_FLAGS=@GTHREAD_FLAGS@
 ALL_CFLAGS = -I. -I$(srcdir) $(CPPFLAGS) $(DEFS) $(CFLAGS) $(WARN_CFLAGS) \
-	-DIN_GCC -DIN_TARGET_LIBS -fno-strict-aliasing -fexceptions
+	$(GTHREAD_FLAGS) -DIN_GCC -DIN_TARGET_LIBS -fno-strict-aliasing
 
 # Libtool
 # The following strings describe the version of the obj-C library 
@@ -91,17 +89,13 @@ LIBTOOL_INSTALL = $(LIBTOOL) --mode=install
 LIBTOOL_CLEAN   = $(LIBTOOL) --mode=clean
 #LIBTOOL_UNINSTALL = $(LIBTOOL) --mode=uninstall
 
+INCLUDES = -I$(srcdir)/objc  -I$(srcdir)/$(MULTISRCTOP)../gcc \
+  -I$(srcdir)/$(MULTISRCTOP)../gcc/config -I$(MULTIBUILDTOP)../../gcc \
+  -I$(srcdir)/$(MULTISRCTOP)../include
+
 OBJC_GCFLAGS=-DOBJC_WITH_GC=1
 OBJC_THREAD_FILE=thr-objc
 OBJC_BOEHM_GC=@OBJC_BOEHM_GC@
-OBJC_BOEHM_GC_INCLUDES=@OBJC_BOEHM_GC_INCLUDES@
-
-INCLUDES = -I$(srcdir)/objc  -I$(srcdir)/$(MULTISRCTOP)../gcc \
-  -I$(srcdir)/$(MULTISRCTOP)../gcc/config \
-  -I$(MULTIBUILDTOP)../../$(host_subdir)/gcc \
-  -I$(srcdir)/$(MULTISRCTOP)../include \
-  $(OBJC_BOEHM_GC_INCLUDES)
-
 
 .SUFFIXES:
 .SUFFIXES: .c .m .lo
@@ -151,13 +145,13 @@ OBJC_H = hash.h objc-list.h sarray.h objc.h objc-api.h \
 OBJS =    archive.lo class.lo encoding.lo gc.lo hash.lo init.lo linking.lo \
 	  misc.lo nil_method.lo NXConstStr.lo Object.lo objects.lo \
 	  Protocol.lo sarray.lo selector.lo sendmsg.lo thr.lo \
-	  $(OBJC_THREAD_FILE).lo exception.lo
+	  $(OBJC_THREAD_FILE).lo exception.lo hash_compat.lo
 
 OBJS_GC = archive_gc.lo class_gc.lo encoding_gc.lo gc_gc.lo hash_gc.lo \
 	  init_gc.lo linking_gc.lo misc_gc.lo nil_method_gc.lo \
 	  NXConstStr_gc.lo Object_gc.lo objects_gc.lo Protocol_gc.lo \
 	  sarray_gc.lo selector_gc.lo sendmsg_gc.lo thr_gc.lo \
-	  $(OBJC_THREAD_FILE)_gc.lo exception_gc.lo
+	  $(OBJC_THREAD_FILE)_gc.lo exception_gc.lo hash_compat_gc.lo
 
 runtime-info.h: 
 	echo "" > tmp-runtime.m
@@ -185,6 +179,10 @@ gc_gc.lo: gc.c
 		$(INCLUDES) $<
 
 hash_gc.lo: hash.c
+	$(LIBTOOL_COMPILE) $(CC) -c -o $@ $(ALL_CFLAGS) $(OBJC_GCFLAGS) \
+		$(INCLUDES) $<
+
+hash_compat_gc.lo: hash_compat.c
 	$(LIBTOOL_COMPILE) $(CC) -c -o $@ $(ALL_CFLAGS) $(OBJC_GCFLAGS) \
 		$(INCLUDES) $<
 
@@ -267,21 +265,17 @@ exception_gc.lo: exception.c
 	$(LIBTOOL_COMPILE) $(CC) -c -o $@ $(ALL_CFLAGS) $(OBJC_GCFLAGS) \
 		-fexceptions $(INCLUDES) $<
 
-doc: info dvi pdf html
-
-# No install-html support
-.PHONY: install-html
-install-html:
+doc: info dvi html
 
 libobjc$(libext).la: $(OBJS)
 	$(LIBTOOL_LINK) $(CC) -o $@ $(OBJS) \
 		-rpath $(toolexeclibdir) \
-		-version-info $(LIBOBJC_VERSION) $(extra_ldflags_libobjc)
+		-version-info $(LIBOBJC_VERSION)
 
 libobjc_gc$(libext).la: $(OBJS_GC)
 	$(LIBTOOL_LINK) $(CC) -o $@ $(OBJS_GC) \
 		-rpath $(toolexeclibdir) \
-		-version-info $(LIBOBJC_GC_VERSION) $(extra_ldflags_libobjc)
+		-version-info $(LIBOBJC_GC_VERSION)
 
 #
 # FIXME -- The following part does not fit in the libtool context. 
@@ -314,7 +308,6 @@ libobjc.dll: libobjc_s.a libobjc_entry.o
 
 info:
 dvi:
-pdf:
 html:
 
 Makefile: Makefile.in config.status
@@ -332,7 +325,7 @@ ${srcdir}/configure: @MAINT@ configure.ac
 install: install-libs install-headers
 
 install-libs: installdirs
-	$(SHELL) $(multi_basedir)/mkinstalldirs $(DESTDIR)$(toolexeclibdir)
+	$(SHELL) $(toplevel_srcdir)/mkinstalldirs $(DESTDIR)$(toolexeclibdir)
 	$(LIBTOOL_INSTALL) $(INSTALL) libobjc$(libext).la $(DESTDIR)$(toolexeclibdir);
 	if [ "$(OBJC_BOEHM_GC)" ]; then \
 	  $(LIBTOOL_INSTALL) $(INSTALL) libobjc_gc$(libext).la \
@@ -343,7 +336,7 @@ install-libs: installdirs
 
 # Copy Objective C headers to installation include directory.
 install-headers:
-	$(SHELL) $(multi_basedir)/mkinstalldirs $(DESTDIR)$(libsubdir)/$(includedirname)/objc
+	$(SHELL) $(toplevel_srcdir)/mkinstalldirs $(DESTDIR)$(libsubdir)/$(includedirname)/objc
 	for file in $(OBJC_H); do \
 	  realfile=$(srcdir)/objc/$${file}; \
 	  $(INSTALL_DATA) $${realfile} $(DESTDIR)$(libsubdir)/$(includedirname)/objc; \
@@ -354,7 +347,7 @@ check uninstall install-strip dist installcheck installdirs:
 mostlyclean:
 	-$(LIBTOOL_CLEAN) rm -f libobjc$(libext).la libobjc_gc$(libext).la *.lo
 	-rm -f runtime-info.h tmp-runtime.s *.o *.lo libobjc* xforward \
-		fflags *.aux *.cp *.dvi *.pdf *.fn *.info *.ky *.log *.pg \
+		fflags *.aux *.cp *.dvi *.fn *.info *.ky *.log *.pg \
 		*.toc *.tp *.vr *.html libobj.exp
 	@$(MULTICLEAN) multi-clean DO=mostlyclean
 

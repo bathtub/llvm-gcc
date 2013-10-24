@@ -38,7 +38,9 @@ extern int errno;
 #endif
 
 char *
-getcwd (char *buf, size_t len)
+getcwd (buf, len)
+  char *buf;
+  size_t len;
 {
   char ourbuf[MAXPATHLEN];
   char *result;

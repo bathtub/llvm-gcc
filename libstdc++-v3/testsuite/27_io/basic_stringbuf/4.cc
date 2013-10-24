@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // 27.7.1 - Template class basic_stringbuf
@@ -31,7 +31,7 @@
 namespace std
 {
   using __gnu_test::pod_char;
-  typedef __gnu_test::tracker_allocator<char> alloc_type;
+  typedef __gnu_test::tracker_alloc<char> alloc_type;
   template class basic_stringbuf<char, char_traits<char>, alloc_type>;
 } // test
 

@@ -6,19 +6,19 @@
 // { dg-options { -Wall -W } }
 
 struct  __attribute__((dllimport)) Foo
-{
-  static int static_int;
-  static void static_func1();
-  static void static_func2();
+ {
+    static int static_int;
+    static void static_func1();
+    static void static_func2();
  };
 
-void Foo::static_func1()	//  { dg-warning "redeclared without dllimport" }
-{
-}
+void Foo::static_func1()	//  { dg-warning "defined" }
+  {
+  }
 
-inline void Foo::static_func2()
-{
-}
+inline void Foo::static_func2()	//  { dg-warning "inline function" }
+ {
+ }
 
 void testfoo()
 { 

@@ -1,4 +1,5 @@
-/* PR 5878. 
+/* APPLE LOCAL file mainline */
+/* PR 5878.
 
    We ICEd in verify_local_live_at_start because we incorrectly forced
    the PIC register live between BAR and BAZ.  We did this because the
@@ -44,6 +45,8 @@ extern void abort (void);
 /* No pic register.  */
 #elif defined(__mn10300__)
 /* No pic register.  */
+#elif #cpu(ns32k)
+/* No pic register.  */
 #elif defined(__hppa__)
 /* PIC register is %r27 or %r19, but is used even without -fpic.  */
 #elif defined(__pdp11__)
@@ -69,8 +72,6 @@ extern void abort (void);
 #elif defined(__sh__)
 # define PIC_REG  "r12"
 #elif defined(__x86_64__)
-/* No pic register.  */
-#elif defined(__m32c__)
 /* No pic register.  */
 #else
 # error "Modify the test for your target."

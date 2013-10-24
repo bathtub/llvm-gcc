@@ -1,10 +1,12 @@
+/* APPLE LOCAL file mainline */
 /* Ensure that @try/@catch blocks do not mess with types of
    local objects (other than their volatile bits).  */
 
 /* { dg-options "-fobjc-exceptions -fnext-runtime" } */
 /* { dg-do compile } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @protocol Proto1
 - (int)meth1;

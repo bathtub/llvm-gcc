@@ -1,5 +1,5 @@
 /* File.java -- Class representing a file on disk
-   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2006
+   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005
    Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -44,6 +44,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import gnu.classpath.Configuration;
+import gnu.gcj.runtime.FileDeleter;
 
 /* Written using "Java Class Libraries", 2nd edition, ISBN 0-201-31002-3
  * "The Java Language Specification", ISBN 0-201-63451-1
@@ -259,15 +260,6 @@ public class File implements Serializable, Comparable
       return path.equalsIgnoreCase(other.path);
   }
 
-  /*
-   * This method tests whether or not the file represented by the
-   * object actually exists on the filesystem.
-   */
-  private boolean internalExists()
-  {
-    return _access (EXISTS);
-  }
-  
   /**
    * This method tests whether or not the file represented by the object
    * actually exists on the filesystem.
@@ -279,7 +271,7 @@ public class File implements Serializable, Comparable
   public boolean exists()
   {
     checkRead();
-    return internalExists();
+    return _access (EXISTS);
   }
 
   /**
@@ -442,11 +434,7 @@ public class File implements Serializable, Comparable
     if (!uri.getScheme().equals("file"))
 	throw new IllegalArgumentException("invalid uri protocol");
 
-    String name = uri.getPath();
-    if (name == null)
-      throw new IllegalArgumentException("URI \"" + uri
-                     + "\" is not hierarchical");
-    path = normalizePath(name);
+    path = normalizePath(uri.getPath());
   }
 
   /**
@@ -517,9 +505,9 @@ public class File implements Serializable, Comparable
   /**
    * This method returns a canonical representation of the pathname of
    * this file.  The actual form of the canonical representation is
-   * system-dependent.  On the GNU system, conversion to canonical
-   * form involves the removal of redundant separators, references to
-   * "." and "..", and symbolic links.
+   * different.  On the GNU system, the canonical form differs from the
+   * absolute form in that all relative file references to "." and ".."
+   * are resolved and removed.
    * <p>
    * Note that this method, unlike the other methods which return path
    * names, can throw an IOException.  This is because native method 
@@ -694,15 +682,6 @@ public class File implements Serializable, Comparable
    */
   public native boolean isAbsolute();
 
-  /*
-   * This method tests whether or not the file represented by this
-   * object is a directory.
-   */
-  private boolean internalIsDirectory()
-  {
-    return _stat (DIRECTORY);
-  }
-  
   /**
    * This method tests whether or not the file represented by this object
    * is a directory.  In order for this method to return <code>true</code>,
@@ -716,7 +695,7 @@ public class File implements Serializable, Comparable
   public boolean isDirectory()
   {
     checkRead();
-    return internalIsDirectory();
+    return _stat (DIRECTORY);
   }
 
   /**
@@ -1087,10 +1066,10 @@ public class File implements Serializable, Comparable
           throw new IOException("Cannot determine system temporary directory"); 
 	
         directory = new File(dirname);
-        if (!directory.internalExists())
+        if (!directory.exists())
           throw new IOException("System temporary directory "
                                 + directory.getName() + " does not exist.");
-        if (!directory.internalIsDirectory())
+        if (!directory.isDirectory())
           throw new IOException("System temporary directory "
                                 + directory.getName()
                                 + " is not really a directory.");
@@ -1316,10 +1295,12 @@ public class File implements Serializable, Comparable
   public synchronized boolean renameTo(File dest)
   {
     SecurityManager s = System.getSecurityManager();
+    String sname = getName();
+    String dname = dest.getName();
     if (s != null)
       {
-	s.checkWrite (getPath());
-	s.checkWrite (dest.getPath());
+	s.checkWrite (sname);
+	s.checkWrite (dname);
       }
     return performRenameTo (dest);
   }
@@ -1388,9 +1369,9 @@ public class File implements Serializable, Comparable
     // Check the SecurityManager
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
-      sm.checkDelete (getPath());
+      sm.checkDelete (getName());
 
-    DeleteFileHelper.add(this);
+    FileDeleter.add (this);
   }
 
   private void writeObject(ObjectOutputStream oos) throws IOException

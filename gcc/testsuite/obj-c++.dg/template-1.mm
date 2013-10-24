@@ -1,9 +1,10 @@
+// APPLE LOCAL file mainline
 /* Test for using ObjC classes as C++ template parameters.  */
 /* Author:  Ziemowit Laski <zlaski@apple.com>.  */
-
 /* { dg-do run } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 
 #define CHECK_IF(expr) if(!(expr)) abort()
@@ -20,10 +21,10 @@ static int count = 0;
 
 template <class T> struct Templ
 {
-  T *m;
-  int i;
-  Templ(): i(55), m([[T alloc] init]) { count++; }
-  ~Templ() { [m free]; count--; }
+	T *m;
+	int i;
+	Templ(): i(55), m([[T alloc] init]) { count++; }
+	~Templ() { [m free]; count--; }
 };
 
 @implementation Base
@@ -35,15 +36,15 @@ template <class T> struct Templ
 @end
 	
 int main (void) {
-  CHECK_IF(count == 0);
-  {
-    Templ<Derived> derived;
-    CHECK_IF(derived.i == 55 && count == 1);
-    Templ<Base> base;
-    CHECK_IF(base.i == 55 && count == 2);
-    CHECK_IF([base.m meth] == 333);
-    CHECK_IF([derived.m meth] == 666);
-  }
-  CHECK_IF(count == 0);
-  return 0;
+    CHECK_IF(count == 0);
+    {
+      Templ<Derived> derived;
+      CHECK_IF(derived.i == 55 && count == 1);
+      Templ<Base> base;
+      CHECK_IF(base.i == 55 && count == 2);
+      CHECK_IF([base.m meth] == 333);
+      CHECK_IF([derived.m meth] == 666);
+    }
+    CHECK_IF(count == 0);
+    return 0;
 }

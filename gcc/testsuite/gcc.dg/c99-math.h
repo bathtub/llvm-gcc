@@ -2,7 +2,7 @@
 
 extern void abort(void);
 
-#define C99_MATH_TESTS(nan, inf, huge, norm, sub, zero)	\
+#define C99_MATH_TESTS(nan, inf, huge, norm, zero)	\
 {							\
   if (fpclassify (nan) != FP_NAN)			\
     abort ();						\
@@ -14,9 +14,6 @@ extern void abort(void);
     abort ();						\
 							\
   if (fpclassify (norm) != FP_NORMAL)			\
-    abort ();						\
-							\
-  if (fpclassify (sub) != FP_SUBNORMAL)			\
     abort ();						\
 							\
   if (fpclassify (zero) != FP_ZERO)			\
@@ -35,9 +32,6 @@ extern void abort(void);
   if (isnan (norm))					\
     abort ();						\
 							\
-  if (isnan (sub))					\
-    abort ();						\
-							\
   if (isnan (zero))					\
     abort ();						\
 							\
@@ -51,10 +45,7 @@ extern void abort(void);
   if (!isinf (huge))					\
     abort ();						\
 							\
-  if (isinf (norm))					\
-    abort ();						\
-							\
-  if (isinf (sub))					\
+  if (isnan (norm))					\
     abort ();						\
 							\
   if (isinf (zero))					\
@@ -73,9 +64,6 @@ extern void abort(void);
   if (!isfinite (norm))					\
     abort ();						\
 							\
-  if (!isfinite (sub))					\
-    abort ();						\
-							\
   if (!isfinite (zero))					\
     abort ();						\
 							\
@@ -90,9 +78,6 @@ extern void abort(void);
     abort ();						\
 							\
   if (!isnormal (norm))					\
-    abort ();						\
-							\
-  if (isnormal (sub))					\
     abort ();						\
 							\
   if (isnormal (zero))					\

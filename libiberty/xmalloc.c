@@ -14,8 +14,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /*
 
@@ -68,30 +68,23 @@ function will be called to print an error message and terminate execution.
 
 #include <stdio.h>
 
+#ifdef ANSI_PROTOTYPES
 #include <stddef.h>
+#else
+#define size_t unsigned long
+#define ptrdiff_t long
+#endif
 
 #if VMS
 #include <stdlib.h>
 #include <unixlib.h>
 #else
 /* For systems with larger pointers than ints, these must be declared.  */
-#  if HAVE_STDLIB_H && HAVE_UNISTD_H && HAVE_DECL_MALLOC \
-      && HAVE_DECL_REALLOC && HAVE_DECL_CALLOC && HAVE_DECL_SBRK
-#    include <stdlib.h>
-#    include <unistd.h>
-#  else
-#    ifdef __cplusplus
-extern "C" {
-#    endif /* __cplusplus */
-void *malloc (size_t);
-void *realloc (void *, size_t);
-void *calloc (size_t, size_t);
-void *sbrk (ptrdiff_t);
-#    ifdef __cplusplus
-}
-#    endif /* __cplusplus */
-#  endif /* HAVE_STDLIB_H ...  */
-#endif /* VMS */
+PTR malloc PARAMS ((size_t));
+PTR realloc PARAMS ((PTR, size_t));
+PTR calloc PARAMS ((size_t, size_t));
+PTR sbrk PARAMS ((ptrdiff_t));
+#endif
 
 /* The program name if set.  */
 static const char *name = "";
@@ -103,7 +96,8 @@ static char *first_break = NULL;
 #endif /* HAVE_SBRK */
 
 void
-xmalloc_set_program_name (const char *s)
+xmalloc_set_program_name (s)
+     const char *s;
 {
   name = s;
 #ifdef HAVE_SBRK
@@ -114,7 +108,8 @@ xmalloc_set_program_name (const char *s)
 }
 
 void
-xmalloc_failed (size_t size)
+xmalloc_failed (size)
+     size_t size;
 {
 #ifdef HAVE_SBRK
   extern char **environ;
@@ -138,7 +133,8 @@ xmalloc_failed (size_t size)
 }  
 
 PTR
-xmalloc (size_t size)
+xmalloc (size)
+    size_t size;
 {
   PTR newmem;
 
@@ -152,7 +148,8 @@ xmalloc (size_t size)
 }
 
 PTR
-xcalloc (size_t nelem, size_t elsize)
+xcalloc (nelem, elsize)
+  size_t nelem, elsize;
 {
   PTR newmem;
 
@@ -167,7 +164,9 @@ xcalloc (size_t nelem, size_t elsize)
 }
 
 PTR
-xrealloc (PTR oldmem, size_t size)
+xrealloc (oldmem, size)
+    PTR oldmem;
+    size_t size;
 {
   PTR newmem;
 

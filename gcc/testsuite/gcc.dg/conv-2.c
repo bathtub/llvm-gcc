@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-Wpointer-sign" } */
+/* { dg-options "" } */
 
 void f1(long *);
 void f2(unsigned long *);

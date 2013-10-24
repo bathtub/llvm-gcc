@@ -1,6 +1,6 @@
 /* Core target definitions for GNU compiler
    for PowerPC embedded targeted systems with SPE support.
-   Copyright (C) 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
    Contributed by Aldy Hernandez (aldyh@redhat.com).
 
    This file is part of GCC.
@@ -17,12 +17,11 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to the
-   Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston,
-   MA 02110-1301, USA.  */
+   Free Software Foundation, 59 Temple Place - Suite 330, Boston,
+   MA 02111-1307, USA.  */
 
 #undef  TARGET_DEFAULT
-#define TARGET_DEFAULT (MASK_POWERPC | MASK_NEW_MNEMONICS | MASK_EABI	\
-  | MASK_STRICT_ALIGN)
+#define TARGET_DEFAULT (MASK_POWERPC | MASK_NEW_MNEMONICS | MASK_EABI)
 
 #undef  TARGET_VERSION
 #define TARGET_VERSION fprintf (stderr, " (PowerPC Embedded SPE)");
@@ -31,16 +30,16 @@
 #define SUBSUBTARGET_OVERRIDE_OPTIONS \
   if (rs6000_select[1].string == NULL) \
     rs6000_cpu = PROCESSOR_PPC8540; \
-  if (!rs6000_explicit_options.abi) \
+  if (rs6000_abi_string == NULL) \
     rs6000_spe_abi = 1; \
-  if (!rs6000_explicit_options.float_gprs) \
+  if (rs6000_float_gprs_string == NULL) \
     rs6000_float_gprs = 1; \
   /* See note below.  */ \
-  /*if (!rs6000_explicit_options.long_double)*/ \
+  /*if (rs6000_long_double_size_string == NULL)*/ \
   /*  rs6000_long_double_type_size = 128;*/ \
-  if (!rs6000_explicit_options.spe) \
+  if (rs6000_spe_string == NULL) \
     rs6000_spe = 1; \
-  if (!rs6000_explicit_options.isel) \
+  if (rs6000_isel_string == NULL) \
     rs6000_isel = 1; \
   if (target_flags & MASK_64BIT) \
     error ("-m64 not supported in this configuration")

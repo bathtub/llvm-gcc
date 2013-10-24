@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Copyright (C) 2002  Free Software Foundation.
    by Hans-Peter Nilsson  <hp@axis.com>
 
@@ -8,9 +9,9 @@
    You must be this tall ---> fit two long longs in asm-declared registers
    to enter this amusement.  */
 
-/* { dg-do compile { target alpha-*-* cris-*-* i?86-*-* mmix-*-* powerpc*-*-* rs6000-*-* x86_64-*-* } } */
+/* { dg-do compile { target alpha-*-* cris-*-* i?86-*-* mmix-*-* powerpc-*-* rs6000-*-* x86_64-*-* } } */
 /* { dg-options "-O2" } */
-
+/* { dg-skip-if "" { *-*-darwin* } { "*" } { "" } } */
 /* Constructed examples; input/output (same register), output, input, and
    input and output (different registers).  */
 
@@ -31,9 +32,8 @@
 #elif defined (__i386__)
 # define REG1 "%eax"
 # define REG2 "%edx"
-/* On Darwin -fpic is on by default, so don't use %ebx. */
-# define REG3 "%esi"
-# define REG4 "%edi"
+# define REG3 "%ecx"
+# define REG4 "%ebx"
 #elif defined (__MMIX__)
 # define REG1 "$8"
 # define REG2 "$9"
@@ -41,10 +41,8 @@
 	|| defined (__POWERPC__) || defined (PPC) || defined (_IBMR2)
 # define REG1 "6"
 # define REG2 "7"
-# ifndef __powerpc64__
-#  define REG3 "8"
-#  define REG4 "9"
-# endif
+# define REG3 "8"
+# define REG4 "9"
 #elif defined (__x86_64__)
 # define REG1 "rax"
 # define REG2 "rdx"

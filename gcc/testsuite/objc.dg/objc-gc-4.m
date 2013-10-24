@@ -1,11 +1,13 @@
+/* APPLE LOCAL file mainline */
 /* Test looking up fields in superclasses in the context of write-barriers
    (where component references get rewritten).  */
 /* Contributed by Ziemowit Laski <zlaski@apple.com>  */
 
-/* { dg-do compile { target *-*-darwin* } } */
+/* { dg-do compile { target powerpc*-*-darwin* i?86*-*-darwin* } } */
 /* { dg-options "-fobjc-gc" } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @class MyWindow;
 

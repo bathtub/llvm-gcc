@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-store_ccp" } */
+/* { dg-options "-O1 -fdump-tree-ccp" } */
   
 
 extern int board[];
@@ -15,5 +15,6 @@ findbestextension (int blah, int blah2)
 }
 
 /* The argument to "foo" should be a variable, not a constant.  */
-/* { dg-final { scan-tree-dump-times "foo .defval" 1 "store_ccp"} } */
-/* { dg-final { cleanup-tree-dump "store_ccp" } } */
+/* { dg-final { scan-tree-dump-times "foo .defval" 1 "ccp"} } */
+ 
+

@@ -1,9 +1,10 @@
+// APPLE LOCAL file mainline
 // Check if ivars may be accessed via the C++ dot notation.
-
 // { dg-do run }
 // { dg-options "-fno-objc-call-cxx-cdtors" }
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdlib.h>
 #define CHECK_IF(expr) if(!(expr)) abort()
 
@@ -20,7 +21,7 @@ struct cxx_struct {
 @interface Manip : Object {
   int c;
   cxx_struct s;   // { dg-warning "user-defined destructor" }
-                  // { dg-warning "constructors and destructors will not be invoked" "" { target *-*-* } 22 }
+                  // { dg-warning "constructors and destructors will not be invoked" "" { target *-*-* } 23 }
 }
 - (void) manipulate_ivars;
 @end

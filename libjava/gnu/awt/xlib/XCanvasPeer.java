@@ -55,8 +55,6 @@ public class XCanvasPeer implements CanvasPeer
 
   Component component;
   XGraphicsConfiguration config;
-  private WindowAttributes attributes = new WindowAttributes();
-  private long eventMask;
   
   public XCanvasPeer(Component component)
   {
@@ -94,6 +92,7 @@ public class XCanvasPeer implements CanvasPeer
        object. */
     component.setBounds(bounds);
 	    
+    WindowAttributes attributes = new WindowAttributes();
 
     /* Set background color */
     Color bg = component.getBackground();
@@ -247,12 +246,10 @@ public class XCanvasPeer implements CanvasPeer
     gfx2d.setColor(component.getBackground());
     return gfx2d;
   }
-
-  private Rectangle locationBounds;
+    
   public Point getLocationOnScreen()
   {
-    locationBounds = window.getBounds (locationBounds);
-    return new Point (locationBounds.x,locationBounds.y);
+    throw new UnsupportedOperationException("FIXME, not implemented");
   }
 
   public Dimension getMinimumSize ()
@@ -352,21 +349,7 @@ public class XCanvasPeer implements CanvasPeer
 
   public void setBackground(Color color)
   {
-    if (color != null)
-    {
-      int[] components =
-      {
-        color.getRed (),
-        color.getGreen (),
-        color.getBlue (),
-        0xff
-      };
-      
-      ColorModel cm = config.getColorModel ();
-      long pixel = cm.getDataElement (components, 0);
-      attributes.setBackground (pixel);
-      window.setAttributes (attributes);
-    }
+    throw new UnsupportedOperationException("not implemented");
   }
 
   public void setBounds(int x, int y, int width, int height)
@@ -404,33 +387,31 @@ public class XCanvasPeer implements CanvasPeer
 
   public void setEventMask(long eventMask)
   {
-    if (this.eventMask != eventMask)
-    {
-      this.eventMask = eventMask;
-      long xEventMask = getBasicEventMask ();
-      
-      if ((eventMask & AWTEvent.MOUSE_EVENT_MASK) != 0)
+    WindowAttributes attributes = new WindowAttributes();
+
+    long xEventMask = getBasicEventMask();
+	
+    if ((eventMask & AWTEvent.MOUSE_EVENT_MASK) != 0)
       {
-        xEventMask |=
-          WindowAttributes.MASK_BUTTON_PRESS |
-          WindowAttributes.MASK_BUTTON_RELEASE;
+	xEventMask |=
+	  WindowAttributes.MASK_BUTTON_PRESS |
+	  WindowAttributes.MASK_BUTTON_RELEASE;
       }
-      
-      attributes.setEventMask (xEventMask);
-      window.setAttributes (attributes);
-      ensureFlush ();
-    }
+	    
+    attributes.setEventMask(xEventMask);
+    window.setAttributes(attributes);
+    ensureFlush();
   }
 
   public void setFont(Font font)
   {
-    /* default canvas peer does not keep track of font, since it won't
-       paint anything. */
+    /* default canvas peer does keep track of font, since it won't
+       write anything. */
   }
 
   public void setForeground(Color color)
   {
-    /* default canvas peer does not keep track of foreground, since it won't
+    /* default canvas peer does keep track of foreground, since it won't
        paint anything. */
   }
 	
@@ -529,63 +510,5 @@ public class XCanvasPeer implements CanvasPeer
       window.map();
     }
   }
-
-  /**
-   * @since 1.5
-   */
-  public boolean isRestackSupported ()
-  {
-    return false;
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void cancelPendingPaint (int x, int y, int width, int height)
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void restack ()
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public Rectangle getBounds ()
-  {
-    return null;
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void reparent (ContainerPeer parent)
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void setBounds (int x, int y, int width, int height, int z)
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public boolean isReparentSupported ()
-  {
-    return false;
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void layout ()
-  {
-  }
 }
+

@@ -1,5 +1,5 @@
 /* Generic implementation of the RESHAPE intrinsic
-   Copyright 2002, 2006 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -37,9 +37,15 @@ Boston, MA 02110-1301, USA.  */
 typedef GFC_ARRAY_DESCRIPTOR(1, index_type) shape_type;
 typedef GFC_ARRAY_DESCRIPTOR(GFC_MAX_DIMENSIONS, char) parray;
 
-static void
-reshape_internal (parray *ret, parray *source, shape_type *shape,
-		  parray *pad, shape_type *order, index_type size)
+extern void reshape (parray *, parray *, shape_type *, parray *, shape_type *);
+export_proto(reshape);
+
+/* The shape parameter is ignored. We can currently deduce the shape from the
+   return array.  */
+
+void
+reshape (parray *ret, parray *source, shape_type *shape,
+	 parray *pad, shape_type *order)
 {
   /* r.* indicates the return array.  */
   index_type rcount[GFC_MAX_DIMENSIONS];
@@ -70,13 +76,23 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
   const char *src;
   int n;
   int dim;
-  int sempty, pempty;
+  int size;
+
+  if (source->dim[0].stride == 0)
+    source->dim[0].stride = 1;
+  if (shape->dim[0].stride == 0)
+    shape->dim[0].stride = 1;
+  if (pad && pad->dim[0].stride == 0)
+    pad->dim[0].stride = 1;
+  if (order && order->dim[0].stride == 0)
+    order->dim[0].stride = 1;
 
   if (ret->data == NULL)
     {
+      size = GFC_DESCRIPTOR_SIZE (ret);
       rdim = shape->dim[0].ubound - shape->dim[0].lbound + 1;
       rs = 1;
-      for (n = 0; n < rdim; n++)
+      for (n=0; n < rdim; n++)
 	{
 	  ret->dim[n].lbound = 0;
 	  rex = shape->data[n * shape->dim[0].stride];
@@ -84,13 +100,16 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
 	  ret->dim[n].stride = rs;
 	  rs *= rex;
 	}
-      ret->offset = 0;
+      ret->base = 0;
       ret->data = internal_malloc_size ( rs * size );
       ret->dtype = (source->dtype & ~GFC_DTYPE_RANK_MASK) | rdim;
     }
   else
     {
+      size = GFC_DESCRIPTOR_SIZE (ret);
       rdim = GFC_DESCRIPTOR_RANK (ret);
+      if (ret->dim[0].stride == 0)
+	ret->dim[0].stride = 1;
     }
 
   rsize = 1;
@@ -118,17 +137,13 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
 
   sdim = GFC_DESCRIPTOR_RANK (source);
   ssize = 1;
-  sempty = 0;
   for (n = 0; n < sdim; n++)
     {
       scount[n] = 0;
       sstride[n] = source->dim[n].stride;
       sextent[n] = source->dim[n].ubound + 1 - source->dim[n].lbound;
       if (sextent[n] <= 0)
-	{
-	  sempty = 1;
-	  sextent[n] = 0;
-	}
+        abort ();
 
       if (ssize == sstride[n])
         ssize *= sextent[n];
@@ -140,18 +155,13 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
     {
       pdim = GFC_DESCRIPTOR_RANK (pad);
       psize = 1;
-      pempty = 0;
       for (n = 0; n < pdim; n++)
         {
           pcount[n] = 0;
           pstride[n] = pad->dim[n].stride;
           pextent[n] = pad->dim[n].ubound + 1 - pad->dim[n].lbound;
           if (pextent[n] <= 0)
-	    {
-	      pempty = 1;
-              pextent[n] = 0;
-	    }
-
+            abort ();
           if (psize == pstride[n])
             psize *= pextent[n];
           else
@@ -163,7 +173,6 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
     {
       pdim = 0;
       psize = 1;
-      pempty = 1;
       pptr = NULL;
     }
 
@@ -181,24 +190,6 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
   rstride0 = rstride[0] * size;
   sstride0 = sstride[0] * size;
 
-  if (sempty && pempty)
-    abort ();
-
-  if (sempty)
-    {
-      /* Switch immediately to the pad array.  */
-      src = pptr;
-      sptr = NULL;
-      sdim = pdim;
-      for (dim = 0; dim < pdim; dim++)
-	{
-	  scount[dim] = pcount[dim];
-	  sextent[dim] = pextent[dim];
-	  sstride[dim] = pstride[dim];
-	  sstride0 = sstride[0] * size;
-	}
-    }
-
   while (rptr)
     {
       /* Select between the source and pad arrays.  */
@@ -208,7 +199,6 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
       src += sstride0;
       rcount[0]++;
       scount[0]++;
-
       /* Advance to the next destination element.  */
       n = 0;
       while (rcount[n] == rextent[n])
@@ -217,7 +207,7 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
              the next dimension.  */
           rcount[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           rptr -= rstride[n] * rextent[n] * size;
           n++;
           if (n == rdim)
@@ -231,8 +221,7 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
               rcount[n]++;
               rptr += rstride[n] * size;
             }
-	}
-
+        }
       /* Advance to the next source element.  */
       n = 0;
       while (scount[n] == sextent[n])
@@ -241,7 +230,7 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
              the next dimension.  */
           scount[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           src -= sstride[n] * sextent[n] * size;
           n++;
           if (n == sdim)
@@ -266,33 +255,8 @@ reshape_internal (parray *ret, parray *source, shape_type *shape,
           else
             {
               scount[n]++;
-              src += sstride[n] * size;
+              sptr += sstride[n] * size;
             }
         }
     }
-}
-
-extern void reshape (parray *, parray *, shape_type *, parray *, shape_type *);
-export_proto(reshape);
-
-void
-reshape (parray *ret, parray *source, shape_type *shape, parray *pad,
-	 shape_type *order)
-{
-  reshape_internal (ret, source, shape, pad, order,
-		    GFC_DESCRIPTOR_SIZE (source));
-}
-
-extern void reshape_char (parray *, GFC_INTEGER_4, parray *, shape_type *,
-			  parray *, shape_type *, GFC_INTEGER_4,
-			  GFC_INTEGER_4);
-export_proto(reshape_char);
-
-void
-reshape_char (parray *ret, GFC_INTEGER_4 ret_length __attribute__((unused)),
-	      parray *source, shape_type *shape, parray *pad,
-	      shape_type *order, GFC_INTEGER_4 source_length,
-	      GFC_INTEGER_4 pad_length __attribute__((unused)))
-{
-  reshape_internal (ret, source, shape, pad, order, source_length);
 }

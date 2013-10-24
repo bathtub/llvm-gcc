@@ -1,3 +1,4 @@
+/* APPLE LOCAL file radar 4156731 */
 /* { dg-do compile } */
 
 @interface A
@@ -10,6 +11,5 @@ extern int foo();
 
 void baz()
 {
-    [foo test];	/* { dg-warning "invalid receiver type" } */ 
-		/* { dg-warning "cannot convert to a pointer type" "" { target *-*-* } 13 } */
+    [foo test];	/* { dg-warning "invalid receiver type" } */
 }

@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "libgfortran.h"
 
@@ -36,7 +36,8 @@ export_proto(ishftc4);
 GFC_INTEGER_4
 ishftc4 (GFC_INTEGER_4 i, GFC_INTEGER_4 shift, GFC_INTEGER_4 size)
 {
-  GFC_UINTEGER_4 mask, bits;
+  GFC_INTEGER_4 mask;
+  GFC_UINTEGER_4 bits;
 
   if (shift < 0)
     shift = shift + size;
@@ -44,14 +45,9 @@ ishftc4 (GFC_INTEGER_4 i, GFC_INTEGER_4 shift, GFC_INTEGER_4 size)
   if (shift == 0 || shift == size)
     return i;
 
-  /* In C, the result of the shift operator is undefined if the right operand
-     is greater than or equal to the number of bits in the left operand. So we
-     have to special case it for fortran.  */
-  mask = ~((size == 32) ? 0 : (~0 << size));
-
-  bits = i & mask;
-  
-  return (i & ~mask) | ((bits << shift) & mask) | (bits >> (size - shift));
+  mask = (~(GFC_INTEGER_4)0) << size;
+  bits = i & ~mask;
+  return (i & mask) | (bits >> (size - shift)) | ((i << shift) & ~mask);
 }
 
 extern GFC_INTEGER_8 ishftc8 (GFC_INTEGER_8, GFC_INTEGER_4, GFC_INTEGER_4);
@@ -60,7 +56,8 @@ export_proto(ishftc8);
 GFC_INTEGER_8
 ishftc8 (GFC_INTEGER_8 i, GFC_INTEGER_4 shift, GFC_INTEGER_4 size)
 {
-  GFC_UINTEGER_8 mask, bits;
+  GFC_INTEGER_8 mask;
+  GFC_UINTEGER_8 bits;
 
   if (shift < 0)
     shift = shift + size;
@@ -68,38 +65,7 @@ ishftc8 (GFC_INTEGER_8 i, GFC_INTEGER_4 shift, GFC_INTEGER_4 size)
   if (shift == 0 || shift == size)
     return i;
 
-  /* In C, the result of the shift operator is undefined if the right operand
-     is greater than or equal to the number of bits in the left operand. So we
-     have to special case it for fortran.  */
-  mask = ~((size == 64) ? 0 : (~0 << size));
-
-  bits = i & mask;
-  
-  return (i & ~mask) | ((bits << shift) & mask) | (bits >> (size - shift));
+  mask = (~(GFC_INTEGER_8)0) << size;
+  bits = i & ~mask;
+  return (i & mask) | (bits >> (size - shift)) | ((i << shift) & ~mask);
 }
-
-#ifdef HAVE_GFC_INTEGER_16
-extern GFC_INTEGER_16 ishftc16 (GFC_INTEGER_16, GFC_INTEGER_4, GFC_INTEGER_4);
-export_proto(ishftc16);
-
-GFC_INTEGER_16
-ishftc16 (GFC_INTEGER_16 i, GFC_INTEGER_4 shift, GFC_INTEGER_4 size)
-{
-  GFC_UINTEGER_16 mask, bits;
-
-  if (shift < 0)
-    shift = shift + size;
-
-  if (shift == 0 || shift == size)
-    return i;
-
-  /* In C, the result of the shift operator is undefined if the right operand
-     is greater than or equal to the number of bits in the left operand. So we
-     have to special case it for fortran.  */
-  mask = ~((size == 128) ? 0 : (~0 << size));
-
-  bits = i & mask;
-  
-  return (i & ~mask) | ((bits << shift) & mask) | (bits >> (size - shift));
-}
-#endif

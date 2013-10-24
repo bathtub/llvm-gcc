@@ -1,12 +1,12 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                  GNAT RUN-TIME LIBRARY (GNARL) COMPONENTS                --
+--                 GNU ADA RUN-TIME LIBRARY (GNARL) COMPONENTS              --
 --                                                                          --
 --                 A D A . D Y N A M I C _ P R I O R I T I E S              --
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---          Copyright (C) 1992-2006, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2004, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNARL; see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -31,6 +31,12 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+with Ada.Task_Identification;
+--  used for Task_Id
+--           Current_Task
+--           Null_Task_Id
+--           Is_Terminated
+
 with System.Task_Primitives.Operations;
 --  used for Write_Lock
 --           Unlock
@@ -41,22 +47,24 @@ with System.Task_Primitives.Operations;
 with System.Tasking;
 --  used for Task_Id
 
+with Ada.Exceptions;
+--  used for Raise_Exception
+
+with System.Tasking.Initialization;
+--  used for Defer/Undefer_Abort
+
 with System.Parameters;
 --  used for Single_Lock
-
-with System.Soft_Links;
---  use for Abort_Defer
---          Abort_Undefer
 
 with Unchecked_Conversion;
 
 package body Ada.Dynamic_Priorities is
 
    package STPO renames System.Task_Primitives.Operations;
-   package SSL renames System.Soft_Links;
 
    use System.Parameters;
    use System.Tasking;
+   use Ada.Exceptions;
 
    function Convert_Ids is new
      Unchecked_Conversion
@@ -77,11 +85,13 @@ package body Ada.Dynamic_Priorities is
 
    begin
       if Target = Convert_Ids (Ada.Task_Identification.Null_Task_Id) then
-         raise Program_Error with Error_Message & "null task";
+         Raise_Exception (Program_Error'Identity,
+           Error_Message & "null task");
       end if;
 
       if Task_Identification.Is_Terminated (T) then
-         raise Tasking_Error with Error_Message & "null task";
+         Raise_Exception (Tasking_Error'Identity,
+           Error_Message & "null task");
       end if;
 
       return Target.Common.Base_Priority;
@@ -104,14 +114,16 @@ package body Ada.Dynamic_Priorities is
 
    begin
       if Target = Convert_Ids (Ada.Task_Identification.Null_Task_Id) then
-         raise Program_Error with Error_Message & "null task";
+         Raise_Exception (Program_Error'Identity,
+           Error_Message & "null task");
       end if;
 
       if Task_Identification.Is_Terminated (T) then
-         raise Tasking_Error with Error_Message & "terminated task";
+         Raise_Exception (Tasking_Error'Identity,
+           Error_Message & "terminated task");
       end if;
 
-      SSL.Abort_Defer.all;
+      Initialization.Defer_Abort (Self_ID);
 
       if Single_Lock then
          STPO.Lock_RTS;
@@ -129,7 +141,7 @@ package body Ada.Dynamic_Priorities is
             STPO.Unlock_RTS;
          end if;
 
-         --  Yield is needed to enforce FIFO task dispatching
+         --  Yield is needed to enforce FIFO task dispatching.
 
          --  LL Set_Priority is made while holding the RTS lock so that it
          --  is inheriting high priority until it release all the RTS locks.
@@ -156,7 +168,7 @@ package body Ada.Dynamic_Priorities is
          end if;
       end if;
 
-      SSL.Abort_Undefer.all;
+      Initialization.Undefer_Abort (Self_ID);
    end Set_Priority;
 
 end Ada.Dynamic_Priorities;

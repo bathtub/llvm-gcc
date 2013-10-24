@@ -14,8 +14,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -43,7 +43,7 @@ Boston, MA 02110-1301, USA.  */
 #endif
 
 #include "libiberty.h"
-extern int mkstemps (char *, int);
+extern int mkstemps PARAMS ((char *, int));
 
 /* '/' works just fine on MS-DOS based systems.  */
 #ifndef DIR_SEPARATOR
@@ -61,10 +61,11 @@ extern int mkstemps (char *, int);
    If success, DIR is returned.
    Otherwise NULL is returned.  */
 
-static inline const char *try_dir (const char *, const char *);
+static inline const char *try PARAMS ((const char *, const char *));
 
 static inline const char *
-try_dir (const char *dir, const char *base)
+try (dir, base)
+     const char *dir, *base;
 {
   if (base != 0)
     return base;
@@ -94,7 +95,7 @@ files in.
 */
 
 char *
-choose_tmpdir (void)
+choose_tmpdir ()
 {
   const char *base = 0;
   char *tmpdir;
@@ -103,18 +104,18 @@ choose_tmpdir (void)
   if (memoized_tmpdir)
     return memoized_tmpdir;
 
-  base = try_dir (getenv ("TMPDIR"), base);
-  base = try_dir (getenv ("TMP"), base);
-  base = try_dir (getenv ("TEMP"), base);
+  base = try (getenv ("TMPDIR"), base);
+  base = try (getenv ("TMP"), base);
+  base = try (getenv ("TEMP"), base);
 
 #ifdef P_tmpdir
-  base = try_dir (P_tmpdir, base);
+  base = try (P_tmpdir, base);
 #endif
 
   /* Try /var/tmp, /usr/tmp, then /tmp.  */
-  base = try_dir (vartmp, base);
-  base = try_dir (usrtmp, base);
-  base = try_dir (tmp, base);
+  base = try (vartmp, base);
+  base = try (usrtmp, base);
+  base = try (tmp, base);
  
   /* If all else fails, use the current directory!  */
   if (base == 0)
@@ -123,7 +124,7 @@ choose_tmpdir (void)
   /* Append DIR_SEPARATOR to the directory we've chosen
      and return it.  */
   len = strlen (base);
-  tmpdir = XNEWVEC (char, len + 2);
+  tmpdir = xmalloc (len + 2);
   strcpy (tmpdir, base);
   tmpdir[len] = DIR_SEPARATOR;
   tmpdir[len+1] = '\0';
@@ -145,7 +146,8 @@ string is @code{malloc}ed, and the temporary file has been created.
 */
 
 char *
-make_temp_file (const char *suffix)
+make_temp_file (suffix)
+     const char *suffix;
 {
   const char *base = choose_tmpdir ();
   char *temp_filename;
@@ -158,7 +160,7 @@ make_temp_file (const char *suffix)
   base_len = strlen (base);
   suffix_len = strlen (suffix);
 
-  temp_filename = XNEWVEC (char, base_len
+  temp_filename = xmalloc (base_len
 			   + TEMP_FILE_LEN
 			   + suffix_len + 1);
   strcpy (temp_filename, base);

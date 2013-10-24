@@ -1,3 +1,5 @@
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-fnested-functions" } */
 #ifndef NO_TRAMPOLINES
 int f1()
 {

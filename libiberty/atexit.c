@@ -16,7 +16,8 @@ Causes function @var{f} to be called at exit.  Returns 0.
 #ifdef HAVE_ON_EXIT
 
 int
-atexit(void (*f)(void))
+atexit(f)
+     void (*f)();
 {
   /* If the system doesn't provide a definition for atexit, use on_exit
      if the system provides that.  */

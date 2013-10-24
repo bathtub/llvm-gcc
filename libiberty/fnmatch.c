@@ -15,8 +15,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #if defined (CONFIG_BROKETS)
@@ -65,7 +65,10 @@ extern int errno;
 /* Match STRING against the filename pattern PATTERN, returning zero if
    it matches, nonzero if not.  */
 int
-fnmatch (const char *pattern, const char *string, int flags)
+fnmatch (pattern, string, flags)
+     const char *pattern;
+     const char *string;
+     int flags;
 {
   register const char *p = pattern, *n = string;
   register unsigned char c;
@@ -124,7 +127,7 @@ fnmatch (const char *pattern, const char *string, int flags)
 	case '[':
 	  {
 	    /* Nonzero if the sense of the character class is inverted.  */
-	    register int negate;
+	    register int not;
 
 	    if (*n == '\0')
 	      return FNM_NOMATCH;
@@ -133,8 +136,8 @@ fnmatch (const char *pattern, const char *string, int flags)
 		(n == string || ((flags & FNM_FILE_NAME) && n[-1] == '/')))
 	      return FNM_NOMATCH;
 
-	    negate = (*p == '!' || *p == '^');
-	    if (negate)
+	    not = (*p == '!' || *p == '^');
+	    if (not)
 	      ++p;
 
 	    c = *p++;
@@ -177,7 +180,7 @@ fnmatch (const char *pattern, const char *string, int flags)
 		if (c == ']')
 		  break;
 	      }
-	    if (!negate)
+	    if (!not)
 	      return FNM_NOMATCH;
 	    break;
 
@@ -194,7 +197,7 @@ fnmatch (const char *pattern, const char *string, int flags)
 		  /* XXX 1003.2d11 is unclear if this is right.  */
 		  ++p;
 	      }
-	    if (negate)
+	    if (not)
 	      return FNM_NOMATCH;
 	  }
 	  break;

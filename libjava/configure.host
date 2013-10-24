@@ -28,11 +28,8 @@
 #			pthread_self calls by caching thread IDs in a hashtable
 #   can_unwind_signal   Set to "yes" if the EH unwinder supports throwing
 #			from a signal handler.
-#   fallback_backtrace_h  Header to use for fallback backtrace implementation
-#			  (only for targets that don't support DWARF2 unwind)
-#   descriptor_h	Header to use for looking past function descriptors
-#   use_libgcj_bc	Whether to build a "libgcj-bc" library for BC-ABI
-#			binaries to link against.
+#   disable_dladdr      Set to "yes" if dladdr should not be used
+#                       (i.e it is broken).
 
 libgcj_flags=
 libgcj_cflags=
@@ -44,7 +41,7 @@ enable_hash_synchronization_default=no
 sysdeps_dir=generic
 slow_pthread_self=
 can_unwind_signal=no
-fallback_backtrace_h=sysdep/generic/backtrace.h
+disable_dladdr=
 
 case "${target_optspace}:${host}" in
   yes:*)
@@ -68,7 +65,6 @@ echo "$target"
 DIVIDESPEC=-fuse-divide-subroutine
 EXCEPTIONSPEC=-fnon-call-exceptions
 CHECKREFSPEC=
-BACKTRACESPEC=
 
 # This case statement supports per-CPU defaults.
 case "${host}" in
@@ -92,15 +88,9 @@ case "${host}" in
  	enable_java_net_default=no
  	enable_getenv_properties_default=no
 	;;
-  mipsel-*|mips-*)
-	libgcj_interpreter=yes
-	;;
   i686-*|i586-*|i486-*|i386-*)
 	sysdeps_dir=i386
-	# With -fomit-frame-pointer -maccumulate-outgoing-args (implied),
-	# the .text section of libgcj.so is 30k larger, and the .eh_frame
-	# section is 1.4M smaller.
-	libgcj_flags="${libgcj_flags} -ffloat-store -fomit-frame-pointer"
+	libgcj_flags="${libgcj_flags} -ffloat-store -fno-omit-frame-pointer"
 	libgcj_interpreter=yes
 	libgcj_cxxflags=
 	libgcj_cflags=
@@ -110,17 +100,10 @@ case "${host}" in
 	;;
   x86_64-*)
 	sysdeps_dir=x86-64
-	# For 64-bit we always use SSE registers for arithmetic,
-	# which doesn't have the extra precision problems of the fpu.
-	# But be careful about 32-bit multilibs.
-	case " $CC " in
-	*" -m32 "*)
-		libgcj_flags="${libgcj_flags} -ffloat-store" ;;
-	esac
-	libgcj_flags="${libgcj_flags} -fomit-frame-pointer"
+	libgcj_flags="${libgcj_flags} -ffloat-store -fno-omit-frame-pointer"
 	libgcj_cxxflags=
 	libgcj_cflags=
-	DIVIDESPEC=-fno-use-divide-subroutine
+	DIVIDESPEC=-f%{m32:no-}use-divide-subroutine
 	enable_hash_synchronization_default=yes
 	slow_pthread_self=yes
 	libgcj_interpreter=yes
@@ -132,10 +115,10 @@ case "${host}" in
 	enable_hash_synchronization_default=yes
 	IEEESPEC=-mieee
 	;;
-  hppa*-*)
+  hppa-*)
 	sysdeps_dir=pa
 	libgcj_interpreter=yes
-	enable_hash_synchronization_default=no
+	enable_hash_synchronization_default=yes
 	;;
   powerpc64*-*)
 	sysdeps_dir=powerpc
@@ -172,7 +155,6 @@ case "${host}" in
 	libgcj_flags="${libgcj_flags} -mieee"
 	libgcj_interpreter=yes
 	enable_hash_synchronization_default=yes
-	IEEESPEC=-mieee
 	;;
 esac
 
@@ -242,19 +224,6 @@ EOF
 	  rm -f conftest conftest.c
 	fi
 	;;
-   i[34567]86*-kfreebsd*-gnu | x86_64*-kfreebsd*-gnu)
-        libgcj_ld_symbolic='-Wl,-Bsymbolic'
-        slow_pthread_self=
-        ;;
-  i[34567]86-*-solaris2.1[0-9]* )
-	sysdeps_dir=x86-64
-	DIVIDESPEC=-f%{m32:no-}%{!m32:%{!m64:no-}}%{m64:}use-divide-subroutine
-	;;
-  mips-sgi-irix6* )
-	sysdeps_dir=mips
-	# disable interpreter, no closure support for N32 and N64 ABIs
-	libgcj_interpreter=no
-	;;
   mips*-*-linux* )
   	sysdeps_dir=mips
   	can_unwind_signal=yes
@@ -262,6 +231,7 @@ EOF
 	case "${host}" in
 	    mipsel*-linux* | mipsisa32el*-linux*)
 		enable_hash_synchronization_default=yes
+		disable_dladdr=yes
 	    ;;
 	esac
 	;;
@@ -270,16 +240,10 @@ EOF
 	slow_pthread_self=
 	can_unwind_signal=yes
 	;;
-  i?86-*-darwin*)
-	enable_hash_synchronization_default=yes
-	slow_pthread_self=
-	can_unwind_signal=no
-	;;
   *-*-freebsd*)
 	slow_pthread_self=
 	;;
   *-mingw*)
-        libgcj_flags="${libgcj_flags} -fno-omit-frame-pointer"
   	# FIXME: win32_exception_handler( ) in win32.cc does not do the
 	# right stuff yet w.r.t. SEH. Live with the following for now.
 	can_unwind_signal=no
@@ -292,55 +256,7 @@ EOF
 	enable_hash_synchronization_default=no
 	slow_pthread_self=
 	;;
-  hppa*-hp-hpux11.*)
-	slow_pthread_self=no
-	can_unwind_signal=yes
-	DIVIDESPEC=-fuse-divide-subroutine
-	;;
 esac
-
-case "${host}" in
-  *-cygwin* | *-mingw*)
-	fallback_backtrace_h=sysdep/i386/backtrace.h  
-	# We need a frame pointer on Windows, so override BACKTRACESPEC
-  	BACKTRACESPEC=
-  ;;
-esac
-
-case "${host}" in
-  ia64-*)
-	descriptor_h=sysdep/descriptor-y.h
-	;;
-
-  hppa*64*-*-hpux*)
-	descriptor_h=sysdep/pa/descriptor-pa64-hpux.h
-	;;
-
-  hppa*-*-hpux*)
-	descriptor_h=sysdep/pa/descriptor-pa32-hpux.h
-	;;
-
-  hppa*-*)
-	descriptor_h=sysdep/pa/descriptor.h
-	;;
-
-  rs6000-* | powerpc*-*)
-	descriptor_h=sysdep/powerpc/descriptor.h
-	;;
-
-  *)
-	descriptor_h=sysdep/descriptor-n.h
-	;;
-esac
-
-case "${host}" in
-  *linux*|*-kfreebsd*-gnu)
-    use_libgcj_bc=yes
-  ;;
-  *)
-    use_libgcj_bc=no
-  ;;
-esac    
 
 libgcj_cflags="${libgcj_cflags} ${libgcj_flags}"
 libgcj_cxxflags="${libgcj_cxxflags} ${libgcj_flags}"

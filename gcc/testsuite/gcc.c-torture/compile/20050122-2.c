@@ -1,3 +1,5 @@
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-fnested-functions" } */
 /* Related to PR 19484.  */
 extern void foo (void) __attribute__((noreturn));
 int n;

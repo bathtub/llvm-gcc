@@ -1,6 +1,6 @@
 // verify.cc - verify bytecode
 
-/* Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 2001, 2002, 2003, 2004, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -13,8 +13,6 @@ details.  */
 // Define VERIFY_DEBUG to enable debugging output.
 
 #include <config.h>
-
-#include <string.h>
 
 #include <jvm.h>
 #include <gcj/cni.h>
@@ -33,7 +31,6 @@ details.  */
 #include <java/lang/Throwable.h>
 #include <java/lang/reflect/Modifier.h>
 #include <java/lang/StringBuffer.h>
-#include <java/lang/NoClassDefFoundError.h>
 
 #ifdef VERIFY_DEBUG
 #include <stdio.h>
@@ -206,7 +203,7 @@ private:
     return r;
   }
 
-  __attribute__ ((__noreturn__)) void verify_fail (const char *s, jint pc = -1)
+  __attribute__ ((__noreturn__)) void verify_fail (char *s, jint pc = -1)
   {
     using namespace java::lang;
     StringBuffer *buf = new StringBuffer ();
@@ -326,7 +323,7 @@ private:
     bool equals (ref_intersection *other, _Jv_BytecodeVerifier *verifier)
     {
       if (! is_resolved && ! other->is_resolved
-	  && _Jv_equalUtf8Classnames (data.name, other->data.name))
+	  && _Jv_equalUtf8Consts (data.name, other->data.name))
 	return true;
       if (! is_resolved)
 	resolve (verifier);
@@ -366,23 +363,12 @@ private:
       if (is_resolved)
 	return;
 
-      // This is useful if you want to see which classes have to be resolved
-      // while doing the class verification.
-      debug_print("resolving class: %s\n", data.name->chars());
-
       using namespace java::lang;
       java::lang::ClassLoader *loader
 	= verifier->current_class->getClassLoaderInternal();
-
-      // Due to special handling in to_array() array classes will always
-      // be of the "L ... ;" kind. The separator char ('.' or '/' may vary
-      // however.
-      if (data.name->limit()[-1] == ';')
-	{
-	  data.klass = _Jv_FindClassFromSignature (data.name->chars(), loader);
-	  if (data.klass == NULL)
-	    throw new java::lang::NoClassDefFoundError(data.name->toString());
-	}
+      // We might see either kind of name.  Sigh.
+      if (data.name->first() == 'L' && data.name->limit()[-1] == ';')
+	data.klass = _Jv_FindClassFromSignature (data.name->chars(), loader);
       else
 	data.klass = Class::forName (_Jv_NewStringUtf8Const (data.name),
 				     false, loader);
@@ -406,21 +392,12 @@ private:
 	      // Avoid resolving if possible.
 	      if (! self->is_resolved
 		  && ! other_iter->is_resolved
-		  && _Jv_equalUtf8Classnames (self->data.name,
-		 			      other_iter->data.name))
+		  && _Jv_equalUtf8Consts (self->data.name,
+					  other_iter->data.name))
 		continue;
 
 	      if (! self->is_resolved)
 		self->resolve(verifier);
-
-              // If the LHS of the expression is of type
-              // java.lang.Object, assignment will succeed, no matter
-              // what the type of the RHS is. Using this short-cut we
-              // don't need to resolve the class of the RHS at
-              // verification time.
-              if (self->data.klass == &java::lang::Object::class$)
-                continue;
-
 	      if (! other_iter->is_resolved)
 		other_iter->resolve(verifier);
 
@@ -870,70 +847,9 @@ private:
       if (key != reference_type)
 	verifier->verify_fail ("internal error in type::to_array()");
 
-      // In case the class is already resolved we can simply ask the runtime
-      // to give us the array version.
-      // If it is not resolved we prepend "[" to the classname to make the
-      // array usage verification more lazy. In other words: makes new Foo[300]
-      // pass the verifier if Foo.class is missing.
-      if (klass->is_resolved)
-        {
-          jclass k = klass->getclass (verifier);
-
-          return type (_Jv_GetArrayClass (k, k->getClassLoaderInternal()),
-		       verifier);
-        }
-      else
-        {
-          int len = klass->data.name->len();
-
-          // If the classname is given in the Lp1/p2/cn; format we only need
-          // to add a leading '['. The same procedure has to be done for
-          // primitive arrays (ie. provided "[I", the result should be "[[I".
-          // If the classname is given as p1.p2.cn we have to embed it into
-          // "[L" and ';'.
-          if (klass->data.name->limit()[-1] == ';' ||
-               _Jv_isPrimitiveOrDerived(klass->data.name))
-            {
-              // Reserves space for leading '[' and trailing '\0' .
-              char arrayName[len + 2];
-
-              arrayName[0] = '[';
-              strcpy(&arrayName[1], klass->data.name->chars());
-
-#ifdef VERIFY_DEBUG
-              // This is only needed when we want to print the string to the
-              // screen while debugging.
-              arrayName[len + 1] = '\0';
-
-              debug_print("len: %d - old: '%s' - new: '%s'\n", len, klass->data.name->chars(), arrayName);
-#endif
-
-              return type (verifier->make_utf8_const( arrayName, len + 1 ),
-                           verifier);
-            }
-           else
-            {
-              // Reserves space for leading "[L" and trailing ';' and '\0' .
-              char arrayName[len + 4];
-
-              arrayName[0] = '[';
-              arrayName[1] = 'L';
-              strcpy(&arrayName[2], klass->data.name->chars());
-              arrayName[len + 2] = ';';
-
-#ifdef VERIFY_DEBUG
-              // This is only needed when we want to print the string to the
-              // screen while debugging.
-              arrayName[len + 3] = '\0';
-
-              debug_print("len: %d - old: '%s' - new: '%s'\n", len, klass->data.name->chars(), arrayName);
-#endif
-
-              return type (verifier->make_utf8_const( arrayName, len + 3 ),
-                           verifier);
-            }
-        }
-
+      jclass k = klass->getclass (verifier);
+      return type (_Jv_GetArrayClass (k, k->getClassLoaderInternal()),
+		   verifier);
     }
 
     bool isreference () const
@@ -1976,7 +1892,6 @@ private:
 	  case op_getstatic_4:
 	  case op_getstatic_8:
 	  case op_getstatic_a:
-	  case op_breakpoint:
 	  default:
 	    verify_fail ("unrecognized instruction in branch_prepass",
 			 start_PC);
@@ -2030,16 +1945,13 @@ private:
   {
     check_pool_index (index);
     _Jv_Constants *pool = &current_class->constants;
-    int tag = pool->tags[index];
-    if (tag == JV_CONSTANT_ResolvedString || tag == JV_CONSTANT_String)
+    if (pool->tags[index] == JV_CONSTANT_ResolvedString
+	|| pool->tags[index] == JV_CONSTANT_String)
       return type (&java::lang::String::class$, this);
-    else if (tag == JV_CONSTANT_Integer)
+    else if (pool->tags[index] == JV_CONSTANT_Integer)
       return type (int_type);
-    else if (tag == JV_CONSTANT_Float)
+    else if (pool->tags[index] == JV_CONSTANT_Float)
       return type (float_type);
-    else if (current_method->is_15
-	     && (tag == JV_CONSTANT_ResolvedClass || tag == JV_CONSTANT_Class))
-      return type (&java::lang::Class::class$, this);
     verify_fail ("String, int, or float constant expected", start_PC);
   }
 
@@ -2281,9 +2193,8 @@ private:
 	    // We only have to do this checking in the situation where
 	    // control flow falls through from the previous
 	    // instruction.  Otherwise merging is done at the time we
-	    // push the branch.  Note that we'll catch the
-	    // off-the-end problem just below.
-	    if (PC < current_method->code_length && states[PC] != NULL)
+	    // push the branch.
+	    if (states[PC] != NULL)
 	      {
 		// We've already visited this instruction.  So merge
 		// the states together.  It is simplest, but not most
@@ -3009,8 +2920,8 @@ private:
 	  case op_new:
 	    {
 	      type t = check_class_constant (get_ushort ());
-	      if (t.isarray ())
-		verify_fail ("type is array");
+	      if (t.isarray () || t.isinterface (this) || t.isabstract (this))
+		verify_fail ("type is array, interface, or abstract");
 	      t.set_uninitialized (start_PC, this);
 	      push_type (t);
 	    }
@@ -3154,7 +3065,6 @@ private:
 	  case op_getstatic_4:
 	  case op_getstatic_8:
 	  case op_getstatic_a:
-	  case op_breakpoint:
 	  default:
 	    // Unrecognized opcode.
 	    verify_fail ("unrecognized instruction in verify_instructions_0",

@@ -8,7 +8,6 @@ SUBDIRS = include testsuite
 EXTRA_DIST = LICENSE ChangeLog.v1 \
 	src/alpha/ffi.c src/alpha/osf.S src/alpha/ffitarget.h \
 	src/arm/ffi.c src/arm/sysv.S src/arm/ffitarget.h \
-	src/cris/ffi.c src/cris/sysv.S src/cris/ffitarget.h \
 	src/mips/ffi.c src/mips/n32.S src/mips/o32.S \
 	src/mips/ffitarget.h \
 	src/m32r/ffi.c src/m32r/sysv.S src/m32r/ffitarget.h \
@@ -24,10 +23,9 @@ EXTRA_DIST = LICENSE ChangeLog.v1 \
 	src/sh64/ffi.c src/sh64/sysv.S src/sh64/ffitarget.h \
 	src/sparc/v8.S src/sparc/v9.S src/sparc/ffitarget.h \
 	src/sparc/ffi.c \
-	src/x86/ffi.c src/x86/sysv.S src/x86/win32.S src/x86/darwin.S \
+	src/x86/ffi.c src/x86/sysv.S src/x86/win32.S \
 	src/x86/ffi64.c src/x86/unix64.S src/x86/ffitarget.h \
-	src/pa/ffi.c src/pa/linux.S src/pa/hpux32.S \
-	src/frv/eabi.S src/frv/ffitarget.h
+	src/pa/ffi.c src/pa/linux.S src/frv/eabi.S src/frv/ffitarget.h
 
 ## ################################################################
 
@@ -94,9 +92,6 @@ endif
 if X86_WIN32
 nodist_libffi_la_SOURCES += src/x86/ffi.c src/x86/win32.S
 endif
-if X86_DARWIN
-nodist_libffi_la_SOURCES += src/x86/ffi.c src/x86/darwin.S
-endif
 if SPARC
 nodist_libffi_la_SOURCES += src/sparc/ffi.c src/sparc/v8.S src/sparc/v9.S
 endif
@@ -121,14 +116,8 @@ endif
 if POWERPC_DARWIN
 nodist_libffi_la_SOURCES += src/powerpc/ffi_darwin.c src/powerpc/darwin.S src/powerpc/darwin_closure.S
 endif
-if POWERPC_FREEBSD
-nodist_libffi_la_SOURCES += src/powerpc/ffi.c src/powerpc/sysv.S src/powerpc/ppc_closure.S
-endif
 if ARM
 nodist_libffi_la_SOURCES += src/arm/sysv.S src/arm/ffi.c
-endif
-if LIBFFI_CRIS
-nodist_libffi_la_SOURCES += src/cris/sysv.S src/cris/ffi.c
 endif
 if FRV
 nodist_libffi_la_SOURCES += src/frv/eabi.S src/frv/ffi.c
@@ -145,11 +134,8 @@ endif
 if SH64
 nodist_libffi_la_SOURCES += src/sh64/sysv.S src/sh64/ffi.c
 endif
-if PA_LINUX
+if PA
 nodist_libffi_la_SOURCES += src/pa/linux.S src/pa/ffi.c
-endif
-if PA_HPUX
-nodist_libffi_la_SOURCES += src/pa/hpux32.S src/pa/ffi.c
 endif
 
 libffi_convenience_la_SOURCES = $(libffi_la_SOURCES)
@@ -161,8 +147,3 @@ libffi_la_LDFLAGS = -version-info `grep -v '^\#' $(srcdir)/libtool-version`
 
 AM_CPPFLAGS = -I. -I$(top_srcdir)/include -Iinclude -I$(top_srcdir)/src
 AM_CCASFLAGS = $(AM_CPPFLAGS)
-
-# No install-html support
-.PHONY: install-html
-install-html:
-

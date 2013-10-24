@@ -16,8 +16,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 /* trans-const.c -- convert constant values */
 
@@ -32,6 +32,12 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "trans.h"
 #include "trans-const.h"
 #include "trans-types.h"
+
+/* String constants.  */
+tree gfc_strconst_bounds;
+tree gfc_strconst_fault;
+tree gfc_strconst_wrong_return;
+tree gfc_strconst_current_filename;
 
 tree gfc_rank_cst[GFC_MAX_DIMENSIONS + 1];
 
@@ -80,13 +86,12 @@ gfc_build_string_const (int length, const char *s)
   return str;
 }
 
-/* Build a Fortran character constant from a zero-terminated string.
-   Since this is mainly used for error messages, the string will get
-   translated.  */
+/* Build a Fortran character constant from a zero-terminated string.  */
+
 tree
-gfc_build_cstring_const (const char *msgid)
+gfc_build_cstring_const (const char *s)
 {
-  return gfc_build_string_const (strlen (msgid) + 1, _(msgid));
+  return gfc_build_string_const (strlen (s) + 1, s);
 }
 
 /* Return a string constant with the given length.  Used for static
@@ -148,6 +153,17 @@ gfc_init_constants (void)
 
   for (n = 0; n <= GFC_MAX_DIMENSIONS; n++)
     gfc_rank_cst[n] = build_int_cst (gfc_array_index_type, n);
+
+  gfc_strconst_bounds = gfc_build_cstring_const ("Array bound mismatch");
+
+  gfc_strconst_fault =
+    gfc_build_cstring_const ("Array reference out of bounds");
+
+  gfc_strconst_wrong_return =
+    gfc_build_cstring_const ("Incorrect function return value");
+
+  gfc_strconst_current_filename =
+    gfc_build_cstring_const (gfc_option.source);
 }
 
 /* Converts a GMP integer into a backend tree node.  */
@@ -169,9 +185,9 @@ gfc_conv_mpz_to_tree (mpz_t i, int kind)
       size_t count;
 
       /* Since we know that the value is not zero (mpz_fits_slong_p),
-	 we know that at least one word will be written, but we don't know
+	 we know that at one word will be written, but we don't know
 	 about the second.  It's quicker to zero the second word before
-	 than conditionally clear it later.  */
+	 that conditionally clear it later.  */
       words[1] = 0;
 
       /* Extract the absolute value into words.  */
@@ -207,53 +223,59 @@ gfc_conv_mpfr_to_tree (mpfr_t f, int kind)
   tree res;
   tree type;
   mp_exp_t exp;
-  char *p, *q;
+  char *p;
+  char *q;
   int n;
-  REAL_VALUE_TYPE real;
+  int edigits;
 
-  n = gfc_validate_kind (BT_REAL, kind, false);
+  for (n = 0; gfc_real_kinds[n].kind != 0; n++)
+    {
+      if (gfc_real_kinds[n].kind == kind)
+	break;
+    }
+  gcc_assert (gfc_real_kinds[n].kind);
 
-  gcc_assert (gfc_real_kinds[n].radix == 2);
+  n = MAX (abs (gfc_real_kinds[n].min_exponent),
+	   abs (gfc_real_kinds[n].max_exponent));
+
+  edigits = 1;
+  while (n > 0)
+    {
+      n = n / 10;
+      edigits += 3;
+    }
+
+  if (kind == gfc_default_double_kind)
+    p = mpfr_get_str (NULL, &exp, 10, 17, f, GFC_RND_MODE);
+  else
+    p = mpfr_get_str (NULL, &exp, 10, 8, f, GFC_RND_MODE);
+
+
+  /* We also have one minus sign, "e", "." and a null terminator.  */
+  q = (char *) gfc_getmem (strlen (p) + edigits + 4);
+
+  if (p[0])
+    {
+      if (p[0] == '-')
+	{
+	  strcpy (&q[2], &p[1]);
+	  q[0] = '-';
+	  q[1] = '.';
+	}
+      else
+	{
+	  strcpy (&q[1], p);
+	  q[0] = '.';
+	}
+      strcat (q, "e");
+      sprintf (&q[strlen (q)], "%d", (int) exp);
+    }
+  else
+    {
+      strcpy (q, "0");
+    }
 
   type = gfc_get_real_type (kind);
-
-  /* Take care of Infinity and NaN.  */
-  if (mpfr_inf_p (f))
-    {
-      real_inf (&real);
-      if (mpfr_sgn (f) < 0)
-	real = REAL_VALUE_NEGATE(real);
-      res = build_real (type , real);
-      return res;
-    }
-
-  if (mpfr_nan_p (f))
-    {
-      real_nan (&real, "", 0, TYPE_MODE (type));
-      res = build_real (type , real);
-      return res;
-    }
-
-  /* mpfr chooses too small a number of hexadecimal digits if the
-     number of binary digits is not divisible by four, therefore we
-     have to explicitly request a sufficient number of digits here.  */
-  p = mpfr_get_str (NULL, &exp, 16, gfc_real_kinds[n].digits / 4 + 1,
-		    f, GFC_RND_MODE);
-
-  /* REAL_VALUE_ATOF expects the exponent for mantissa * 2**exp,
-     mpfr_get_str returns the exponent for mantissa * 16**exp, adjust
-     for that.  */
-  exp *= 4;
-
-  /* The additional 12 characters add space for the sprintf below.
-     This leaves 6 digits for the exponent which is certainly enough.  */
-  q = (char *) gfc_getmem (strlen (p) + 12);
-
-  if (p[0] == '-')
-    sprintf (q, "-0x.%sp%d", &p[1], (int) exp);
-  else
-    sprintf (q, "0x.%sp%d", p, (int) exp);
-
   res = build_real (type, REAL_VALUE_ATOF (q, TYPE_MODE (type)));
 
   gfc_free (q);
@@ -277,58 +299,29 @@ gfc_conv_constant_to_tree (gfc_expr * expr)
 {
   gcc_assert (expr->expr_type == EXPR_CONSTANT);
 
-  /* If it is converted from Hollerith constant, we build string constant
-     and VIEW_CONVERT to its type.  */
- 
   switch (expr->ts.type)
     {
     case BT_INTEGER:
-      if (expr->from_H)
-	return build1 (VIEW_CONVERT_EXPR,
-			gfc_get_int_type (expr->ts.kind),
-			gfc_build_string_const (expr->value.character.length,
-				expr->value.character.string));
-      else
-	return gfc_conv_mpz_to_tree (expr->value.integer, expr->ts.kind);
+      return gfc_conv_mpz_to_tree (expr->value.integer, expr->ts.kind);
 
     case BT_REAL:
-      if (expr->from_H)
-	return build1 (VIEW_CONVERT_EXPR,
-			gfc_get_real_type (expr->ts.kind),
-			gfc_build_string_const (expr->value.character.length,
-				expr->value.character.string));
-      else
-	return gfc_conv_mpfr_to_tree (expr->value.real, expr->ts.kind);
+      return gfc_conv_mpfr_to_tree (expr->value.real, expr->ts.kind);
 
     case BT_LOGICAL:
-      if (expr->from_H)
-	return build1 (VIEW_CONVERT_EXPR,
-			gfc_get_logical_type (expr->ts.kind),
-			gfc_build_string_const (expr->value.character.length,
-				expr->value.character.string));
-      else
-	return build_int_cst (gfc_get_logical_type (expr->ts.kind),
+      return build_int_cst (gfc_get_logical_type (expr->ts.kind),
 			    expr->value.logical);
 
     case BT_COMPLEX:
-      if (expr->from_H)
-	return build1 (VIEW_CONVERT_EXPR,
-			gfc_get_complex_type (expr->ts.kind),
-			gfc_build_string_const (expr->value.character.length,
-				expr->value.character.string));
-      else
-	{
-	  tree real = gfc_conv_mpfr_to_tree (expr->value.complex.r,
+      {
+	tree real = gfc_conv_mpfr_to_tree (expr->value.complex.r,
 					  expr->ts.kind);
-	  tree imag = gfc_conv_mpfr_to_tree (expr->value.complex.i,
+	tree imag = gfc_conv_mpfr_to_tree (expr->value.complex.i,
 					  expr->ts.kind);
 
-	  return build_complex (gfc_typenode_for_spec (&expr->ts),
-				real, imag);
-	}
+	return build_complex (NULL_TREE, real, imag);
+      }
 
     case BT_CHARACTER:
-    case BT_HOLLERITH:
       return gfc_build_string_const (expr->value.character.length,
 				     expr->value.character.string);
 

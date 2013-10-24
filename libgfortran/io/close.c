@@ -1,4 +1,4 @@
-/* Copyright (C) 2002, 2003, 2005 Free Software Foundation, Inc.
+/* Copyright (C) 2002-2003 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -24,85 +24,59 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with Libgfortran; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "libgfortran.h"
 #include "io.h"
-#include <limits.h>
 
 typedef enum
 { CLOSE_DELETE, CLOSE_KEEP, CLOSE_UNSPECIFIED }
 close_status;
 
-static const st_option status_opt[] = {
+static st_option status_opt[] = {
   {"keep", CLOSE_KEEP},
   {"delete", CLOSE_DELETE},
-  {NULL, 0}
+  {NULL}
 };
 
 
-extern void st_close (st_parameter_close *);
+extern void st_close (void);
 export_proto(st_close);
 
 void
-st_close (st_parameter_close *clp)
+st_close (void)
 {
   close_status status;
   gfc_unit *u;
-#if !HAVE_UNLINK_OPEN_FILE
-  char * path;
 
-  path = NULL;
-#endif
+  library_start ();
 
-  library_start (&clp->common);
+  status = (ioparm.status == NULL) ? CLOSE_UNSPECIFIED :
+    find_option (ioparm.status, ioparm.status_len, status_opt,
+		 "Bad STATUS parameter in CLOSE statement");
 
-  status = !(clp->common.flags & IOPARM_CLOSE_HAS_STATUS) ? CLOSE_UNSPECIFIED :
-    find_option (&clp->common, clp->status, clp->status_len,
-		 status_opt, "Bad STATUS parameter in CLOSE statement");
-
-  if ((clp->common.flags & IOPARM_LIBRETURN_MASK) != IOPARM_LIBRETURN_OK)
-  {
-    library_end ();
+  if (ioparm.library_return != LIBRARY_OK)
     return;
-  }
 
-  u = find_unit (clp->common.unit);
+  u = find_unit (ioparm.unit);
   if (u != NULL)
     {
       if (u->flags.status == STATUS_SCRATCH)
 	{
 	  if (status == CLOSE_KEEP)
-	    generate_error (&clp->common, ERROR_BAD_OPTION,
+	    generate_error (ERROR_BAD_OPTION,
 			    "Can't KEEP a scratch file on CLOSE");
-#if !HAVE_UNLINK_OPEN_FILE
-	  path = (char *) gfc_alloca (u->file_len + 1);
-          unpack_filename (path, u->file, u->file_len);
-#endif
 	}
       else
 	{
 	  if (status == CLOSE_DELETE)
-            {
-#if HAVE_UNLINK_OPEN_FILE
-	      delete_file (u);
-#else
-	      path = (char *) gfc_alloca (u->file_len + 1);
-              unpack_filename (path, u->file, u->file_len);
-#endif
-            }
+	    delete_file (u);
 	}
 
       close_unit (u);
-
-#if !HAVE_UNLINK_OPEN_FILE
-      if (path != NULL)
-        unlink (path);
-#endif
     }
 
-  /* CLOSE on unconnected unit is legal and a no-op: F95 std., 9.3.5. */ 
   library_end ();
 }

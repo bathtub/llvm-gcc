@@ -1,7 +1,6 @@
+/* APPLE LOCAL file mainline */
 /* Test calling super from within a category method.  */
-
 /* { dg-do compile } */
-
 #include <objc/objc.h>
 
 @interface NSObject
@@ -26,5 +25,6 @@
 + (int) test_func
 {
    return [super test_func];  /* { dg-bogus "invalid use of undefined type" } */
-}   /* { dg-bogus "forward declaration of" "" { target *-*-* } 28 } */
+}   /* { dg-bogus "forward declaration of" "" { target *-*-* } 27 } */
 @end
+

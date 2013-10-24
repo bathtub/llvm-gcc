@@ -1,6 +1,5 @@
 /* { dg-do compile } */
 /* { dg-options "-O1 -fdump-tree-cfg" } */
-/* { dg-skip-if "" { "*-*-*" } { "-fpic" "-fPIC" } { "" } } */
 double a;
 void t()
 {
@@ -18,4 +17,3 @@ void q()
 }
 /* We shouldnotice nothrow attribute.  */
 /* { dg-final { scan-tree-dump-times "exception" 0 "cfg"} } */
-/* { dg-final { cleanup-tree-dump "cfg" } } */

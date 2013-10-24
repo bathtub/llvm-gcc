@@ -1,6 +1,6 @@
-// natFloat.cc - Implementation of java.lang.VMFloat native methods.
+// natFloat.cc - Implementation of java.lang.Float native methods.
 
-/* Copyright (C) 1998, 1999, 2001, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2001  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -11,7 +11,6 @@ details.  */
 #include <config.h>
 
 #include <java/lang/Float.h>
-#include <java/lang/VMFloat.h>
 #include <jvm.h>
 
 union u
@@ -21,7 +20,7 @@ union u
 };
 
 jint 
-java::lang::VMFloat::floatToIntBits(jfloat value)
+java::lang::Float::floatToIntBits(jfloat value)
 {
   union u u;
   u.d = value;
@@ -35,7 +34,7 @@ java::lang::VMFloat::floatToIntBits(jfloat value)
 }
 
 jint 
-java::lang::VMFloat::floatToRawIntBits(jfloat value)
+java::lang::Float::floatToRawIntBits(jfloat value)
 {
   union u u;
   u.d = value;  
@@ -43,7 +42,7 @@ java::lang::VMFloat::floatToRawIntBits(jfloat value)
 }
 
 jfloat 
-java::lang::VMFloat::intBitsToFloat(jint bits)
+java::lang::Float::intBitsToFloat(jint bits)
 {
   union u u;
   u.l = bits;

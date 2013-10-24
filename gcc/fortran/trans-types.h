@@ -17,8 +17,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 
 #ifndef GFC_BACKEND_H
@@ -41,12 +41,10 @@ enum
 };
 
 extern GTY(()) tree gfc_array_index_type;
-extern GTY(()) tree gfc_array_range_type;
 extern GTY(()) tree gfc_character1_type_node;
 extern GTY(()) tree ppvoid_type_node;
 extern GTY(()) tree pvoid_type_node;
 extern GTY(()) tree pchar_type_node;
-
 /* This is the type used to hold the lengths of character variables.
    It must be the same as the corresponding definition in gfortran.h.  */
 /* TODO: This is still hardcoded as kind=4 in some bits of the compiler
@@ -96,5 +94,9 @@ int gfc_is_nodesc_array (gfc_symbol *);
 
 /* Return the DTYPE for an array.  */
 tree gfc_get_dtype (tree);
+/* APPLE LOCAL begin AltiVec */
+tree build_stmt (enum tree_code code ATTRIBUTE_UNUSED, ...);
+void store_init_value (tree decl ATTRIBUTE_UNUSED, tree init ATTRIBUTE_UNUSED);
+/* APPLE LOCAL end AltiVec */
 
 #endif

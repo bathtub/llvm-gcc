@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1992-2005 Free Software Foundation, Inc.          --
+--          Copyright (C) 1992-2003 Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -62,6 +62,18 @@ private
    --  child packages (there is one such child package for each tool that
    --  uses Switches to scan switches - Compiler/gnatbind/gnatmake/.
 
+   Bad_Switch : exception;
+   --  Exception raised if bad switch encountered
+
+   Bad_Switch_Value : exception;
+   --  Exception raised if bad switch value encountered
+
+   Missing_Switch_Value : exception;
+   --  Exception raised if no switch value encountered
+
+   Too_Many_Output_Files : exception;
+   --  Exception raised if the -o switch is encountered more than once
+
    Switch_Max_Value : constant := 999_999;
    --  Maximum value permitted in switches that take a value
 
@@ -69,8 +81,7 @@ private
      (Switch_Chars : String;
       Max          : Integer;
       Ptr          : in out Integer;
-      Result       : out Nat;
-      Switch       : Character);
+      Result       : out Nat);
    --  Scan natural integer parameter for switch. On entry, Ptr points
    --  just past the switch character, on exit it points past the last
    --  digit of the integer value.
@@ -79,14 +90,9 @@ private
      (Switch_Chars : String;
       Max          : Integer;
       Ptr          : in out Integer;
-      Result       : out Pos;
-      Switch       : Character);
+      Result       : out Pos);
    --  Scan positive integer parameter for switch. On entry, Ptr points
    --  just past the switch character, on exit it points past the last
    --  digit of the integer value.
-
-   procedure Bad_Switch (Switch : Character);
-   procedure Bad_Switch (Switch : String);
-   --  Fail with an appropriate message when a switch is not recognized
 
 end Switch;

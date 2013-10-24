@@ -57,179 +57,146 @@ ENTRY(ffi_closure_SYSV)
 	addi %r7,%r1,152
 
 	# make the call
-	bl ffi_closure_helper_SYSV@local
-.Lret:
+	bl JUMPTARGET(ffi_closure_helper_SYSV)
+
 	# now r3 contains the return type
 	# so use it to look up in a table
 	# so we know how to deal with each type
 
 	# look up the proper starting point in table
 	# by using return type as offset
-
-	mflr %r4		# move address of .Lret to r4
-	slwi %r3,%r3,4		# now multiply return type by 16
-	addi %r4, %r4, .Lret_type0 - .Lret
-	lwz %r0,148(%r1)
-	add %r3,%r3,%r4		# add contents of table to table address
+	addi %r5,%r1,112   # get pointer to results area
+	bl .Lget_ret_type0_addr # get pointer to .Lret_type0 into LR
+	mflr %r4           # move to r4
+	slwi %r3,%r3,4     # now multiply return type by 16
+	add %r3,%r3,%r4    # add contents of table to table address
 	mtctr %r3
-	bctr			# jump to it
+	bctr               # jump to it
 .LFE1:
 
 # Each of the ret_typeX code fragments has to be exactly 16 bytes long
 # (4 instructions). For cache effectiveness we align to a 16 byte boundary
 # first.
 	.align 4
+
+	nop
+	nop
+	nop
+.Lget_ret_type0_addr:
+	blrl
+
 # case FFI_TYPE_VOID
 .Lret_type0:
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+	b .Lfinish
+	nop
+	nop
 	nop
 
 # case FFI_TYPE_INT
-	lwz %r3,112+0(%r1)
-	mtlr %r0
-.Lfinish:
-	addi %r1,%r1,144
-	blr
+.Lret_type1:
+	lwz %r3,0(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_FLOAT
-	lfs %f1,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type2:
+	lfs %f1,0(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_DOUBLE
-	lfd %f1,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type3:
+	lfd %f1,0(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_LONGDOUBLE
-	lfd %f1,112+0(%r1)
-	lfd %f2,112+8(%r1)
-	mtlr %r0
+.Lret_type4:
+	lfd %f1,0(%r5)
 	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_UINT8
-	lbz %r3,112+3(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type5:
+	lbz %r3,3(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_SINT8
-	lbz %r3,112+3(%r1)
+.Lret_type6:
+	lbz %r3,3(%r5)
 	extsb %r3,%r3
-	mtlr %r0
 	b .Lfinish
+	nop
 
 # case FFI_TYPE_UINT16
-	lhz %r3,112+2(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type7:
+	lhz %r3,2(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_SINT16
-	lha %r3,112+2(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type8:
+	lha %r3,2(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_UINT32
-	lwz %r3,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type9:
+	lwz %r3,0(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_SINT32
-	lwz %r3,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type10:
+	lwz %r3,0(%r5)
+	b .Lfinish
+	nop
+	nop
 
 # case FFI_TYPE_UINT64
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	mtlr %r0
+.Lret_type11:
+	lwz %r3,0(%r5)
+	lwz %r4,4(%r5)
 	b .Lfinish
+	nop
 
 # case FFI_TYPE_SINT64
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	mtlr %r0
+.Lret_type12:
+	lwz %r3,0(%r5)
+	lwz %r4,4(%r5)
 	b .Lfinish
+	nop
 
 # case FFI_TYPE_STRUCT
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
+.Lret_type13:
+	b .Lfinish
+	nop
+	nop
 	nop
 
 # case FFI_TYPE_POINTER
-	lwz %r3,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
-
-# The return types below are only used when the ABI type is FFI_SYSV.
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 1. One byte struct.
-	lbz %r3,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 2. Two byte struct.
-	lhz %r3,112+0(%r1)
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 3. Three byte struct.
-	lwz %r3,112+0(%r1)
-	srwi %r3,%r3,8
-	mtlr %r0
+.Lret_type14:
+	lwz %r3,0(%r5)
 	b .Lfinish
+	nop
+	nop
 
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 4. Four byte struct.
-	lwz %r3,112+0(%r1)
+# case done
+.Lfinish:
+
+	lwz %r0,148(%r1)
 	mtlr %r0
 	addi %r1,%r1,144
 	blr
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 5. Five byte struct.
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	li %r5,24
-	b .Lstruct567
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 6. Six byte struct.
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	li %r5,16
-	b .Lstruct567
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 7. Seven byte struct.
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	li %r5,8
-	b .Lstruct567
-
-# case FFI_SYSV_TYPE_SMALL_STRUCT + 8. Eight byte struct.
-	lwz %r3,112+0(%r1)
-	lwz %r4,112+4(%r1)
-	mtlr %r0
-	b .Lfinish
-
-.Lstruct567:
-	subfic %r6,%r5,32
-	srw %r4,%r4,%r5
-	slw %r6,%r3,%r6
-	srw %r3,%r3,%r5
-	or %r4,%r6,%r4
-	mtlr %r0
-	addi %r1,%r1,144
-	blr
-
 END(ffi_closure_SYSV)
 
 	.section	".eh_frame",EH_FRAME_FLAGS,@progbits
@@ -274,9 +241,9 @@ END(ffi_closure_SYSV)
 	.uleb128 144
 	.byte	0x4	 # DW_CFA_advance_loc4
 	.4byte	.LCFI1-.LCFI0
-	.byte	0x11	 # DW_CFA_offset_extended_sf
+	.byte	0x2f	 # DW_CFA_GNU_negative_offset_extended
 	.uleb128 0x41
-	.sleb128 -1
+	.uleb128 0x1
 	.align 2
 .LEFDE1:
 

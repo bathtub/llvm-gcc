@@ -14,6 +14,7 @@ main_test (void)
 {
   const char *const s1 = "hello world";
   const char *s2, *s3;
+  int n = 6, x;
   
   if (strncmp (s1, "hello world", 12) != 0)
     abort();

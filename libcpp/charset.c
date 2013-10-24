@@ -16,12 +16,14 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
 #include "cpplib.h"
 #include "internal.h"
+/* APPLE LOCAL mainline UCNs 2005-04-17 3892809 */
+/* Remove include of ucnid.h */
 
 /* Character set handling for C-family languages.
 
@@ -486,7 +488,7 @@ conversion_loop (int (*const one_conversion)(iconv_t, const uchar **, size_t *,
 
       outbytesleft += OUTBUF_BLOCK_SIZE;
       to->asize += OUTBUF_BLOCK_SIZE;
-      to->text = XRESIZEVEC (uchar, to->text, to->asize);
+      to->text = xrealloc (to->text, to->asize);
       outbuf = to->text + to->asize - outbytesleft;
     }
 }
@@ -538,7 +540,7 @@ convert_no_conversion (iconv_t cd ATTRIBUTE_UNUSED,
   if (to->len + flen > to->asize)
     {
       to->asize = to->len + flen;
-      to->text = XRESIZEVEC (uchar, to->text, to->asize);
+      to->text = xrealloc (to->text, to->asize);
     }
   memcpy (to->text + to->len, from, flen);
   to->len += flen;
@@ -578,7 +580,7 @@ convert_using_iconv (iconv_t cd, const uchar *from, size_t flen,
 
       outbytesleft += OUTBUF_BLOCK_SIZE;
       to->asize += OUTBUF_BLOCK_SIZE;
-      to->text = XRESIZEVEC (uchar, to->text, to->asize);
+      to->text = xrealloc (to->text, to->asize);
       outbuf = (char *)to->text + to->asize - outbytesleft;
     }
 }
@@ -628,7 +630,7 @@ init_iconv_desc (cpp_reader *pfile, const char *to, const char *from)
       return ret;
     }
 
-  pair = (char *) alloca(strlen(to) + strlen(from) + 2);
+  pair = alloca(strlen(to) + strlen(from) + 2);
 
   strcpy(pair, from);
   strcat(pair, "/");
@@ -751,7 +753,7 @@ cpp_host_to_exec_charset (cpp_reader *pfile, cppchar_t c)
 
   /* This should never need to reallocate, but just in case... */
   tbuf.asize = 1;
-  tbuf.text = XNEWVEC (uchar, tbuf.asize);
+  tbuf.text = xmalloc (tbuf.asize);
   tbuf.len = 0;
 
   if (!APPLY_CONVERSION (pfile->narrow_cset_desc, sbuf, 1, &tbuf))
@@ -785,6 +787,8 @@ width_to_mask (size_t width)
     return ((size_t) 1 << width) - 1;
 }
 
+
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 /* A large table of unicode character information.  */
 enum {
   /* Valid in a C99 identifier?  */
@@ -909,6 +913,7 @@ ucn_valid_in_identifier (cpp_reader *pfile, cppchar_t c,
   if (CPP_OPTION (pfile, c99) && (ucnranges[mn].flags & DIG))
     return 2;
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
   return 1;
 }
 
@@ -922,9 +927,11 @@ ucn_valid_in_identifier (cpp_reader *pfile, cppchar_t c,
    designates a character in the basic source character set, then the
    program is ill-formed.
 
+   APPLE LOCAL begin mainline UCNs 2005-04-17 3892809
    *PSTR must be preceded by "\u" or "\U"; it is assumed that the
    buffer end is delimited by a non-hex digit.  Returns zero if the
    UCN has not been consumed.
+   APPLE LOCAL end mainline UCNs 2005-04-17 3892809
 
    Otherwise the nonzero value of the UCN, whether valid or invalid,
    is returned.  Diagnostics are emitted for invalid values.  PSTR
@@ -936,8 +943,10 @@ ucn_valid_in_identifier (cpp_reader *pfile, cppchar_t c,
 
 cppchar_t
 _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 		const uchar *limit, int identifier_pos,
 		struct normalize_state *nst)
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 {
   cppchar_t result, c;
   unsigned int length;
@@ -957,11 +966,13 @@ _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
   else if (str[-1] == 'U')
     length = 8;
   else
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
     {
       cpp_error (pfile, CPP_DL_ICE, "In _cpp_valid_ucn but not a UCN");
       length = 4;
     }
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
   result = 0;
   do
     {
@@ -973,6 +984,7 @@ _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
     }
   while (--length && str < limit);
 
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
   /* Partial UCNs are not valid in strings, but decompose into
      multiple tokens in identifiers, so we can't give a helpful
      error message in that case.  */
@@ -1022,6 +1034,7 @@ _cpp_valid_ucn (cpp_reader *pfile, const uchar **pstr,
    "universal character %.*s is not valid at the start of an identifier",
 		   (int) (str - base), base);
     }
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 
   if (result == 0)
     result = 1;
@@ -1043,11 +1056,13 @@ convert_ucn (cpp_reader *pfile, const uchar *from, const uchar *limit,
   int rval;
   struct cset_converter cvt
     = wide ? pfile->wide_cset_desc : pfile->narrow_cset_desc;
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
   struct normalize_state nst = INITIAL_NORMALIZE_STATE;
 
   from++;  /* Skip u/U.  */
   ucn = _cpp_valid_ucn (pfile, &from, limit, 0, &nst);
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
   rval = one_cppchar_to_utf8 (ucn, &bufp, &bytesleft);
   if (rval)
     {
@@ -1087,7 +1102,7 @@ emit_numeric_escape (cpp_reader *pfile, cppchar_t n,
       if (tbuf->len + nbwc > tbuf->asize)
 	{
 	  tbuf->asize += OUTBUF_BLOCK_SIZE;
-	  tbuf->text = XRESIZEVEC (uchar, tbuf->text, tbuf->asize);
+	  tbuf->text = xrealloc (tbuf->text, tbuf->asize);
 	}
 
       for (i = 0; i < nbwc; i++)
@@ -1105,7 +1120,7 @@ emit_numeric_escape (cpp_reader *pfile, cppchar_t n,
       if (tbuf->len + 1 > tbuf->asize)
 	{
 	  tbuf->asize += OUTBUF_BLOCK_SIZE;
-	  tbuf->text = XRESIZEVEC (uchar, tbuf->text, tbuf->asize);
+	  tbuf->text = xrealloc (tbuf->text, tbuf->asize);
 	}
       tbuf->text[tbuf->len++] = n;
     }
@@ -1277,14 +1292,8 @@ convert_escape (cpp_reader *pfile, const uchar *from, const uchar *limit,
 	cpp_error (pfile, CPP_DL_PEDWARN,
 		   "unknown escape sequence '\\%c'", (int) c);
       else
-	{
-	  /* diagnostic.c does not support "%03o".  When it does, this
-	     code can use %03o directly in the diagnostic again.  */
-	  char buf[32];
-	  sprintf(buf, "%03o", (int) c);
-	  cpp_error (pfile, CPP_DL_PEDWARN,
-		     "unknown escape sequence: '\\%s'", buf);
-	}
+	cpp_error (pfile, CPP_DL_PEDWARN,
+		   "unknown escape sequence: '\\%03o'", (int) c);
     }
 
   /* Now convert what we have to the execution character set.  */
@@ -1303,17 +1312,25 @@ convert_escape (cpp_reader *pfile, const uchar *from, const uchar *limit,
    false for failure.  */
 bool
 cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
-		      cpp_string *to, bool wide)
+		      /* APPLE LOCAL pascal strings */
+		      cpp_string *to, bool wide, bool pascal_p)
 {
   struct _cpp_strbuf tbuf;
   const uchar *p, *base, *limit;
   size_t i;
+  /* APPLE LOCAL begin pascal strings */
+  size_t width = CPP_OPTION (pfile, wchar_precision);
+  size_t cwidth = CPP_OPTION (pfile, char_precision);
+  size_t pascal_string_max_length = width_to_mask (wide ? width : cwidth);
+  size_t pascal_string_length_byte_size = ((wide ? width : cwidth)/cwidth);
+  /* APPLE LOCAL end pascal strings */
   struct cset_converter cvt
     = wide ? pfile->wide_cset_desc : pfile->narrow_cset_desc;
 
   tbuf.asize = MAX (OUTBUF_BLOCK_SIZE, from->len);
-  tbuf.text = XNEWVEC (uchar, tbuf.asize);
-  tbuf.len = 0;
+  tbuf.text = xmalloc (tbuf.asize);
+  /* APPLE LOCAL pascal strings */
+  tbuf.len = (pascal_p ? pascal_string_length_byte_size : 0);  /* Reserve space for Pascal length byte.  */
 
   for (i = 0; i < count; i++)
     {
@@ -1321,6 +1338,13 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
       if (*p == 'L') p++;
       p++; /* Skip leading quote.  */
       limit = from[i].text + from[i].len - 1; /* Skip trailing quote.  */
+      /* APPLE LOCAL begin pascal strings */
+      /* Handle narrow literals beginning with "\p..." specially, but only
+         if '-fpascal-strings' has been specified.  */
+      if (pascal_p && p[0] == '\\' && p[1] == 'p')
+        p += 2;
+      /* APPLE LOCAL end pascal strings */
+
 
       for (;;)
 	{
@@ -1340,10 +1364,37 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
 	  p = convert_escape (pfile, p + 1, limit, &tbuf, wide);
 	}
     }
+
+  /* APPLE LOCAL begin pascal strings */
+  /* For Pascal strings, compute the length byte. */
+  if (pascal_p)
+    {
+      if (wide)
+	{
+	  /* Conversion routine uses tbuf.len as the starting point in destination
+	     buffer. However we are adding string lenght at the beginning. Save tbuf.len
+	     and restore it later.  */
+	  size_t saved_tbuf_len = tbuf.len;
+	  unsigned char uclen = (unsigned char) (saved_tbuf_len/pascal_string_length_byte_size - 1);
+	  tbuf.len = 0;
+	  APPLY_CONVERSION (cvt, &uclen, 1, &tbuf);
+	  tbuf.len = saved_tbuf_len;
+	  if (tbuf.len/pascal_string_length_byte_size > pascal_string_max_length)
+	    cpp_error (pfile, CPP_DL_ERROR, "Pascal string is too long");
+	}
+      else
+	{
+	  *tbuf.text = (unsigned char) (tbuf.len - 1);
+	  if (tbuf.len > 256)
+	    cpp_error (pfile, CPP_DL_ERROR, "Pascal string is too long");
+	}
+    }
+  /* APPLE LOCAL end pascal strings */
+
   /* NUL-terminate the 'to' buffer and translate it to a cpp_string
      structure.  */
   emit_numeric_escape (pfile, 0, &tbuf, wide);
-  tbuf.text = XRESIZEVEC (uchar, tbuf.text, tbuf.len);
+  tbuf.text = xrealloc (tbuf.text, tbuf.len);
   to->text = tbuf.text;
   to->len = tbuf.len;
   return true;
@@ -1358,7 +1409,10 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
    in a string, but do not perform character set conversion.  */
 bool
 cpp_interpret_string_notranslate (cpp_reader *pfile, const cpp_string *from,
-				  size_t count,	cpp_string *to, bool wide)
+				  /* APPLE LOCAL begin pascal strings */
+				  size_t count,	cpp_string *to, bool wide,
+				  bool pascal_p)
+				  /* APPLE LOCAL end pascal strings */
 {
   struct cset_converter save_narrow_cset_desc = pfile->narrow_cset_desc;
   bool retval;
@@ -1366,7 +1420,8 @@ cpp_interpret_string_notranslate (cpp_reader *pfile, const cpp_string *from,
   pfile->narrow_cset_desc.func = convert_no_conversion;
   pfile->narrow_cset_desc.cd = (iconv_t) -1;
 
-  retval = cpp_interpret_string (pfile, from, count, to, wide);
+  /* APPLE LOCAL pascal strings */
+  retval = cpp_interpret_string (pfile, from, count, to, wide, pascal_p);
 
   pfile->narrow_cset_desc = save_narrow_cset_desc;
   return retval;
@@ -1414,7 +1469,14 @@ narrow_str_to_charconst (cpp_reader *pfile, cpp_string str,
       cpp_error (pfile, CPP_DL_WARNING,
 		 "character constant too long for its type");
     }
-  else if (i > 1 && CPP_OPTION (pfile, warn_multichar))
+  /* APPLE LOCAL begin -Wfour-char-constants */
+  else if ((i == 4 && CPP_OPTION (pfile, warn_four_char_constants))
+           || (i > 1 && CPP_OPTION (pfile, warn_multichar)
+               /* APPLE LOCAL begin 3222135 */
+               && (i != 4 || (CPP_PEDANTIC (pfile)
+                              && !CPP_IN_SYSTEM_HEADER (pfile)))))
+               /* APPLE LOCAL end 3222135 */
+    /* APPLE LOCAL end -Wfour-char-constants */
     cpp_error (pfile, CPP_DL_WARNING, "multi-character character constant");
 
   /* Multichar constants are of type int and therefore signed.  */
@@ -1510,7 +1572,8 @@ cpp_interpret_charconst (cpp_reader *pfile, const cpp_token *token,
       cpp_error (pfile, CPP_DL_ERROR, "empty character constant");
       return 0;
     }
-  else if (!cpp_interpret_string (pfile, &token->val.str, 1, &str, wide))
+  /* APPLE LOCAL pascal strings */
+  else if (!cpp_interpret_string (pfile, &token->val.str, 1, &str, wide, false))
     return 0;
 
   if (wide)
@@ -1523,6 +1586,7 @@ cpp_interpret_charconst (cpp_reader *pfile, const cpp_token *token,
 
   return result;
 }
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 
 /* Convert an identifier denoted by ID and LEN, which might contain
    UCN escapes, to the source character set, either UTF-8 or
@@ -1532,7 +1596,7 @@ _cpp_interpret_identifier (cpp_reader *pfile, const uchar *id, size_t len)
 {
   /* It turns out that a UCN escape always turns into fewer characters
      than the escape itself, so we can allocate a temporary in advance.  */
-  uchar * buf = (uchar *) alloca (len + 1);
+  uchar * buf = alloca (len + 1);
   uchar * bufp = buf;
   size_t idp;
   
@@ -1577,6 +1641,7 @@ _cpp_interpret_identifier (cpp_reader *pfile, const uchar *id, size_t len)
 				  buf, bufp - buf, HT_ALLOC));
 }
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 /* Convert an input buffer (containing the complete contents of one
    source file) from INPUT_CHARSET to the source character set.  INPUT
    points to the input buffer, SIZE is its allocated size, and LEN is
@@ -1604,7 +1669,7 @@ _cpp_convert_input (cpp_reader *pfile, const char *input_charset,
   else
     {
       to.asize = MAX (65536, len);
-      to.text = XNEWVEC (uchar, to.asize);
+      to.text = xmalloc (to.asize);
       to.len = 0;
 
       if (!APPLY_CONVERSION (input_cset, input, len, &to))
@@ -1622,7 +1687,7 @@ _cpp_convert_input (cpp_reader *pfile, const char *input_charset,
   /* Resize buffer if we allocated substantially too much, or if we
      haven't enough space for the \n-terminator.  */
   if (to.len + 4096 < to.asize || to.len >= to.asize)
-    to.text = XRESIZEVEC (uchar, to.text, to.len + 1);
+    to.text = xrealloc (to.text, to.len + 1);
 
   /* If the file is using old-school Mac line endings (\r only),
      terminate with another \r, not an \n, so that we do not mistake
@@ -1670,3 +1735,29 @@ _cpp_default_encoding (void)
 
   return current_encoding;
 }
+/* APPLE LOCAL begin radar 2996215 */
+/* This routine is used to convert  utf-8 to utf-16 character format. FROM, FLEN
+   are the input character buffer and its length. Upon success, utf-16 characters are
+   returned in TO buffer and size of returned buffer in TO_LEN. Function returns true
+   upon success and false when it fails to do the conversion.
+*/
+
+bool
+cpp_utf8_utf16 (cpp_reader *pfile, const uchar *from, size_t flen, 
+		uchar **to, size_t *to_len)
+{
+  struct cset_converter cvt;
+  struct _cpp_strbuf tbuf;
+ 
+  cvt.cd = CPP_OPTION (pfile, bytes_big_endian) ? (iconv_t)1 : (iconv_t)0;
+  cvt.func = convert_utf8_utf16;
+  tbuf.asize = OUTBUF_BLOCK_SIZE;
+  tbuf.text = xmalloc (tbuf.asize);
+  tbuf.len = 0;
+  if (!APPLY_CONVERSION (cvt, from, flen, &tbuf))
+    return false;
+  *to = tbuf.text;
+  *to_len = tbuf.len;
+  return true;
+}
+/* APPLE LOCAL end radar 2996215 */

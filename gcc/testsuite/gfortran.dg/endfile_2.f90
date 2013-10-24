@@ -9,5 +9,4 @@
       call abort ! should never get here
       stop
  0023 continue
-      close(8,status='delete')
       end

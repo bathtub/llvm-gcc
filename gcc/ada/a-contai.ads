@@ -2,7 +2,7 @@
 --                                                                          --
 --                         GNAT LIBRARY COMPONENTS                          --
 --                                                                          --
---                       A D A . C O N T A I N E R S                        --
+--                              ADA.CONTAINERS                              --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
@@ -14,7 +14,7 @@
 ------------------------------------------------------------------------------
 
 package Ada.Containers is
-   pragma Pure;
+pragma Pure (Containers);
 
    type Hash_Type is mod 2**32;
    type Count_Type is range 0 .. 2**31 - 1;

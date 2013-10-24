@@ -13,10 +13,11 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+
 with Ada.Strings.Maps;
 
 package Ada.Strings.Fixed is
-   pragma Preelaborate;
+pragma Preelaborate (Fixed);
 
    --------------------------------------------------------------
    -- Copy Procedure for Strings of Possibly Different Lengths --

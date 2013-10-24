@@ -13,7 +13,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -29,8 +29,8 @@
 
 #include <locale>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std 
+{
   // Definitions for locale::id of standard facets that are specialized.
  locale::id codecvt<char, char, mbstate_t>::id;
 
@@ -149,5 +149,4 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   do_always_noconv() const throw()
   { return false; }
 #endif //  _GLIBCXX_USE_WCHAR_T
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std

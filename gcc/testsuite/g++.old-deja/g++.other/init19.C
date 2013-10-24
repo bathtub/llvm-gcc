@@ -1,4 +1,5 @@
-// { dg-do run { xfail { ! cxa_atexit } } }
+// APPLE LOCAL file 4484188
+// { dg-do run }
 #include <stdlib.h>
 
 #define assert(x) do { if (! (x)) abort(); } while (0)

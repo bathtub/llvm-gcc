@@ -1,5 +1,5 @@
 /* Implementation of the MATMUL intrinsic
-   Copyright 2002, 2005, 2006 Free Software Foundation, Inc.
+   Copyright 2002, 2005 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,30 +25,26 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
 #include <assert.h>
 #include "libgfortran.h"
 
-#if defined (HAVE_GFC_LOGICAL_4)
-
 /* Dimensions: retarray(x,y) a(x, count) b(count,y).
    Either a or b can be rank 1.  In this case x or y is 1.  */
 
-extern void matmul_l4 (gfc_array_l4 * const restrict, 
-	gfc_array_l4 * const restrict, gfc_array_l4 * const restrict);
+extern void matmul_l4 (gfc_array_l4 *, gfc_array_l4 *, gfc_array_l4 *);
 export_proto(matmul_l4);
 
 void
-matmul_l4 (gfc_array_l4 * const restrict retarray, 
-	gfc_array_l4 * const restrict a, gfc_array_l4 * const restrict b)
+matmul_l4 (gfc_array_l4 * retarray, gfc_array_l4 * a, gfc_array_l4 * b)
 {
-  const GFC_INTEGER_4 * restrict abase;
-  const GFC_INTEGER_4 * restrict bbase;
-  GFC_LOGICAL_4 * restrict dest;
+  GFC_INTEGER_4 *abase;
+  GFC_INTEGER_4 *bbase;
+  GFC_LOGICAL_4 *dest;
   index_type rxstride;
   index_type rystride;
   index_type xcount;
@@ -58,8 +54,8 @@ matmul_l4 (gfc_array_l4 * const restrict retarray,
   index_type x;
   index_type y;
 
-  const GFC_INTEGER_4 * restrict pa;
-  const GFC_INTEGER_4 * restrict pb;
+  GFC_INTEGER_4 *pa;
+  GFC_INTEGER_4 *pb;
   index_type astride;
   index_type bstride;
   index_type count;
@@ -95,7 +91,7 @@ matmul_l4 (gfc_array_l4 * const restrict retarray,
           
       retarray->data
 	= internal_malloc_size (sizeof (GFC_LOGICAL_4) * size0 ((array_t *) retarray));
-      retarray->offset = 0;
+      retarray->base = 0;
     }
 
   abase = a->data;
@@ -111,6 +107,13 @@ matmul_l4 (gfc_array_l4 * const restrict retarray,
       bbase = GFOR_POINTER_L8_TO_L4 (bbase);
     }
   dest = retarray->data;
+
+  if (retarray->dim[0].stride == 0)
+    retarray->dim[0].stride = 1;
+  if (a->dim[0].stride == 0)
+    a->dim[0].stride = 1;
+  if (b->dim[0].stride == 0)
+    b->dim[0].stride = 1;
 
 
   if (GFC_DESCRIPTOR_RANK (retarray) == 1)
@@ -187,5 +190,3 @@ matmul_l4 (gfc_array_l4 * const restrict retarray,
       dest += rystride - (rxstride * xcount);
     }
 }
-
-#endif

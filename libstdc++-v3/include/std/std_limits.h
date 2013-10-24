@@ -1,7 +1,6 @@
-// The template and inlines for the numeric_limits classes. -*- C++ -*- 
+// The template and inlines for the -*- C++ -*- numeric_limits classes.
 
-// Copyright (C) 1999, 2000, 2001, 2002, 2003, 2005 
-// Free Software Foundation, Inc.
+// Copyright (C) 1999, 2000, 2001, 2002, 2003 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -16,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -147,8 +146,8 @@
   (__glibcxx_digits (T) * 643 / 2136)
 
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   /**
    *  @brief Describes the rounding style for floating-point types.
    *
@@ -1008,7 +1007,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       static const bool has_quiet_NaN = __FLT_HAS_QUIET_NAN__;
       static const bool has_signaling_NaN = has_quiet_NaN;
       static const float_denorm_style has_denorm
-	= bool(__FLT_HAS_DENORM__) ? denorm_present : denorm_absent;
+	= bool(__FLT_DENORM_MIN__) ? denorm_present : denorm_absent;
       static const bool has_denorm_loss = __glibcxx_float_has_denorm_loss;
 
       static float infinity() throw()
@@ -1065,7 +1064,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       static const bool has_quiet_NaN = __DBL_HAS_QUIET_NAN__;
       static const bool has_signaling_NaN = has_quiet_NaN;
       static const float_denorm_style has_denorm
-	= bool(__DBL_HAS_DENORM__) ? denorm_present : denorm_absent;
+	= bool(__DBL_DENORM_MIN__) ? denorm_present : denorm_absent;
       static const bool has_denorm_loss = __glibcxx_double_has_denorm_loss;
 
       static double infinity() throw()
@@ -1122,7 +1121,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       static const bool has_quiet_NaN = __LDBL_HAS_QUIET_NAN__;
       static const bool has_signaling_NaN = has_quiet_NaN;
       static const float_denorm_style has_denorm
-	= bool(__LDBL_HAS_DENORM__) ? denorm_present : denorm_absent;
+	= bool(__LDBL_DENORM_MIN__) ? denorm_present : denorm_absent;
       static const bool has_denorm_loss
 	= __glibcxx_long_double_has_denorm_loss;
 
@@ -1149,7 +1148,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #undef __glibcxx_long_double_traps
 #undef __glibcxx_long_double_tinyness_before
 
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #undef __glibcxx_signed
 #undef __glibcxx_min

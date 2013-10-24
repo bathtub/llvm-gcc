@@ -20,7 +20,6 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="..\..\..;..\..\masmx86"
 				PreprocessorDefinitions="WIN32;ZLIB_WINAPI"
 				ExceptionHandling="FALSE"
 				RuntimeLibrary="5"
@@ -62,7 +61,6 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="..\..\..;..\..\masmx86"
 				PreprocessorDefinitions="WIN32;ZLIB_WINAPI"
 				StringPooling="TRUE"
 				ExceptionHandling="FALSE"
@@ -104,7 +102,6 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="..\..\..;..\..\masmx86"
 				PreprocessorDefinitions="WIN32;ZLIB_WINAPI;ASMV;ASMINF"
 				StringPooling="TRUE"
 				ExceptionHandling="FALSE"
@@ -120,7 +117,7 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLibrarianTool"
-				AdditionalOptions="..\..\masmx86\gvmat32.obj ..\..\masmx86\inffas32.obj /NODEFAULTLIB "
+				AdditionalOptions="gvmat32.obj inffas32.obj /NODEFAULTLIB "
 				OutputFile=".\zlibstat\zlibstat.lib"
 				SuppressStartupBanner="TRUE"/>
 			<Tool
@@ -147,7 +144,6 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="..\..\..;..\..\masmx86"
 				PreprocessorDefinitions="WIN32;ZLIB_WINAPI"
 				StringPooling="TRUE"
 				ExceptionHandling="FALSE"
@@ -186,49 +182,49 @@
 			Name="Source Files"
 			Filter="">
 			<File
-				RelativePath="..\..\..\adler32.c">
+				RelativePath=".\adler32.c">
 			</File>
 			<File
-				RelativePath="..\..\..\compress.c">
+				RelativePath=".\compress.c">
 			</File>
 			<File
-				RelativePath="..\..\..\crc32.c">
+				RelativePath=".\crc32.c">
 			</File>
 			<File
-				RelativePath="..\..\..\deflate.c">
+				RelativePath=".\deflate.c">
 			</File>
 			<File
-				RelativePath="..\..\masmx86\gvmat32c.c">
+				RelativePath=".\gvmat32c.c">
 			</File>
 			<File
-				RelativePath="..\..\..\gzio.c">
+				RelativePath=".\gzio.c">
 			</File>
 			<File
-				RelativePath="..\..\..\infback.c">
+				RelativePath=".\infback.c">
 			</File>
 			<File
-				RelativePath="..\..\..\inffast.c">
+				RelativePath=".\inffast.c">
 			</File>
 			<File
-				RelativePath="..\..\..\inflate.c">
+				RelativePath=".\inflate.c">
 			</File>
 			<File
-				RelativePath="..\..\..\inftrees.c">
+				RelativePath=".\inftrees.c">
 			</File>
 			<File
-				RelativePath="..\..\minizip\ioapi.c">
+				RelativePath=".\ioapi.c">
 			</File>
 			<File
-				RelativePath="..\..\..\trees.c">
+				RelativePath=".\trees.c">
 			</File>
 			<File
-				RelativePath="..\..\..\uncompr.c">
+				RelativePath=".\uncompr.c">
 			</File>
 			<File
-				RelativePath="..\..\minizip\unzip.c">
+				RelativePath=".\unzip.c">
 			</File>
 			<File
-				RelativePath="..\..\minizip\zip.c">
+				RelativePath=".\zip.c">
 			</File>
 			<File
 				RelativePath=".\zlib.rc">
@@ -237,7 +233,7 @@
 				RelativePath=".\zlibvc.def">
 			</File>
 			<File
-				RelativePath="..\..\..\zutil.c">
+				RelativePath=".\zutil.c">
 			</File>
 		</Filter>
 	</Files>

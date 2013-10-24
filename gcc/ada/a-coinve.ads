@@ -2,11 +2,11 @@
 --                                                                          --
 --                         GNAT LIBRARY COMPONENTS                          --
 --                                                                          --
---    A D A . C O N T A I N E R S . I N D E F I N I T E _ V E C T O R S     --
+--                    ADA.CONTAINERS.INDEFINITE_VECTORS                     --
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 2004-2005, Free Software Foundation, Inc.         --
+--             Copyright (C) 2004 Free Software Foundation, Inc.            --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -20,8 +20,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -38,18 +38,22 @@ with Ada.Streams;
 
 generic
    type Index_Type is range <>;
+
    type Element_Type (<>) is private;
 
    with function "=" (Left, Right : Element_Type) return Boolean is <>;
 
 package Ada.Containers.Indefinite_Vectors is
-   pragma Preelaborate;
+pragma Preelaborate (Indefinite_Vectors);
 
    subtype Extended_Index is Index_Type'Base
      range Index_Type'First - 1 ..
-           Index_Type'Min (Index_Type'Base'Last - 1, Index_Type'Last) + 1;
+            Index_Type'Last +
+            Boolean'Pos (Index_Type'Base'Last > Index_Type'Last);
 
    No_Index : constant Extended_Index := Extended_Index'First;
+
+   subtype Index_Subtype is Index_Type;
 
    type Vector is tagged private;
 
@@ -58,8 +62,6 @@ package Ada.Containers.Indefinite_Vectors is
    Empty_Vector : constant Vector;
 
    No_Element : constant Cursor;
-
-   function "=" (Left, Right : Vector) return Boolean;
 
    function To_Vector (Length : Count_Type) return Vector;
 
@@ -75,6 +77,8 @@ package Ada.Containers.Indefinite_Vectors is
 
    function "&" (Left, Right : Element_Type) return Vector;
 
+   function "=" (Left, Right : Vector) return Boolean;
+
    function Capacity (Container : Vector) return Count_Type;
 
    procedure Reserve_Capacity
@@ -82,10 +86,6 @@ package Ada.Containers.Indefinite_Vectors is
       Capacity  : Count_Type);
 
    function Length (Container : Vector) return Count_Type;
-
-   procedure Set_Length
-     (Container : in out Vector;
-      Length    : Count_Type);
 
    function Is_Empty (Container : Vector) return Boolean;
 
@@ -103,16 +103,6 @@ package Ada.Containers.Indefinite_Vectors is
 
    function Element (Position : Cursor) return Element_Type;
 
-   procedure Replace_Element
-     (Container : in out Vector;
-      Index     : Index_Type;
-      New_Item  : Element_Type);
-
-   procedure Replace_Element
-     (Container : in out Vector;
-      Position  : Cursor;
-      New_Item  : Element_Type);
-
    procedure Query_Element
      (Container : Vector;
       Index     : Index_Type;
@@ -123,14 +113,24 @@ package Ada.Containers.Indefinite_Vectors is
       Process  : not null access procedure (Element : Element_Type));
 
    procedure Update_Element
-     (Container : in out Vector;
+     (Container : Vector;
       Index     : Index_Type;
       Process   : not null access procedure (Element : in out Element_Type));
 
    procedure Update_Element
-     (Container : in out Vector;
-      Position  : Cursor;
-      Process   : not null access procedure (Element : in out Element_Type));
+     (Position : Cursor;
+      Process  : not null access procedure (Element : in out Element_Type));
+
+   procedure Replace_Element
+     (Container : Vector;
+      Index     : Index_Type;
+      By        : Element_Type);
+
+   procedure Replace_Element
+     (Position : Cursor;
+      By       : Element_Type);
+
+   procedure Assign (Target : in out Vector; Source : Vector);
 
    procedure Move (Target : in out Vector; Source : in out Vector);
 
@@ -198,9 +198,13 @@ package Ada.Containers.Indefinite_Vectors is
       Position  : out Cursor;
       Count     : Count_Type := 1);
 
+   procedure Set_Length
+     (Container : in out Vector;
+      Length    : Count_Type);
+
    procedure Delete
      (Container : in out Vector;
-      Index     : Extended_Index;
+      Index     : Extended_Index;  --  TODO: verify
       Count     : Count_Type := 1);
 
    procedure Delete
@@ -216,12 +220,6 @@ package Ada.Containers.Indefinite_Vectors is
      (Container : in out Vector;
       Count     : Count_Type := 1);
 
-   procedure Reverse_Elements (Container : in out Vector);
-
-   procedure Swap (Container : in out Vector; I, J : Index_Type);
-
-   procedure Swap (Container : in out Vector; I, J : Cursor);
-
    function First_Index (Container : Vector) return Index_Type;
 
    function First (Container : Vector) return Cursor;
@@ -234,13 +232,13 @@ package Ada.Containers.Indefinite_Vectors is
 
    function Last_Element (Container : Vector) return Element_Type;
 
-   function Next (Position : Cursor) return Cursor;
+   procedure Swap (Container : Vector; I, J : Index_Type);
 
-   procedure Next (Position : in out Cursor);
+   procedure Swap (I, J : Cursor);
 
-   function Previous (Position : Cursor) return Cursor;
-
-   procedure Previous (Position : in out Cursor);
+   generic
+      with function "<" (Left, Right : Element_Type) return Boolean is <>;
+   procedure Generic_Sort (Container : Vector);
 
    function Find_Index
      (Container : Vector;
@@ -250,21 +248,29 @@ package Ada.Containers.Indefinite_Vectors is
    function Find
      (Container : Vector;
       Item      : Element_Type;
-      Position  : Cursor := No_Element) return Cursor;
+       Position  : Cursor := No_Element) return Cursor;
 
    function Reverse_Find_Index
      (Container : Vector;
       Item      : Element_Type;
       Index     : Index_Type := Index_Type'Last) return Extended_Index;
 
-   function Reverse_Find
-     (Container : Vector;
-      Item      : Element_Type;
-      Position  : Cursor := No_Element) return Cursor;
+   function Reverse_Find (Container : Vector;
+                          Item      : Element_Type;
+                          Position  : Cursor := No_Element)
+      return Cursor;
 
    function Contains
      (Container : Vector;
       Item      : Element_Type) return Boolean;
+
+   function Next (Position : Cursor) return Cursor;
+
+   function Previous (Position : Cursor) return Cursor;
+
+   procedure Next (Position : in out Cursor);
+
+   procedure Previous (Position : in out Cursor);
 
    function Has_Element (Position : Cursor) return Boolean;
 
@@ -275,18 +281,6 @@ package Ada.Containers.Indefinite_Vectors is
    procedure Reverse_Iterate
      (Container : Vector;
       Process   : not null access procedure (Position : Cursor));
-
-   generic
-      with function "<" (Left, Right : Element_Type) return Boolean is <>;
-   package Generic_Sorting is
-
-      function Is_Sorted (Container : Vector) return Boolean;
-
-      procedure Sort (Container : in out Vector);
-
-      procedure Merge (Target : in out Vector; Source : in out Vector);
-
-   end Generic_Sorting;
 
 private
 
@@ -313,8 +307,6 @@ private
    type Vector is new Controlled with record
       Elements : Elements_Access;
       Last     : Extended_Index := No_Index;
-      Busy     : Natural := 0;
-      Lock     : Natural := 0;
    end record;
 
    procedure Adjust (Container : in out Vector);
@@ -324,18 +316,18 @@ private
    use Ada.Streams;
 
    procedure Write
-     (Stream    : not null access Root_Stream_Type'Class;
+     (Stream    : access Root_Stream_Type'Class;
       Container : Vector);
 
    for Vector'Write use Write;
 
    procedure Read
-     (Stream    : not null access Root_Stream_Type'Class;
+     (Stream    : access Root_Stream_Type'Class;
       Container : out Vector);
 
    for Vector'Read use Read;
 
-   Empty_Vector : constant Vector := (Controlled with null, No_Index, 0, 0);
+   Empty_Vector : constant Vector := Vector'(Controlled with null, No_Index);
 
    type Vector_Access is access constant Vector;
    for Vector_Access'Storage_Size use 0;
@@ -345,18 +337,7 @@ private
       Index     : Index_Type := Index_Type'First;
    end record;
 
-   procedure Write
-     (Stream   : not null access Root_Stream_Type'Class;
-      Position : Cursor);
-
-   for Cursor'Write use Write;
-
-   procedure Read
-     (Stream   : not null access Root_Stream_Type'Class;
-      Position : out Cursor);
-
-   for Cursor'Read use Read;
-
    No_Element : constant Cursor := Cursor'(null, Index_Type'First);
 
 end Ada.Containers.Indefinite_Vectors;
+

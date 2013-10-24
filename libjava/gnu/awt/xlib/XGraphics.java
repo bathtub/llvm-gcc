@@ -83,8 +83,7 @@ public class XGraphics implements Cloneable, DirectRasterGraphics
   
   public void setColor(Color color)
   {
-    if (color != null)
-      context.setForeground(config.getPixel(color));
+    context.setForeground(config.getPixel(color));
   }
 
   public void setPaintMode()

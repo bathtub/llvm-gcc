@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Check ObjC class layout follows the ABI (informally)
    set in the past.  ObjC structs must be laid out as if
    all ivars, including those inherited from superclasses,
@@ -6,6 +7,7 @@
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-options "-Wpadded" } */
 /* { dg-do run } */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
 
 #include <objc/objc.h>
 #include <objc/Object.h>

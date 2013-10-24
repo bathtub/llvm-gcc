@@ -1,5 +1,5 @@
 /* Loop unswitching for GNU compiler.
-   Copyright (C) 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -15,8 +15,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -104,11 +104,13 @@ compare_and_jump_seq (rtx op0, rtx op1, enum rtx_code comp, rtx label, int prob,
     {
       /* A hack -- there seems to be no easy generic way how to make a
 	 conditional jump from a ccmode comparison.  */
-      gcc_assert (cinsn);
+      if (!cinsn)
+	abort ();
       cond = XEXP (SET_SRC (pc_set (cinsn)), 0);
-      gcc_assert (GET_CODE (cond) == comp);
-      gcc_assert (rtx_equal_p (op0, XEXP (cond, 0)));
-      gcc_assert (rtx_equal_p (op1, XEXP (cond, 1)));
+      if (GET_CODE (cond) != comp
+	  || !rtx_equal_p (op0, XEXP (cond, 0))
+	  || !rtx_equal_p (op1, XEXP (cond, 1)))
+	abort ();
       emit_jump_insn (copy_insn (PATTERN (cinsn)));
       jump = get_last_insn ();
       JUMP_LABEL (jump) = JUMP_LABEL (cinsn);
@@ -117,7 +119,8 @@ compare_and_jump_seq (rtx op0, rtx op1, enum rtx_code comp, rtx label, int prob,
     }
   else
     {
-      gcc_assert (!cinsn);
+      if (cinsn)
+	abort ();
 
       op0 = force_operand (op0, NULL_RTX);
       op1 = force_operand (op1, NULL_RTX);
@@ -172,7 +175,7 @@ unswitch_loops (struct loops *loops)
 static rtx
 may_unswitch_on (basic_block bb, struct loop *loop, rtx *cinsn)
 {
-  rtx test, at, op[2], stest;
+  rtx test, at, insn, op[2], stest;
   struct rtx_iv iv;
   unsigned i;
   enum machine_mode mode;
@@ -205,7 +208,8 @@ may_unswitch_on (basic_block bb, struct loop *loop, rtx *cinsn)
       if (CONSTANT_P (op[i]))
 	continue;
 
-      if (!iv_analyze (at, op[i], &iv))
+      insn = iv_get_reaching_def (at, op[i]);
+      if (!iv_analyze (insn, op[i], &iv))
 	return NULL_RTX;
       if (iv.step != const0_rtx
 	  || iv.first_special)
@@ -377,7 +381,8 @@ unswitch_single_loop (struct loops *loops, struct loop *loop,
 
   /* Unswitch the loop on this condition.  */
   nloop = unswitch_loop (loops, loop, bbs[i], cond, cinsn);
-  gcc_assert (nloop);
+  if (!nloop)
+  abort ();
 
   /* Invoke itself on modified loops.  */
   unswitch_single_loop (loops, nloop, rconds, num + 1);
@@ -402,41 +407,45 @@ unswitch_loop (struct loops *loops, struct loop *loop, basic_block unswitch_on,
 	       rtx cond, rtx cinsn)
 {
   edge entry, latch_edge, true_edge, false_edge, e;
-  basic_block switch_bb, unswitch_on_alt;
+  basic_block switch_bb, unswitch_on_alt, src;
   struct loop *nloop;
   sbitmap zero_bitmap;
   int irred_flag, prob;
   rtx seq;
 
   /* Some sanity checking.  */
-  gcc_assert (flow_bb_inside_loop_p (loop, unswitch_on));
-  gcc_assert (EDGE_COUNT (unswitch_on->succs) == 2);
-  gcc_assert (just_once_each_iteration_p (loop, unswitch_on));
-  gcc_assert (!loop->inner);
-  gcc_assert (flow_bb_inside_loop_p (loop, EDGE_SUCC (unswitch_on, 0)->dest));
-  gcc_assert (flow_bb_inside_loop_p (loop, EDGE_SUCC (unswitch_on, 1)->dest));
+  if (!flow_bb_inside_loop_p (loop, unswitch_on))
+    abort ();
+  if (EDGE_COUNT (unswitch_on->succs) != 2)
+    abort ();
+  if (!just_once_each_iteration_p (loop, unswitch_on))
+    abort ();
+  if (loop->inner)
+    abort ();
+  if (!flow_bb_inside_loop_p (loop, EDGE_SUCC (unswitch_on, 0)->dest))
+    abort ();
+  if (!flow_bb_inside_loop_p (loop, EDGE_SUCC (unswitch_on, 1)->dest))
+    abort ();
 
   entry = loop_preheader_edge (loop);
 
   /* Make a copy.  */
+  src = entry->src;
   irred_flag = entry->flags & EDGE_IRREDUCIBLE_LOOP;
   entry->flags &= ~EDGE_IRREDUCIBLE_LOOP;
   zero_bitmap = sbitmap_alloc (2);
   sbitmap_zero (zero_bitmap);
   if (!duplicate_loop_to_header_edge (loop, entry, loops, 1,
 	zero_bitmap, NULL, NULL, NULL, 0))
-    {
-      sbitmap_free (zero_bitmap);
-      return NULL;
-    }
-  sbitmap_free (zero_bitmap);
+    return NULL;
+  free (zero_bitmap);
   entry->flags |= irred_flag;
 
   /* Record the block with condition we unswitch on.  */
-  unswitch_on_alt = get_bb_copy (unswitch_on);
+  unswitch_on_alt = unswitch_on->rbi->copy;
   true_edge = BRANCH_EDGE (unswitch_on_alt);
   false_edge = FALLTHRU_EDGE (unswitch_on);
-  latch_edge = single_succ_edge (get_bb_copy (loop->latch));
+  latch_edge = EDGE_SUCC (loop->latch->rbi->copy, 0);
 
   /* Create a block with the condition.  */
   prob = true_edge->probability;
@@ -467,7 +476,7 @@ unswitch_loop (struct loops *loops, struct loop *loop, basic_block unswitch_on,
 
   /* Loopify from the copy of LOOP body, constructing the new loop.  */
   nloop = loopify (loops, latch_edge,
-		   single_pred_edge (get_bb_copy (loop->header)), switch_bb,
+		   EDGE_PRED (loop->header->rbi->copy, 0), switch_bb,
 		   BRANCH_EDGE (switch_bb), FALLTHRU_EDGE (switch_bb), true);
 
   /* Remove branches that are now unreachable in new loops.  */

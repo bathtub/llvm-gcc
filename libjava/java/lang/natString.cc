@@ -1,6 +1,6 @@
 // natString.cc - Implementation of java.lang.String native methods.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -15,7 +15,6 @@ details.  */
 
 #include <gcj/cni.h>
 #include <java/lang/Character.h>
-#include <java/lang/CharSequence.h>
 #include <java/lang/String.h>
 #include <java/lang/IndexOutOfBoundsException.h>
 #include <java/lang/ArrayIndexOutOfBoundsException.h>
@@ -130,6 +129,7 @@ rehash ()
     {
       strhash_size = 1024;
       strhash = (jstring *) _Jv_AllocBytes (strhash_size * sizeof (jstring));
+      memset (strhash, 0, strhash_size * sizeof (jstring));
     }
   else
     {
@@ -137,6 +137,7 @@ rehash ()
       jstring* ptr = strhash + i;
       int nsize = strhash_size * 2;
       jstring *next = (jstring *) _Jv_AllocBytes (nsize * sizeof (jstring));
+      memset (next, 0, nsize * sizeof (jstring));
 
       while (--i >= 0)
 	{
@@ -371,11 +372,11 @@ _Jv_FormatInt (jchar* bufend, jint num)
   if (num < 0)
     {
       isNeg = true;
-      if (num != (jint) -2147483648U)
-	num = -(num);
-      else
+      num = -(num);
+      if (num < 0)
 	{
-	  // Handle special case of MIN_VALUE.
+	  // Must be MIN_VALUE, so handle this special case.
+	  // FIXME use 'unsigned jint' for num.
 	  *--ptr = '8';
 	  num = 214748364;
 	}
@@ -409,7 +410,8 @@ _Jv_NewString(const jchar *chars, jsize len)
 {
   jstring str = _Jv_AllocString(len);
   jchar* data = JvGetStringChars (str);
-  memcpy (data, chars, len * sizeof (jchar));
+  while (--len >= 0)
+    *data++ = *chars++;
   return str;
 }
 
@@ -533,20 +535,16 @@ java::lang::String::equals(jobject anObject)
   jstring other = (jstring) anObject;
   if (count != other->count)
     return false;
-
-  // If both have cached hash codes, check that.  If the cached hash
-  // codes are zero, don't bother trying to compute them.
-  int myHash = cachedHashCode;
-  int otherHash = other->cachedHashCode;
-  if (myHash && otherHash && myHash != otherHash)
-    return false;
-
-  // We could see if both are interned, and return false.  But that
-  // seems too expensive.
-
+  /* if both are interned, return false. */
+  jint i = count;
   jchar *xptr = JvGetStringChars (this);
   jchar *yptr = JvGetStringChars (other);
-  return ! memcmp (xptr, yptr, count * sizeof (jchar));
+  while (--i >= 0)
+    {
+      if (*xptr++ != *yptr++)
+	return false;
+    }
+  return true;
 }
 
 jboolean
@@ -559,19 +557,11 @@ java::lang::String::contentEquals(java::lang::StringBuffer* buffer)
     return false;
   if (data == buffer->value)
     return true; // Possible if shared.
+  jint i = count;
   jchar *xptr = JvGetStringChars(this);
   jchar *yptr = elements(buffer->value);
-  return ! memcmp (xptr, yptr, count * sizeof (jchar));
-}
-
-jboolean
-java::lang::String::contentEquals(java::lang::CharSequence *seq)
-{
-  if (seq->length() != count)
-    return false;
-  jchar *value = JvGetStringChars(this);
-  for (int i = 0; i < count; ++i)
-    if (value[i] != seq->charAt(i))
+  while (--i >= 0)
+    if (*xptr++ != *yptr++)
       return false;
   return true;
 }
@@ -598,8 +588,9 @@ java::lang::String::getChars(jint srcBegin, jint srcEnd,
     throw new ArrayIndexOutOfBoundsException;
   jchar *dPtr = elements (dst) + dstBegin;
   jchar *sPtr = JvGetStringChars (this) + srcBegin;
-  jint i = srcEnd - srcBegin;
-  memcpy (dPtr, sPtr, i * sizeof (jchar));
+  jint i = srcEnd-srcBegin;
+  while (--i >= 0)
+    *dPtr++ = *sPtr++;
 }
 
 jbyteArray
@@ -615,8 +606,6 @@ java::lang::String::getBytes (jstring enc)
   while (todo > 0 || converter->havePendingBytes())
     {
       converter->setOutput(buffer, bufpos);
-      // We only really need to do a single write.
-      converter->setFinished();
       int converted = converter->write(this, offset, todo, NULL);
       bufpos = converter->count;
       if (converted == 0 && bufpos == converter->count)
@@ -666,7 +655,8 @@ java::lang::String::toCharArray()
   jchar *dPtr = elements (array);
   jchar *sPtr = JvGetStringChars (this);
   jint i = count;
-  memcpy (dPtr, sPtr, i * sizeof (jchar));
+  while (--i >= 0)
+    *dPtr++ = *sPtr++;
   return array;
 }
 
@@ -703,7 +693,12 @@ java::lang::String::regionMatches (jint toffset,
   jchar *tptr = JvGetStringChars (this) + toffset;
   jchar *optr = JvGetStringChars (other) + ooffset;
   jint i = len;
-  return ! memcmp (tptr, optr, i * sizeof (jchar));
+  while (--i >= 0)
+    {
+      if (*tptr++ != *optr++)
+	return false;
+    }
+  return true;
 }
 
 jint
@@ -736,20 +731,25 @@ java::lang::String::regionMatches (jboolean ignoreCase, jint toffset,
   jchar *optr = JvGetStringChars (other) + ooffset;
   jint i = len;
   if (ignoreCase)
-    {
-      while (--i >= 0)
-	{
-	  jchar tch = *tptr++;
-	  jchar och = *optr++;
-	  if ((java::lang::Character::toLowerCase (tch)
-	       != java::lang::Character::toLowerCase (och))
-	      && (java::lang::Character::toUpperCase (tch)
-		  != java::lang::Character::toUpperCase (och)))
-	    return false;
-	}
-      return true;
-    }
-  return ! memcmp (tptr, optr, i * sizeof (jchar));
+    while (--i >= 0)
+      {
+	jchar tch = *tptr++;
+	jchar och = *optr++;
+	if ((java::lang::Character::toLowerCase (tch)
+	     != java::lang::Character::toLowerCase (och))
+	    && (java::lang::Character::toUpperCase (tch)
+		!= java::lang::Character::toUpperCase (och)))
+	  return false;
+      }
+  else
+    while (--i >= 0)
+      {
+	jchar tch = *tptr++;
+	jchar och = *optr++;
+	if (tch != och)
+	  return false;
+      }
+  return true;
 }
 
 jboolean
@@ -760,7 +760,12 @@ java::lang::String::startsWith (jstring prefix, jint toffset)
     return false;
   jchar *xptr = JvGetStringChars (this) + toffset;
   jchar *yptr = JvGetStringChars (prefix);
-  return ! memcmp (xptr, yptr, i * sizeof (jchar));
+  while (--i >= 0)
+    {
+      if (*xptr++ != *yptr++)
+	return false;
+    }
+  return true;
 }
 
 jint
@@ -852,11 +857,12 @@ java::lang::String::concat(jstring str)
   jchar *dstPtr = JvGetStringChars(result);
   jchar *srcPtr = JvGetStringChars(this);
   jint i = count;
-  memcpy (dstPtr, srcPtr, i * sizeof (jchar));
-  dstPtr += i;
+  while (--i >= 0)
+    *dstPtr++ = *srcPtr++;
   srcPtr = JvGetStringChars(str);
   i = str->count;
-  memcpy (dstPtr, srcPtr, i * sizeof (jchar));
+  while (--i >= 0)
+    *dstPtr++ = *srcPtr++;
   return result;
 }
 
@@ -1031,7 +1037,8 @@ java::lang::String::valueOf(jcharArray data, jint offset, jint count)
   jstring result = JvAllocString(count);
   jchar *sPtr = elements (data) + offset;
   jchar *dPtr = JvGetStringChars(result);
-  memcpy (dPtr, sPtr, count * sizeof (jchar));
+  while (--count >= 0)
+    *dPtr++ = *sPtr++;
   return result;
 }
 

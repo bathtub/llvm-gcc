@@ -1,5 +1,5 @@
 /* Subroutines for gcc2 for pdp11.
-   Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2001, 2004, 2005
+   Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2001, 2004
    Free Software Foundation, Inc.
    Contributed by Michael K. Gschwind (mike@vlsivie.tuwien.ac.at).
 
@@ -17,8 +17,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -138,7 +138,6 @@ decode_pdp11_d (const struct real_format *fmt ATTRIBUTE_UNUSED,
 /* This is where the condition code register lives.  */
 /* rtx cc0_reg_rtx; - no longer needed? */
 
-static bool pdp11_handle_option (size_t, const char *, int);
 static rtx find_addr_reg (rtx); 
 static const char *singlemove_string (rtx *);
 static bool pdp11_assemble_integer (rtx, unsigned int, int);
@@ -167,12 +166,6 @@ static bool pdp11_return_in_memory (tree, tree);
 #undef TARGET_ASM_CLOSE_PAREN
 #define TARGET_ASM_CLOSE_PAREN "]"
 
-#undef TARGET_DEFAULT_TARGET_FLAGS
-#define TARGET_DEFAULT_TARGET_FLAGS \
-  (MASK_FPU | MASK_45 | MASK_ABSHI_BUILTIN | TARGET_UNIX_ASM_DEFAULT)
-#undef TARGET_HANDLE_OPTION
-#define TARGET_HANDLE_OPTION pdp11_handle_option
-
 #undef TARGET_RTX_COSTS
 #define TARGET_RTX_COSTS pdp11_rtx_costs
 
@@ -181,23 +174,6 @@ static bool pdp11_return_in_memory (tree, tree);
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 
-/* Implement TARGET_HANDLE_OPTION.  */
-
-static bool
-pdp11_handle_option (size_t code, const char *arg ATTRIBUTE_UNUSED,
-		     int value ATTRIBUTE_UNUSED)
-{
-  switch (code)
-    {
-    case OPT_m10:
-      target_flags &= ~(MASK_40 | MASK_45);
-      return true;
-
-    default:
-      return true;
-    }
-}
-
 /* Nonzero if OP is a valid second operand for an arithmetic insn.  */
 
 int
@@ -245,7 +221,7 @@ pdp11_output_function_prologue (FILE *stream, HOST_WIDE_INT size)
     {
       fprintf (stream, "\t/*abuse empty parameter slot for locals!*/\n");
       if (size > 2)
-	asm_fprintf (stream, "\tsub $%#wo, sp\n", size - 2);
+	fprintf(stream, "\tsub $%#o, sp\n", size - 2);
 
     }
 }
@@ -285,7 +261,7 @@ pdp11_output_function_prologue (FILE *stream, HOST_WIDE_INT size)
 
     /* make frame */
     if (fsize)							
-	asm_fprintf (stream, "\tsub $%#wo, sp\n", fsize);
+	fprintf (stream, "\tsub $%#o, sp\n", fsize);			
 
     /* save CPU registers  */
     for (regno = 0; regno < 8; regno++)				
@@ -315,10 +291,11 @@ pdp11_output_function_prologue (FILE *stream, HOST_WIDE_INT size)
 	    && regs_ever_live[regno]
 	    && ! call_used_regs[regno])
 	{
-	  gcc_assert (via_ac != -1);
-	  fprintf (stream, "\tldd %s, %s\n",
-		   reg_names[regno], reg_names[via_ac]);
-	  fprintf (stream, "\tstd %s, -(sp)\n", reg_names[via_ac]);
+	    if (via_ac == -1)
+		abort();
+	    
+	    fprintf (stream, "\tldd %s, %s\n", reg_names[regno], reg_names[via_ac]);
+	    fprintf (stream, "\tstd %s, -(sp)\n", reg_names[via_ac]);
 	}
     }
 
@@ -409,7 +386,8 @@ pdp11_output_function_epilogue (FILE *stream, HOST_WIDE_INT size)
 		&& regs_ever_live[i]
 		&& ! call_used_regs[i])
 	    {
-	        gcc_assert (LOAD_FPU_REG_P(via_ac));
+		if (! LOAD_FPU_REG_P(via_ac))
+		    abort();
 		    
 		fprintf(stream, "\tldd %#o(r5), %s\n", (-fsize-k)&0xffff, reg_names[via_ac]);
 		fprintf(stream, "\tstd %s, %s\n", reg_names[via_ac], reg_names[i]);
@@ -440,7 +418,8 @@ pdp11_output_function_epilogue (FILE *stream, HOST_WIDE_INT size)
 		&& regs_ever_live[i]
 		&& ! call_used_regs[i])
 	    {
-	        gcc_assert (LOAD_FPU_REG_P(via_ac));
+		if (! LOAD_FPU_REG_P(via_ac))
+		    abort();
 		    
 		fprintf(stream, "\tldd (sp)+, %s\n", reg_names[via_ac]);
 		fprintf(stream, "\tstd %s, %s\n", reg_names[via_ac], reg_names[i]);
@@ -521,7 +500,8 @@ output_move_double (rtx *operands)
      supposed to allow to happen.  Abort if we get one,
      because generating code for these cases is painful.  */
 
-  gcc_assert (optype0 != RNDOP && optype1 != RNDOP);
+  if (optype0 == RNDOP || optype1 == RNDOP)
+    abort ();
 
   /* If one operand is decrementing and one is incrementing
      decrement the former register explicitly
@@ -581,9 +561,11 @@ output_move_double (rtx *operands)
 	    latehalf[1] = GEN_INT (INTVAL(operands[1]) >> 16);
 	    operands[1] = GEN_INT (INTVAL(operands[1]) & 0xff);
 	}
-	else
-	  /* immediate 32 bit values not allowed */
-	  gcc_assert (GET_CODE (operands[1]) != CONST_DOUBLE);
+      else if (GET_CODE (operands[1]) == CONST_DOUBLE)
+	{
+	    /* immediate 32 bit values not allowed */
+	    abort();
+	}
     }
   else
     latehalf[1] = operands[1];
@@ -693,13 +675,15 @@ output_move_quad (rtx *operands)
      supposed to allow to happen.  Abort if we get one,
      because generating code for these cases is painful.  */
 
-  gcc_assert (optype0 != RNDOP && optype1 != RNDOP);
+  if (optype0 == RNDOP || optype1 == RNDOP)
+    abort ();
   
   /* check if we move a CPU reg to an FPU reg, or vice versa! */
   if (optype0 == REGOP && optype1 == REGOP)
       /* bogus - 64 bit cannot reside in CPU! */
-      gcc_assert (!CPU_REG_P(REGNO(operands[0]))
-		  && !CPU_REG_P (REGNO(operands[1])));
+      if (CPU_REG_P(REGNO(operands[0]))
+	  || CPU_REG_P (REGNO(operands[1])))
+	  abort();
   
   if (optype0 == REGOP || optype1 == REGOP)
   {
@@ -793,7 +777,7 @@ output_move_quad (rtx *operands)
 	  latehalf[1] = const0_rtx;
 	}
       else
-	gcc_unreachable ();
+	abort();
     }
   else
     latehalf[1] = operands[1];
@@ -987,7 +971,7 @@ print_operand_address (FILE *file, register rtx addr)
 	}
       if (offset != 0)
 	{
-	  gcc_assert (addr == 0);
+	  if (addr != 0) abort ();
 	  addr = offset;
 	}
       if (reg1 != 0 && GET_CODE (reg1) == MULT)
@@ -1014,15 +998,17 @@ print_operand_address (FILE *file, register rtx addr)
 	output_address (addr);
       if (breg != 0)
 	{
-	  gcc_assert (GET_CODE (breg) == REG);
+	  if (GET_CODE (breg) != REG)
+	    abort ();
 	  fprintf (file, "(%s)", reg_names[REGNO (breg)]);
 	}
       if (ireg != 0)
 	{
 	  if (GET_CODE (ireg) == MULT)
 	    ireg = XEXP (ireg, 0);
-	  gcc_assert (GET_CODE (ireg) == REG);
-	  gcc_unreachable(); /* ??? */
+	  if (GET_CODE (ireg) != REG)
+	    abort ();
+	  abort();
 	  fprintf (file, "[%s]", reg_names[REGNO (ireg)]);
 	}
       break;
@@ -1193,7 +1179,7 @@ pdp11_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total)
 }
 
 const char *
-output_jump (const char *pos, const char *neg, int length)
+output_jump(const char *pos, const char *neg, int length)
 {
     static int x = 0;
     
@@ -1228,7 +1214,7 @@ output_jump (const char *pos, const char *neg, int length)
 	
       default:
 	
-	gcc_unreachable ();
+	abort();
     }
     
 }
@@ -1657,8 +1643,10 @@ output_addr_const_pdp11 (FILE *file, rtx x)
   switch (GET_CODE (x))
     {
     case PC:
-      gcc_assert (flag_pic);
-      putc ('.', file);
+      if (flag_pic)
+	putc ('.', file);
+      else
+	abort ();
       break;
 
     case SYMBOL_REF:
@@ -1691,8 +1679,10 @@ output_addr_const_pdp11 (FILE *file, rtx x)
       if (GET_MODE (x) == VOIDmode)
 	{
 	  /* We can use %o if the number is one word and positive.  */
-	  gcc_assert (!CONST_DOUBLE_HIGH (x));
-	  fprintf (file, "%#ho", (unsigned short) CONST_DOUBLE_LOW (x));
+	  if (CONST_DOUBLE_HIGH (x))
+	    abort (); /* Should we just silently drop the high part?  */
+	  else
+	    fprintf (file, "%#ho", (unsigned short) CONST_DOUBLE_LOW (x));
 	}
       else
 	/* We can't handle floating point constants;

@@ -2,8 +2,11 @@
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-options "-fnext-runtime" } */
 /* { dg-do compile { target *-*-darwin* } } */
+/* APPLE LOCAL radar 4492976 */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @interface Base: Object 
 - (void)setValues;
@@ -21,4 +24,5 @@
 -(void)checkValues { }
 @end
 
-/* { dg-final { scan-assembler "L_OBJC_SYMBOLS.*:\n\t.long\t0\n\t.long\t0\n\t.short\t2\n\t.short\t0\n\t.long\tL_OBJC_CLASS_Derived.*\n\t.long\tL_OBJC_CLASS_Base.*\n" } } */
+/* APPLE LOCAL testing */
+/* { dg-final { scan-assembler "L_OBJC_SYMBOLS.*:\n\t.long\t0\n\t.long\t0\n\t.(short|word)\t2\n\t.(short|word)\t0\n\t.long\tL_OBJC_CLASS_Derived.*\n\t.long\tL_OBJC_CLASS_Base.*\n" } } */

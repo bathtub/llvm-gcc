@@ -1,4 +1,5 @@
-/* Copyright (C) 2003, 2004, 2005, 2006, 2007 Free Software Foundation, Inc.
+/* APPLE LOCAL file mainline 2005-06-30 Radar 4131077 */
+/* Copyright (C) 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -14,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /* As a special exception, if you include this header file into source
    files compiled by GCC, this header file does not by itself cause
@@ -40,15 +41,18 @@ typedef int __v4si __attribute__ ((__vector_size__ (16)));
 typedef short __v8hi __attribute__ ((__vector_size__ (16)));
 typedef char __v16qi __attribute__ ((__vector_size__ (16)));
 
-/* The Intel API is flexible enough that we must allow aliasing with other
-   vector types, and their scalar components.  */
-typedef long long __m128i __attribute__ ((__vector_size__ (16), __may_alias__));
-typedef double __m128d __attribute__ ((__vector_size__ (16), __may_alias__));
+typedef __v2di __m128i;
+typedef __v2df __m128d;
 
 /* Create a selector for use with the SHUFPD instruction.  */
 #define _MM_SHUFFLE2(fp1,fp0) \
  (((fp1) << 1) | (fp0))
 
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#define __always_inline__ __always_inline__, __nodebug__
+/* APPLE LOCAL end nodebug inline 4152603 */
+
+/* APPLE LOCAL begin radar 4152603 */
 /* Create a vector with element 0 as F and the rest zero.  */
 static __inline __m128d __attribute__((__always_inline__))
 _mm_set_sd (double __F)
@@ -604,38 +608,9 @@ _mm_set_epi8 (char __q15, char __q14, char __q13, char __q12,
   };
 }
 
-/* Set all of the elements of the vector to A.  */
-
-static __inline __m128i __attribute__((__always_inline__))
-_mm_set1_epi64x (long long __A)
-{
-  return _mm_set_epi64x (__A, __A);
-}
-
-static __inline __m128i __attribute__((__always_inline__))
-_mm_set1_epi64 (__m64 __A)
-{
-  return _mm_set_epi64 (__A, __A);
-}
-
-static __inline __m128i __attribute__((__always_inline__))
-_mm_set1_epi32 (int __A)
-{
-  return _mm_set_epi32 (__A, __A, __A, __A);
-}
-
-static __inline __m128i __attribute__((__always_inline__))
-_mm_set1_epi16 (short __A)
-{
-  return _mm_set_epi16 (__A, __A, __A, __A, __A, __A, __A, __A);
-}
-
-static __inline __m128i __attribute__((__always_inline__))
-_mm_set1_epi8 (char __A)
-{
-  return _mm_set_epi8 (__A, __A, __A, __A, __A, __A, __A, __A,
-		       __A, __A, __A, __A, __A, __A, __A, __A);
-}
+/* APPLE LOCAL begin 4220129 */
+/* functions moved to end of file */
+/* APPLE LOCAL end 4220129 */
 
 /* Create a vector of Qi, where i is the element number.
    The parameter order is reversed from the _mm_set_epi* functions.  */
@@ -683,11 +658,13 @@ _mm_loadu_si128 (__m128i const *__P)
   return (__m128i) __builtin_ia32_loaddqu ((char const *)__P);
 }
 
+/* APPLE LOCAL begin 4099020 */
 static __inline __m128i __attribute__((__always_inline__))
 _mm_loadl_epi64 (__m128i const *__P)
 {
-  return _mm_set_epi64 ((__m64)0LL, *(__m64 *)__P);
+  return  (__m128i)__builtin_ia32_loadlv4si ((__v2si *)__P);
 }
+/* APPLE LOCAL end 4099020 */
 
 static __inline void __attribute__((__always_inline__))
 _mm_store_si128 (__m128i *__P, __m128i __B)
@@ -701,11 +678,13 @@ _mm_storeu_si128 (__m128i *__P, __m128i __B)
   __builtin_ia32_storedqu ((char *)__P, (__v16qi)__B);
 }
 
+/* APPLE LOCAL begin 4099020 */
 static __inline void __attribute__((__always_inline__))
 _mm_storel_epi64 (__m128i *__P, __m128i __B)
 {
-  *(long long *)__P = __builtin_ia32_vec_ext_v2di ((__v2di)__B, 0);
+  __builtin_ia32_storelv4si ((__v2si *)__P, __B);
 }
+/* APPLE LOCAL end 4099020 */
 
 static __inline __m64 __attribute__((__always_inline__))
 _mm_movepi64_pi64 (__m128i __B)
@@ -719,11 +698,13 @@ _mm_movpi64_epi64 (__m64 __A)
   return _mm_set_epi64 ((__m64)0LL, __A);
 }
 
+/* APPLE LOCAL begin 4099020 */
 static __inline __m128i __attribute__((__always_inline__))
 _mm_move_epi64 (__m128i __A)
 {
-  return _mm_set_epi64 ((__m64)0LL, _mm_movepi64_pi64 (__A));
+  return (__m128i)__builtin_ia32_movqv4si ((__v4si)__A) ;
 }
+/* APPLE LOCAL end 4099020 */
 
 /* Create a vector of zeros.  */
 static __inline __m128i __attribute__((__always_inline__))
@@ -876,7 +857,8 @@ _mm_cvtss_sd (__m128d __A, __m128 __B)
   return (__m128d)__builtin_ia32_cvtss2sd ((__v2df) __A, (__v4sf)__B);
 }
 
-#define _mm_shuffle_pd(__A, __B, __C) ((__m128d)__builtin_ia32_shufpd ((__v2df)__A, (__v2df)__B, (__C)))
+/* APPLE LOCAL 5814283 */
+#define _mm_shuffle_pd(__A, __B, __C) ((__m128d)__builtin_ia32_shufpd ((__v2df)(__A), (__v2df)(__B), (__C)))
 
 static __inline __m128d __attribute__((__always_inline__))
 _mm_unpackhi_pd (__m128d __A, __m128d __B)
@@ -1100,7 +1082,6 @@ _mm_mul_epu32 (__m128i __A, __m128i __B)
   return (__m128i)__builtin_ia32_pmuludq128 ((__v4si)__A, (__v4si)__B);
 }
 
-#if 0
 static __inline __m128i __attribute__((__always_inline__))
 _mm_slli_epi16 (__m128i __A, int __B)
 {
@@ -1118,16 +1099,7 @@ _mm_slli_epi64 (__m128i __A, int __B)
 {
   return (__m128i)__builtin_ia32_psllqi128 ((__v2di)__A, __B);
 }
-#else
-#define _mm_slli_epi16(__A, __B) \
-  ((__m128i)__builtin_ia32_psllwi128 ((__v8hi)(__A), __B))
-#define _mm_slli_epi32(__A, __B) \
-  ((__m128i)__builtin_ia32_pslldi128 ((__v8hi)(__A), __B))
-#define _mm_slli_epi64(__A, __B) \
-  ((__m128i)__builtin_ia32_psllqi128 ((__v8hi)(__A), __B))
-#endif
 
-#if 0
 static __inline __m128i __attribute__((__always_inline__))
 _mm_srai_epi16 (__m128i __A, int __B)
 {
@@ -1139,24 +1111,18 @@ _mm_srai_epi32 (__m128i __A, int __B)
 {
   return (__m128i)__builtin_ia32_psradi128 ((__v4si)__A, __B);
 }
-#else
-#define _mm_srai_epi16(__A, __B) \
-  ((__m128i)__builtin_ia32_psrawi128 ((__v8hi)(__A), __B))
-#define _mm_srai_epi32(__A, __B) \
-  ((__m128i)__builtin_ia32_psradi128 ((__v8hi)(__A), __B))
-#endif
 
 #if 0
 static __m128i __attribute__((__always_inline__))
-_mm_srli_si128 (__m128i __A, int __B)
+_mm_srli_si128 (__m128i __A, const int __B)
 {
-  return ((__m128i)__builtin_ia32_psrldqi128 (__A, __B * 8));
+  return ((__m128i)__builtin_ia32_psrldqi128 (__A, __B))
 }
 
 static __m128i __attribute__((__always_inline__))
-_mm_srli_si128 (__m128i __A, int __B)
+_mm_srli_si128 (__m128i __A, const int __B)
 {
-  return ((__m128i)__builtin_ia32_pslldqi128 (__A, __B * 8));
+  return ((__m128i)__builtin_ia32_pslldqi128 (__A, __B))
 }
 #else
 #define _mm_srli_si128(__A, __B) \
@@ -1165,7 +1131,6 @@ _mm_srli_si128 (__m128i __A, int __B)
   ((__m128i)__builtin_ia32_pslldqi128 (__A, (__B) * 8))
 #endif
 
-#if 0
 static __inline __m128i __attribute__((__always_inline__))
 _mm_srli_epi16 (__m128i __A, int __B)
 {
@@ -1183,61 +1148,53 @@ _mm_srli_epi64 (__m128i __A, int __B)
 {
   return (__m128i)__builtin_ia32_psrlqi128 ((__v2di)__A, __B);
 }
-#else
-#define _mm_srli_epi16(__A, __B) \
-  ((__m128i)__builtin_ia32_psrlwi128 ((__v8hi)(__A), __B))
-#define _mm_srli_epi32(__A, __B) \
-  ((__m128i)__builtin_ia32_psrldi128 ((__v4si)(__A), __B))
-#define _mm_srli_epi64(__A, __B) \
-  ((__m128i)__builtin_ia32_psrlqi128 ((__v4si)(__A), __B))
-#endif
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_sll_epi16 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psllw128((__v8hi)__A, (__v8hi)__B);
+  return _mm_slli_epi16 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_sll_epi32 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_pslld128((__v4si)__A, (__v4si)__B);
+  return _mm_slli_epi32 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_sll_epi64 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psllq128((__v2di)__A, (__v2di)__B);
+  return _mm_slli_epi64 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_sra_epi16 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psraw128 ((__v8hi)__A, (__v8hi)__B);
+  return _mm_srai_epi16 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_sra_epi32 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psrad128 ((__v4si)__A, (__v4si)__B);
+  return _mm_srai_epi32 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_srl_epi16 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psrlw128 ((__v8hi)__A, (__v8hi)__B);
+  return _mm_srli_epi16 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_srl_epi32 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psrld128 ((__v4si)__A, (__v4si)__B);
+  return _mm_srli_epi32 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
 _mm_srl_epi64 (__m128i __A, __m128i __B)
 {
-  return (__m128i)__builtin_ia32_psrlq128 ((__v2di)__A, (__v2di)__B);
+  return _mm_srli_epi64 (__A, _mm_cvtsi128_si32 (__B));
 }
 
 static __inline __m128i __attribute__((__always_inline__))
@@ -1373,9 +1330,11 @@ _mm_mulhi_epu16 (__m128i __A, __m128i __B)
   return (__m128i)__builtin_ia32_pmulhuw128 ((__v8hi)__A, (__v8hi)__B);
 }
 
-#define _mm_shufflehi_epi16(__A, __B) ((__m128i)__builtin_ia32_pshufhw ((__v8hi)__A, __B))
-#define _mm_shufflelo_epi16(__A, __B) ((__m128i)__builtin_ia32_pshuflw ((__v8hi)__A, __B))
-#define _mm_shuffle_epi32(__A, __B) ((__m128i)__builtin_ia32_pshufd ((__v4si)__A, __B))
+/* APPLE LOCAL begin 5814283 */
+#define _mm_shufflehi_epi16(__A, __B) ((__m128i)__builtin_ia32_pshufhw ((__v8hi)(__A), __B))
+#define _mm_shufflelo_epi16(__A, __B) ((__m128i)__builtin_ia32_pshuflw ((__v8hi)(__A), __B))
+#define _mm_shuffle_epi32(__A, __B) ((__m128i)__builtin_ia32_pshufd ((__v4si)(__A), __B))
+/* APPLE LOCAL end 5814283 */
 
 static __inline void __attribute__((__always_inline__))
 _mm_maskmoveu_si128 (__m128i __A, __m128i __B, char *__C)
@@ -1496,6 +1455,54 @@ _mm_castsi128_pd(__m128i __A)
 {
   return (__m128d) __A;
 }
+/* APPLE LOCAL end radar 4152603 */
+
+/* APPLE LOCAL begin 4220129, 4286110 */
+/* Set all of the elements of the vector to A.  */
+
+static __inline __m128i __attribute__((__always_inline__))
+_mm_set1_epi64x (long long __A)
+{
+  return _mm_set_epi64x (__A, __A);
+}
+
+static __inline __m128i __attribute__((__always_inline__))
+_mm_set1_epi64 (__m64 __A)
+{
+  return _mm_set_epi64 (__A, __A);
+}
+
+static __inline __m128i __attribute__((__always_inline__))
+_mm_set1_epi32 (int __A)
+{
+  return _mm_set_epi32 (__A, __A, __A, __A);
+}
+
+static __inline __m128i __attribute__((__always_inline__))
+_mm_set1_epi16 (short __A)
+{
+  __m128i temp, temp2, temp3; 
+  temp = _mm_cvtsi32_si128((int)__A);
+  temp2 = _mm_unpacklo_epi16(temp, temp);
+  temp3 = _mm_shuffle_epi32(temp2, 0);
+  return temp3;
+}
+
+static __inline __m128i __attribute__((__always_inline__))
+_mm_set1_epi8 (char __A)
+{
+    __m128i temp, temp2, temp3, temp4;
+    temp = _mm_cvtsi32_si128 ((int)__A);
+    temp2 = _mm_unpacklo_epi8 (temp, temp);
+    temp3 = _mm_unpacklo_epi8 (temp2, temp2);
+    temp4 = _mm_shuffle_epi32 (temp3, 0);
+    return temp4;
+}
+/* APPLE LOCAL end 4220129, 4286110 */
+
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#undef __always_inline__
+/* APPLE LOCAL end nodebug inline 4152603 */
 
 #endif /* __SSE2__  */
 

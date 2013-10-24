@@ -5,7 +5,7 @@
 @include gcc-common.texi
 
 @ifinfo
-@dircategory Software development
+@dircategory Programming
 @direntry
 * Cpplib: (cppinternals).      Cpplib internals.
 @end direntry
@@ -41,8 +41,9 @@ into another language, under the above conditions for modified versions.
 @end ifinfo
 
 @titlepage
+@c @finalout
 @title Cpplib Internals
-@versionsubtitle
+@subtitle for GCC version @value{version-GCC}
 @author Neil Booth
 @page
 @vskip 0pt plus 1filll
@@ -962,7 +963,7 @@ directives outside the main conditional block for the optimization to be
 on.
 
 Note that whilst we are inside the conditional block, @code{mi_valid} is
-likely to be reset to @code{false}, but this does not matter since
+likely to be reset to @code{false}, but this does not matter since the
 the closing @code{#endif} restores it to @code{true} if appropriate.
 
 Finally, since @code{_cpp_lex_direct} pops the file off the buffer stack

@@ -1,10 +1,11 @@
+/* APPLE LOCAL file mainline */
 /* Bail out gracefully if attempting to derive from a class that has only been
    forward-declared (via @class).  Conversely, @compatibility_alias declarations
    should be traversed to find the @interface.  */
-
 /* { dg-do compile } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 
 @class MyWpModule;
 

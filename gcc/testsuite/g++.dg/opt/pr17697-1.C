@@ -20,7 +20,7 @@ A::strcmp (const char *s, const char *t)
 }
 
 int
-foo (const char *x) throw ()
+foo (char *x) throw ()
 {
   return A::strcmp ("", x);
 }

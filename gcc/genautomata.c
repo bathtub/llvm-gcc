@@ -18,8 +18,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 /* References:
 
@@ -109,15 +109,16 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "rtl.h"
 #include "obstack.h"
 #include "errors.h"
-#include "gensupport.h"
 
 #include <math.h>
 #include "hashtab.h"
-#include "vec.h"
+#include "varray.h"
 
 #ifndef CHAR_BIT
 #define CHAR_BIT 8
 #endif
+
+#include "genattrtab.h"
 
 /* Positions in machine description file.  Now they are not used.  But
    they could be used in the future for better diagnostic messages.  */
@@ -130,6 +131,17 @@ typedef unsigned HOST_WIDE_INT set_el_t;
 /* Reservations of function units are represented by value of the following
    type.  */
 typedef set_el_t *reserv_sets_t;
+
+/* The following structure represents variable length array (vla) of
+   pointers and HOST WIDE INTs.  We could be use only varray.  But we
+   add new lay because we add elements very frequently and this could
+   stress OS allocator when varray is used only.  */
+typedef struct {
+  size_t length;      /* current size of vla.  */
+  varray_type varray; /* container for vla.  */
+} vla_ptr_t;
+
+typedef vla_ptr_t vla_hwint_t;
 
 /* The following structure describes a ticker.  */
 struct ticker
@@ -195,6 +207,331 @@ typedef struct automaton *automaton_t;
 typedef struct automata_list_el *automata_list_el_t;
 typedef struct state_ainsn_table *state_ainsn_table_t;
 
+
+/* Prototypes of functions gen_cpu_unit, gen_query_cpu_unit,
+   gen_bypass, gen_excl_set, gen_presence_set, gen_final_presence_set,
+   gen_absence_set, gen_final_absence_set, gen_automaton,
+   gen_automata_option, gen_reserv, gen_insn_reserv,
+   initiate_automaton_gen, expand_automata, write_automata are
+   described on the file top because the functions are called from
+   function `main'.  */
+
+static void *create_node             (size_t);
+static void *copy_node               (const void *, size_t);
+static char *check_name              (char *, pos_t);
+static char *next_sep_el             (char **, int, int);
+static int n_sep_els                 (char *, int, int);
+static char **get_str_vect           (char *, int *, int, int);
+static void gen_presence_absence_set (rtx, int, int);
+static regexp_t gen_regexp_el        (char *);
+static regexp_t gen_regexp_repeat    (char *);
+static regexp_t gen_regexp_allof     (char *);
+static regexp_t gen_regexp_oneof     (char *);
+static regexp_t gen_regexp_sequence  (char *);
+static regexp_t gen_regexp           (char *);
+
+static unsigned string_hash          (const char *);
+static unsigned automaton_decl_hash  (const void *);
+static int automaton_decl_eq_p       (const void *,
+				      const void *);
+static decl_t insert_automaton_decl       (decl_t);
+static decl_t find_automaton_decl         (char *);
+static void initiate_automaton_decl_table (void);
+static void finish_automaton_decl_table   (void);
+
+static hashval_t insn_decl_hash           (const void *);
+static int insn_decl_eq_p                 (const void *,
+					   const void *);
+static decl_t insert_insn_decl            (decl_t);
+static decl_t find_insn_decl              (char *);
+static void initiate_insn_decl_table      (void);
+static void finish_insn_decl_table        (void);
+
+static hashval_t decl_hash                (const void *);
+static int decl_eq_p                      (const void *,
+					   const void *);
+static decl_t insert_decl                 (decl_t);
+static decl_t find_decl                   (char *);
+static void initiate_decl_table           (void);
+static void finish_decl_table             (void);
+
+static unit_set_el_t process_excls       (char **, int, pos_t);
+static void add_excls                    (unit_set_el_t, unit_set_el_t,
+					  pos_t);
+static unit_set_el_t process_presence_absence_names
+					 (char **, int, pos_t,
+					  int, int);
+static pattern_set_el_t process_presence_absence_patterns
+					 (char ***, int, pos_t,
+					  int, int);
+static void add_presence_absence	 (unit_set_el_t,
+					  pattern_set_el_t,
+					  pos_t, int, int);
+static void process_decls                (void);
+static struct bypass_decl *find_bypass   (struct bypass_decl *,
+					  struct insn_reserv_decl *);
+static void check_automaton_usage        (void);
+static regexp_t process_regexp           (regexp_t);
+static void process_regexp_decls         (void);
+static void check_usage                  (void);
+static int loop_in_regexp                (regexp_t, decl_t);
+static void check_loops_in_regexps       (void);
+static void process_regexp_cycles        (regexp_t, int, int,
+					  int *, int *);
+static void evaluate_max_reserv_cycles   (void);
+static void check_all_description        (void);
+
+static ticker_t create_ticker               (void);
+static void ticker_off                      (ticker_t *);
+static void ticker_on                       (ticker_t *);
+static int active_time                      (ticker_t);
+static void print_active_time               (FILE *, ticker_t);
+
+static void add_advance_cycle_insn_decl     (void);
+
+static alt_state_t get_free_alt_state (void);
+static void free_alt_state              (alt_state_t);
+static void free_alt_states             (alt_state_t);
+static int alt_state_cmp                (const void *alt_state_ptr_1,
+					 const void *alt_state_ptr_2);
+static alt_state_t uniq_sort_alt_states (alt_state_t);
+static int alt_states_eq                (alt_state_t, alt_state_t);
+static void initiate_alt_states         (void);
+static void finish_alt_states           (void);
+
+static reserv_sets_t alloc_empty_reserv_sets (void);
+static unsigned reserv_sets_hash_value (reserv_sets_t);
+static int reserv_sets_cmp             (reserv_sets_t, reserv_sets_t);
+static int reserv_sets_eq              (reserv_sets_t, reserv_sets_t);
+static void set_unit_reserv            (reserv_sets_t, int, int);
+static int test_unit_reserv            (reserv_sets_t, int, int);
+static int it_is_empty_reserv_sets     (reserv_sets_t)
+                                            ATTRIBUTE_UNUSED;
+static int reserv_sets_are_intersected (reserv_sets_t, reserv_sets_t);
+static void reserv_sets_shift          (reserv_sets_t, reserv_sets_t);
+static void reserv_sets_or             (reserv_sets_t, reserv_sets_t,
+					reserv_sets_t);
+static void reserv_sets_and            (reserv_sets_t, reserv_sets_t,
+					reserv_sets_t)
+                                            ATTRIBUTE_UNUSED;
+static void output_cycle_reservs       (FILE *, reserv_sets_t,
+					int, int);
+static void output_reserv_sets         (FILE *, reserv_sets_t);
+static state_t get_free_state          (int, automaton_t);
+static void free_state                 (state_t);
+static hashval_t state_hash            (const void *);
+static int state_eq_p                  (const void *, const void *);
+static state_t insert_state            (state_t);
+static void set_state_reserv           (state_t, int, int);
+static int intersected_state_reservs_p (state_t, state_t);
+static state_t states_union            (state_t, state_t, reserv_sets_t);
+static state_t state_shift             (state_t, reserv_sets_t);
+static void initiate_states            (void);
+static void finish_states              (void);
+
+static void free_arc           (arc_t);
+static void remove_arc         (state_t, arc_t);
+static arc_t find_arc          (state_t, state_t, ainsn_t);
+static arc_t add_arc           (state_t, state_t, ainsn_t, int);
+static arc_t first_out_arc     (state_t);
+static arc_t next_out_arc      (arc_t);
+static void initiate_arcs      (void);
+static void finish_arcs        (void);
+
+static automata_list_el_t get_free_automata_list_el (void);
+static void free_automata_list_el (automata_list_el_t);
+static void free_automata_list (automata_list_el_t);
+static hashval_t automata_list_hash (const void *);
+static int automata_list_eq_p (const void *, const void *);
+static void initiate_automata_lists (void);
+static void automata_list_start (void);
+static void automata_list_add (automaton_t);
+static automata_list_el_t automata_list_finish (void);
+static void finish_automata_lists (void);
+
+static void initiate_excl_sets             (void);
+static reserv_sets_t get_excl_set          (reserv_sets_t);
+
+static pattern_reserv_t form_reserv_sets_list (pattern_set_el_t);
+static void initiate_presence_absence_pattern_sets     (void);
+static int check_presence_pattern_sets     (reserv_sets_t,
+					    reserv_sets_t, int);
+static int check_absence_pattern_sets  (reserv_sets_t, reserv_sets_t,
+					int);
+
+static regexp_t copy_insn_regexp     (regexp_t);
+static regexp_t transform_1          (regexp_t);
+static regexp_t transform_2          (regexp_t);
+static regexp_t transform_3          (regexp_t);
+static regexp_t regexp_transform_func
+                       (regexp_t, regexp_t (*) (regexp_t));
+static regexp_t transform_regexp            (regexp_t);
+static void transform_insn_regexps          (void);
+
+static void store_alt_unit_usage (regexp_t, regexp_t, int, int);
+static void check_regexp_units_distribution   (const char *, regexp_t);
+static void check_unit_distributions_to_automata (void);
+
+static int process_seq_for_forming_states   (regexp_t, automaton_t,
+					     int);
+static void finish_forming_alt_state        (alt_state_t,
+					     automaton_t);
+static void process_alts_for_forming_states (regexp_t,
+					     automaton_t, int);
+static void create_alt_states               (automaton_t);
+
+static void form_ainsn_with_same_reservs    (automaton_t);
+
+static reserv_sets_t form_reservs_matter (automaton_t);
+static void make_automaton           (automaton_t);
+static void form_arcs_marked_by_insn (state_t);
+static int create_composed_state     (state_t, arc_t, vla_ptr_t *);
+static void NDFA_to_DFA              (automaton_t);
+static void pass_state_graph         (state_t, void (*) (state_t));
+static void pass_states              (automaton_t,
+				      void (*) (state_t));
+static void initiate_pass_states       (void);
+static void add_achieved_state         (state_t);
+static int set_out_arc_insns_equiv_num (state_t, int);
+static void clear_arc_insns_equiv_num  (state_t);
+static void copy_equiv_class           (vla_ptr_t *to,
+					const vla_ptr_t *from);
+static int first_cycle_unit_presence   (state_t, int);
+static int state_is_differed           (state_t, state_t, int, int);
+static state_t init_equiv_class        (state_t *states, int);
+static int partition_equiv_class       (state_t *, int,
+					vla_ptr_t *, int *);
+static void evaluate_equiv_classes     (automaton_t, vla_ptr_t *);
+static void merge_states               (automaton_t, vla_ptr_t *);
+static void set_new_cycle_flags        (state_t);
+static void minimize_DFA               (automaton_t);
+static void incr_states_and_arcs_nums  (state_t);
+static void count_states_and_arcs      (automaton_t, int *, int *);
+static void build_automaton            (automaton_t);
+
+static void set_order_state_num              (state_t);
+static void enumerate_states                 (automaton_t);
+
+static ainsn_t insert_ainsn_into_equiv_class       (ainsn_t, ainsn_t);
+static void delete_ainsn_from_equiv_class          (ainsn_t);
+static void process_insn_equiv_class               (ainsn_t, arc_t *);
+static void process_state_for_insn_equiv_partition (state_t);
+static void set_insn_equiv_classes                 (automaton_t);
+
+static double estimate_one_automaton_bound     (void);
+static int compare_max_occ_cycle_nums          (const void *,
+						const void *);
+static void units_to_automata_heuristic_distr  (void);
+static ainsn_t create_ainsns                   (void);
+static void units_to_automata_distr            (void);
+static void create_automata                    (void);
+
+static void form_regexp                      (regexp_t);
+static const char *regexp_representation     (regexp_t);
+static void finish_regexp_representation     (void);
+
+static void output_range_type            (FILE *, long int, long int);
+static int longest_path_length           (state_t);
+static void process_state_longest_path_length (state_t);
+static void output_dfa_max_issue_rate    (void);
+static void output_vect                  (vect_el_t *, int);
+static void output_chip_member_name      (FILE *, automaton_t);
+static void output_temp_chip_member_name (FILE *, automaton_t);
+static void output_translate_vect_name   (FILE *, automaton_t);
+static void output_trans_full_vect_name  (FILE *, automaton_t);
+static void output_trans_comb_vect_name  (FILE *, automaton_t);
+static void output_trans_check_vect_name (FILE *, automaton_t);
+static void output_trans_base_vect_name  (FILE *, automaton_t);
+static void output_state_alts_full_vect_name    (FILE *, automaton_t);
+static void output_state_alts_comb_vect_name    (FILE *, automaton_t);
+static void output_state_alts_check_vect_name   (FILE *, automaton_t);
+static void output_state_alts_base_vect_name    (FILE *, automaton_t);
+static void output_min_issue_delay_vect_name    (FILE *, automaton_t);
+static void output_dead_lock_vect_name   (FILE *, automaton_t);
+static void output_reserved_units_table_name    (FILE *, automaton_t);
+static void output_state_member_type     (FILE *, automaton_t);
+static void output_chip_definitions      (void);
+static void output_translate_vect        (automaton_t);
+static int comb_vect_p                   (state_ainsn_table_t);
+static state_ainsn_table_t create_state_ainsn_table (automaton_t);
+static void output_state_ainsn_table
+   (state_ainsn_table_t, char *, void (*) (FILE *, automaton_t),
+    void (*) (FILE *, automaton_t), void (*) (FILE *, automaton_t),
+    void (*) (FILE *, automaton_t));
+static void add_vect                     (state_ainsn_table_t,
+					  int, vect_el_t *, int);
+static int out_state_arcs_num            (state_t);
+static int compare_transition_els_num    (const void *, const void *);
+static void add_vect_el	         (vla_hwint_t *,
+					  ainsn_t, int);
+static void add_states_vect_el           (state_t);
+static void output_trans_table           (automaton_t);
+static void output_state_alts_table      (automaton_t);
+static int min_issue_delay_pass_states   (state_t, ainsn_t);
+static int min_issue_delay               (state_t, ainsn_t);
+static void initiate_min_issue_delay_pass_states (void);
+static void output_min_issue_delay_table (automaton_t);
+static void output_dead_lock_vect        (automaton_t);
+static void output_reserved_units_table  (automaton_t);
+static void output_tables                (void);
+static void output_max_insn_queue_index_def (void);
+static void output_insn_code_cases   (void (*) (automata_list_el_t));
+static void output_automata_list_min_issue_delay_code (automata_list_el_t);
+static void output_internal_min_issue_delay_func (void);
+static void output_automata_list_transition_code (automata_list_el_t);
+static void output_internal_trans_func   (void);
+static void output_internal_insn_code_evaluation (const char *,
+						  const char *, int);
+static void output_dfa_insn_code_func	        (void);
+static void output_trans_func                   (void);
+static void output_automata_list_state_alts_code (automata_list_el_t);
+static void output_internal_state_alts_func     (void);
+static void output_state_alts_func              (void);
+static void output_min_issue_delay_func         (void);
+static void output_internal_dead_lock_func      (void);
+static void output_dead_lock_func               (void);
+static void output_internal_reset_func          (void);
+static void output_size_func		        (void);
+static void output_reset_func                   (void);
+static void output_min_insn_conflict_delay_func (void);
+static void output_internal_insn_latency_func   (void);
+static void output_insn_latency_func            (void);
+static void output_print_reservation_func       (void);
+static int units_cmp			        (const void *,
+						 const void *);
+static void output_get_cpu_unit_code_func       (void);
+static void output_cpu_unit_reservation_p       (void);
+static void output_dfa_clean_insn_cache_func    (void);
+static void output_dfa_start_func	        (void);
+static void output_dfa_finish_func	        (void);
+
+static void output_regexp                  (regexp_t );
+static void output_unit_set_el_list	   (unit_set_el_t);
+static void output_pattern_set_el_list	   (pattern_set_el_t);
+static void output_description             (void);
+static void output_automaton_name          (FILE *, automaton_t);
+static void output_automaton_units         (automaton_t);
+static void add_state_reservs              (state_t);
+static void output_state_arcs              (state_t);
+static int state_reservs_cmp               (const void *,
+					    const void *);
+static void remove_state_duplicate_reservs (void);
+static void output_state                   (state_t);
+static void output_automaton_descriptions  (void);
+static void output_statistics              (FILE *);
+static void output_time_statistics         (FILE *);
+static void generate                       (void);
+
+static void make_insn_alts_attr                (void);
+static void make_internal_dfa_insn_code_attr   (void);
+static void make_default_insn_latency_attr     (void);
+static void make_bypass_attr                   (void);
+static const char *file_name_suffix            (const char *);
+static const char *base_file_name              (const char *);
+static void check_automata_insn_issues	       (void);
+static void add_automaton_state                (state_t);
+static void form_important_insn_automata_lists (void);
+
 /* Undefined position.  */
 static pos_t no_pos = 0;
 
@@ -202,34 +539,109 @@ static pos_t no_pos = 0;
 static struct obstack irp;
 
 
-/* Declare vector types for various data structures: */
 
-DEF_VEC_P(alt_state_t);
-DEF_VEC_ALLOC_P(alt_state_t,heap);
-DEF_VEC_P(ainsn_t);
-DEF_VEC_ALLOC_P(ainsn_t,heap);
-DEF_VEC_P(state_t);
-DEF_VEC_ALLOC_P(state_t,heap);
-DEF_VEC_P(decl_t);
-DEF_VEC_ALLOC_P(decl_t,heap);
-DEF_VEC_P(reserv_sets_t);
-DEF_VEC_ALLOC_P(reserv_sets_t,heap);
+/* This page contains code for work with variable length array (vla)
+   of pointers.  We could be use only varray.  But we add new lay
+   because we add elements very frequently and this could stress OS
+   allocator when varray is used only.  */
 
-DEF_VEC_I(vect_el_t);
-DEF_VEC_ALLOC_I(vect_el_t, heap);
-typedef VEC(vect_el_t,heap) *vla_hwint_t;
-
-/* Forward declarations of functions used before their definitions, only.  */
-static regexp_t gen_regexp_sequence    (const char *);
-static void reserv_sets_or             (reserv_sets_t, reserv_sets_t,
-				        reserv_sets_t);
-static reserv_sets_t get_excl_set      (reserv_sets_t);
-static int check_presence_pattern_sets (reserv_sets_t,
-					reserv_sets_t, int);
-static int check_absence_pattern_sets  (reserv_sets_t, reserv_sets_t,
-					int);
-static arc_t first_out_arc             (state_t);
-static arc_t next_out_arc              (arc_t);
+/* Start work with vla.  */
+#define VLA_PTR_CREATE(vla, allocated_length, name)	 \
+  do									 \
+    {	 \
+      vla_ptr_t *const _vla_ptr = &(vla);                                \
+	 \
+      VARRAY_GENERIC_PTR_INIT (_vla_ptr->varray, allocated_length, name);\
+      _vla_ptr->length = 0;                                              \
+    }									 \
+  while (0)
+
+/* Finish work with the vla.  */
+#define VLA_PTR_DELETE(vla) VARRAY_FREE ((vla).varray)
+
+/* Return start address of the vla.  */
+#define VLA_PTR_BEGIN(vla) ((void *) &VARRAY_GENERIC_PTR ((vla).varray, 0))
+
+/* Address of the last element of the vla.  Do not use side effects in
+   the macro argument.  */
+#define VLA_PTR_LAST(vla) (&VARRAY_GENERIC_PTR ((vla).varray,         \
+                                                (vla).length - 1))
+/* Nullify the vla.  */
+#define VLA_PTR_NULLIFY(vla)  ((vla).length = 0)
+
+/* Shorten the vla on given number bytes.  */
+#define VLA_PTR_SHORTEN(vla, n)  ((vla).length -= (n))
+
+/* Expand the vla on N elements.  The values of new elements are
+   undefined.  */
+#define VLA_PTR_EXPAND(vla, n)                                        \
+  do {                                                                \
+    vla_ptr_t *const _expand_vla_ptr = &(vla);                        \
+    const size_t _new_length = (n) + _expand_vla_ptr->length;         \
+                                                                      \
+    if (VARRAY_SIZE (_expand_vla_ptr->varray) < _new_length)          \
+      VARRAY_GROW (_expand_vla_ptr->varray,                           \
+                   (_new_length - _expand_vla_ptr->length < 128       \
+                    ? _expand_vla_ptr->length + 128 : _new_length));  \
+    _expand_vla_ptr->length = _new_length;                            \
+  } while (0)
+
+/* Add element to the end of the vla.  */
+#define VLA_PTR_ADD(vla, ptr)                                           \
+  do {                                                                  \
+    vla_ptr_t *const _vla_ptr = &(vla);                                 \
+                                                                        \
+    VLA_PTR_EXPAND (*_vla_ptr, 1);                                      \
+    VARRAY_GENERIC_PTR (_vla_ptr->varray, _vla_ptr->length - 1) = (ptr);\
+  } while (0)
+
+/* Length of the vla in elements.  */
+#define VLA_PTR_LENGTH(vla) ((vla).length)
+
+/* N-th element of the vla.  */
+#define VLA_PTR(vla, n) VARRAY_GENERIC_PTR ((vla).varray, n)
+
+
+/* The following macros are analogous to the previous ones but for
+   VLAs of HOST WIDE INTs.  */
+
+#define VLA_HWINT_CREATE(vla, allocated_length, name)                 \
+  do {                                                                \
+    vla_hwint_t *const _vla_ptr = &(vla);                             \
+                                                                      \
+    VARRAY_WIDE_INT_INIT (_vla_ptr->varray, allocated_length, name);  \
+    _vla_ptr->length = 0;                                             \
+  } while (0)
+
+#define VLA_HWINT_DELETE(vla) VARRAY_FREE ((vla).varray)
+
+#define VLA_HWINT_BEGIN(vla) (&VARRAY_WIDE_INT ((vla).varray, 0))
+
+#define VLA_HWINT_NULLIFY(vla)  ((vla).length = 0)
+
+#define VLA_HWINT_EXPAND(vla, n)                                      \
+  do {                                                                \
+    vla_hwint_t *const _expand_vla_ptr = &(vla);                      \
+    const size_t _new_length = (n) + _expand_vla_ptr->length;         \
+                                                                      \
+    if (VARRAY_SIZE (_expand_vla_ptr->varray) < _new_length)          \
+      VARRAY_GROW (_expand_vla_ptr->varray,                           \
+                   (_new_length - _expand_vla_ptr->length < 128       \
+                    ? _expand_vla_ptr->length + 128 : _new_length));  \
+    _expand_vla_ptr->length = _new_length;                            \
+  } while (0)
+
+#define VLA_HWINT_ADD(vla, ptr)                                       \
+  do {                                                                \
+    vla_hwint_t *const _vla_ptr = &(vla);                             \
+                                                                      \
+    VLA_HWINT_EXPAND (*_vla_ptr, 1);                                  \
+    VARRAY_WIDE_INT (_vla_ptr->varray, _vla_ptr->length - 1) = (ptr); \
+  } while (0)
+
+#define VLA_HWINT_LENGTH(vla) ((vla).length)
+
+#define VLA_HWINT(vla, n) VARRAY_WIDE_INT ((vla).varray, n)
 
 
 
@@ -315,9 +727,9 @@ enum decl_mode
    rtl.def).  */
 struct unit_decl
 {
-  const char *name;
+  char *name;
   /* NULL if the automaton name is absent.  */
-  const char *automaton_name;
+  char *automaton_name;
   /* If the following value is not zero, the cpu unit reservation is
      described in define_query_cpu_unit.  */
   char query_p;
@@ -377,9 +789,9 @@ struct unit_decl
 struct bypass_decl
 {
   int latency;
-  const char *out_insn_name;
-  const char *in_insn_name;
-  const char *bypass_guard_name;
+  char *out_insn_name;
+  char *in_insn_name;
+  char *bypass_guard_name;
 
   /* The following fields are defined by checker.  */
 
@@ -393,7 +805,7 @@ struct bypass_decl
 /* This describes define_automaton (see file rtl.def).  */
 struct automaton_decl
 {
-  const char *name;
+  char *name;
 
   /* The following fields are defined by automaton generator.  */
 
@@ -433,7 +845,7 @@ struct unit_pattern_rel_decl
 /* This describes define_reservation (see file rtl.def).  */
 struct reserv_decl
 {
-  const char *name;
+  char *name;
   regexp_t regexp;
 
   /* The following fields are defined by checker.  */
@@ -452,7 +864,7 @@ struct insn_reserv_decl
   rtx condexp;
   int default_latency;
   regexp_t regexp;
-  const char *name;
+  char *name;
 
   /* The following fields are defined by checker.  */
 
@@ -481,6 +893,10 @@ struct insn_reserv_decl
      which arc marked by given insn enters from a state (fixed during
      an automaton minimization).  */
   int equiv_class_num;
+  /* The field value is state_alts of arc leaving a state (fixed
+     during an automaton minimization) and marked by given insn
+     enters.  */
+  int state_alts;
   /* The following member value is the list to automata which can be
      changed by the insn issue.  */
   automata_list_el_t important_automata_list;
@@ -522,14 +938,14 @@ enum regexp_mode
 /* Cpu unit in reservation.  */
 struct unit_regexp
 {
-  const char *name;
+  char *name;
   unit_decl_t unit_decl;
 };
 
 /* Define_reservation in a reservation.  */
 struct reserv_regexp
 {
-  const char *name;
+  char *name;
   struct reserv_decl *reserv_decl;
 };
 
@@ -677,7 +1093,6 @@ struct state
   /* The following field value is the first arc output from given
      state.  */
   arc_t first_out_arc;
-  unsigned int num_out_arcs;
   /* The following field is used to form NDFA.  */
   char it_was_placed_in_stack_for_NDFA_forming;
   /* The following field is used to form DFA.  */
@@ -701,7 +1116,6 @@ struct state
      automaton.  The field value is state corresponding to equivalence
      class to which given state belongs.  */
   state_t equiv_class_state;
-  unsigned int *presence_signature;
   /* The following field value is the order number of given state.
      The states in final DFA is enumerated with the aid of the
      following field.  */
@@ -740,6 +1154,10 @@ struct arc
   /* List of arcs marked given insn is formed with the following
      field.  The field is used in transformation NDFA -> DFA.  */
   arc_t next_arc_marked_by_insn;
+  /* The following field is defined if NDFA_FLAG is zero.  The member
+     value is number of alternative reservations which can be used for
+     transition for given state by given insn.  */
+  int state_alts;
 };
 
 /* The following node type describes a deterministic alternative in
@@ -837,9 +1255,10 @@ struct automaton
   /* The following field value is defined only if minimization of DFA
      is used.  */
   int minimal_DFA_arcs_num;
-  /* The following member refers for two table state x ainsn -> int.
-     ??? Above sentence is incomprehensible.  */
+  /* The following two members refer for two table state x ainsn ->
+     int.  */
   state_ainsn_table_t trans_table;
+  state_ainsn_table_t state_alts_table;
   /* The following member value is maximal value of min issue delay
      for insns of the automaton.  */
   int max_min_delay;
@@ -847,8 +1266,6 @@ struct automaton
      8) elements in one vector element.  So the compression factor can
      be 1 (no compression), 2, 4, 8.  */
   int min_issue_delay_table_compression_factor;
-  /* Total number of locked states in this automaton.  */
-  int locked_states;
 };
 
 /* The following is the element of the list of automata.  */
@@ -940,8 +1357,7 @@ struct state_ainsn_table
 
 static const char *decl_name (enum decl_mode);
 static void decl_mode_check_failed (enum decl_mode, const char *,
-				    const char *, int, const char *)
-     ATTRIBUTE_NORETURN;
+				    const char *, int, const char *);
 
 /* Return string representation of declaration mode MODE.  */
 static const char *
@@ -1029,7 +1445,7 @@ decl_mode_check_failed (enum decl_mode mode, const char *expected_mode_str,
 static const char *regexp_name (enum regexp_mode);
 static void regexp_mode_check_failed (enum regexp_mode, const char *,
 				      const char *, int,
-				      const char *) ATTRIBUTE_NORETURN;
+				      const char *);
 
 
 /* Return string representation of regexp mode MODE.  */
@@ -1115,8 +1531,8 @@ copy_node (const void *from, size_t size)
 }
 
 /* The function checks that NAME does not contain quotes (`"').  */
-static const char *
-check_name (const char * name, pos_t pos ATTRIBUTE_UNUSED)
+static char *
+check_name (char * name, pos_t pos ATTRIBUTE_UNUSED)
 {
   const char *str;
 
@@ -1128,7 +1544,7 @@ check_name (const char * name, pos_t pos ATTRIBUTE_UNUSED)
 
 /* Pointers to all declarations during IR generation are stored in the
    following.  */
-static VEC(decl_t,heap) *decls;
+static vla_ptr_t decls;
 
 /* Given a pointer to a (char *) and a separator, return an alloc'ed
    string containing the next separated element, taking parentheses
@@ -1136,10 +1552,10 @@ static VEC(decl_t,heap) *decls;
    after the string scanned, or the end-of-string.  Return NULL if at
    end of string.  */
 static char *
-next_sep_el (const char **pstr, int sep, int par_flag)
+next_sep_el (char **pstr, int sep, int par_flag)
 {
   char *out_str;
-  const char *p;
+  char *p;
   int pars_num;
   int n_spaces;
 
@@ -1184,7 +1600,7 @@ next_sep_el (const char **pstr, int sep, int par_flag)
    nonzero value.  Return 0 for the null string, -1 if parentheses is
    not balanced.  */
 static int
-n_sep_els (const char *s, int sep, int par_flag)
+n_sep_els (char *s, int sep, int par_flag)
 {
   int n;
   int pars_num;
@@ -1209,11 +1625,11 @@ n_sep_els (const char *s, int sep, int par_flag)
    function also inserts the end marker NULL at the end of vector.
    Return 0 for the null string, -1 if parentheses are not balanced.  */
 static char **
-get_str_vect (const char *str, int *els_num, int sep, int paren_p)
+get_str_vect (char *str, int *els_num, int sep, int paren_p)
 {
   int i;
   char **vect;
-  const char **pstr;
+  char **pstr;
   char *trail;
 
   *els_num = n_sep_els (str, sep, paren_p);
@@ -1235,7 +1651,7 @@ get_str_vect (const char *str, int *els_num, int sep, int paren_p)
 
    This gives information about a unit contained in CPU.  We fill a
    struct unit_decl with information used later by `expand_automata'.  */
-static void
+void
 gen_cpu_unit (rtx def)
 {
   decl_t decl;
@@ -1243,7 +1659,8 @@ gen_cpu_unit (rtx def)
   int vect_length;
   int i;
 
-  str_cpu_units = get_str_vect (XSTR (def, 0), &vect_length, ',', FALSE);
+  str_cpu_units = get_str_vect ((char *) XSTR (def, 0), &vect_length, ',',
+				FALSE);
   if (str_cpu_units == NULL)
     fatal ("invalid string `%s' in define_cpu_unit", XSTR (def, 0));
   for (i = 0; i < vect_length; i++)
@@ -1252,11 +1669,12 @@ gen_cpu_unit (rtx def)
       decl->mode = dm_unit;
       decl->pos = 0;
       DECL_UNIT (decl)->name = check_name (str_cpu_units [i], decl->pos);
-      DECL_UNIT (decl)->automaton_name = XSTR (def, 1);
+      DECL_UNIT (decl)->automaton_name = (char *) XSTR (def, 1);
       DECL_UNIT (decl)->query_p = 0;
       DECL_UNIT (decl)->min_occ_cycle_num = -1;
       DECL_UNIT (decl)->in_set_p = 0;
-      VEC_safe_push (decl_t,heap, decls, decl);
+      VLA_PTR_ADD (decls, decl);
+      num_dfa_decls++;
     }
 }
 
@@ -1264,7 +1682,7 @@ gen_cpu_unit (rtx def)
 
    This gives information about a unit contained in CPU.  We fill a
    struct unit_decl with information used later by `expand_automata'.  */
-static void
+void
 gen_query_cpu_unit (rtx def)
 {
   decl_t decl;
@@ -1272,7 +1690,7 @@ gen_query_cpu_unit (rtx def)
   int vect_length;
   int i;
 
-  str_cpu_units = get_str_vect (XSTR (def, 0), &vect_length, ',',
+  str_cpu_units = get_str_vect ((char *) XSTR (def, 0), &vect_length, ',',
 				FALSE);
   if (str_cpu_units == NULL)
     fatal ("invalid string `%s' in define_query_cpu_unit", XSTR (def, 0));
@@ -1282,9 +1700,10 @@ gen_query_cpu_unit (rtx def)
       decl->mode = dm_unit;
       decl->pos = 0;
       DECL_UNIT (decl)->name = check_name (str_cpu_units [i], decl->pos);
-      DECL_UNIT (decl)->automaton_name = XSTR (def, 1);
+      DECL_UNIT (decl)->automaton_name = (char *) XSTR (def, 1);
       DECL_UNIT (decl)->query_p = 1;
-      VEC_safe_push (decl_t,heap, decls, decl);
+      VLA_PTR_ADD (decls, decl);
+      num_dfa_decls++;
     }
 }
 
@@ -1293,7 +1712,7 @@ gen_query_cpu_unit (rtx def)
    This gives information about a unit contained in the CPU.  We fill
    in a struct bypass_decl with information used later by
    `expand_automata'.  */
-static void
+void
 gen_bypass (rtx def)
 {
   decl_t decl;
@@ -1303,10 +1722,10 @@ gen_bypass (rtx def)
   int in_length;
   int i, j;
 
-  out_insns = get_str_vect (XSTR (def, 1), &out_length, ',', FALSE);
+  out_insns = get_str_vect ((char *) XSTR (def, 1), &out_length, ',', FALSE);
   if (out_insns == NULL)
     fatal ("invalid string `%s' in define_bypass", XSTR (def, 1));
-  in_insns = get_str_vect (XSTR (def, 2), &in_length, ',', FALSE);
+  in_insns = get_str_vect ((char *) XSTR (def, 2), &in_length, ',', FALSE);
   if (in_insns == NULL)
     fatal ("invalid string `%s' in define_bypass", XSTR (def, 2));
   for (i = 0; i < out_length; i++)
@@ -1318,8 +1737,9 @@ gen_bypass (rtx def)
 	DECL_BYPASS (decl)->latency = XINT (def, 0);
 	DECL_BYPASS (decl)->out_insn_name = out_insns [i];
 	DECL_BYPASS (decl)->in_insn_name = in_insns [j];
-	DECL_BYPASS (decl)->bypass_guard_name = XSTR (def, 3);
-	VEC_safe_push (decl_t,heap, decls, decl);
+	DECL_BYPASS (decl)->bypass_guard_name = (char *) XSTR (def, 3);
+	VLA_PTR_ADD (decls, decl);
+	num_dfa_decls++;
       }
 }
 
@@ -1328,7 +1748,7 @@ gen_bypass (rtx def)
    This gives information about a cpu unit conflicts.  We fill a
    struct excl_rel_decl (excl) with information used later by
    `expand_automata'.  */
-static void
+void
 gen_excl_set (rtx def)
 {
   decl_t decl;
@@ -1339,10 +1759,10 @@ gen_excl_set (rtx def)
   int i;
 
   first_str_cpu_units
-    = get_str_vect (XSTR (def, 0), &first_vect_length, ',', FALSE);
+    = get_str_vect ((char *) XSTR (def, 0), &first_vect_length, ',', FALSE);
   if (first_str_cpu_units == NULL)
     fatal ("invalid first string `%s' in exclusion_set", XSTR (def, 0));
-  second_str_cpu_units = get_str_vect (XSTR (def, 1), &length, ',',
+  second_str_cpu_units = get_str_vect ((char *) XSTR (def, 1), &length, ',',
 				       FALSE);
   if (second_str_cpu_units == NULL)
     fatal ("invalid second string `%s' in exclusion_set", XSTR (def, 1));
@@ -1358,7 +1778,8 @@ gen_excl_set (rtx def)
     else
       DECL_EXCL (decl)->names [i]
 	= second_str_cpu_units [i - first_vect_length];
-  VEC_safe_push (decl_t,heap, decls, decl);
+  VLA_PTR_ADD (decls, decl);
+  num_dfa_decls++;
 }
 
 /* Process a PRESENCE_SET, a FINAL_PRESENCE_SET, an ABSENCE_SET,
@@ -1372,14 +1793,13 @@ gen_presence_absence_set (rtx def, int presence_p, int final_p)
 {
   decl_t decl;
   char **str_cpu_units;
-  char **str_pattern_lists;
   char ***str_patterns;
   int cpu_units_length;
   int length;
   int patterns_length;
   int i;
 
-  str_cpu_units = get_str_vect (XSTR (def, 0), &cpu_units_length, ',',
+  str_cpu_units = get_str_vect ((char *) XSTR (def, 0), &cpu_units_length, ',',
 				FALSE);
   if (str_cpu_units == NULL)
     fatal ((presence_p
@@ -1390,9 +1810,9 @@ gen_presence_absence_set (rtx def, int presence_p, int final_p)
 	       ? "invalid first string `%s' in final_absence_set"
 	       : "invalid first string `%s' in absence_set")),
 	   XSTR (def, 0));
-  str_pattern_lists = get_str_vect (XSTR (def, 1),
-				    &patterns_length, ',', FALSE);
-  if (str_pattern_lists == NULL)
+  str_patterns = (char ***) get_str_vect ((char *) XSTR (def, 1),
+					  &patterns_length, ',', FALSE);
+  if (str_patterns == NULL)
     fatal ((presence_p
 	    ? (final_p
 	       ? "invalid second string `%s' in final_presence_set"
@@ -1400,11 +1820,10 @@ gen_presence_absence_set (rtx def, int presence_p, int final_p)
 	    : (final_p
 	       ? "invalid second string `%s' in final_absence_set"
 	       : "invalid second string `%s' in absence_set")), XSTR (def, 1));
-  str_patterns = obstack_alloc (&irp, patterns_length * sizeof (char **));
   for (i = 0; i < patterns_length; i++)
     {
-      str_patterns [i] = get_str_vect (str_pattern_lists [i],
-				       &length, ' ', FALSE);
+      str_patterns [i] = get_str_vect ((char *) str_patterns [i], &length, ' ',
+				       FALSE);
       gcc_assert (str_patterns [i]);
     }
   decl = create_node (sizeof (struct decl));
@@ -1427,7 +1846,8 @@ gen_presence_absence_set (rtx def, int presence_p, int final_p)
       DECL_ABSENCE (decl)->patterns_num = patterns_length;
       DECL_ABSENCE (decl)->final_p = final_p;
     }
-  VEC_safe_push (decl_t,heap, decls, decl);
+  VLA_PTR_ADD (decls, decl);
+  num_dfa_decls++;
 }
 
 /* Process a PRESENCE_SET.
@@ -1435,7 +1855,7 @@ gen_presence_absence_set (rtx def, int presence_p, int final_p)
     This gives information about a cpu unit reservation requirements.
    We fill a struct unit_pattern_rel_decl (presence) with information
    used later by `expand_automata'.  */
-static void
+void
 gen_presence_set (rtx def)
 {
   gen_presence_absence_set (def, TRUE, FALSE);
@@ -1446,7 +1866,7 @@ gen_presence_set (rtx def)
    This gives information about a cpu unit reservation requirements.
    We fill a struct unit_pattern_rel_decl (presence) with information
    used later by `expand_automata'.  */
-static void
+void
 gen_final_presence_set (rtx def)
 {
   gen_presence_absence_set (def, TRUE, TRUE);
@@ -1457,7 +1877,7 @@ gen_final_presence_set (rtx def)
    This gives information about a cpu unit reservation requirements.
    We fill a struct unit_pattern_rel_decl (absence) with information
    used later by `expand_automata'.  */
-static void
+void
 gen_absence_set (rtx def)
 {
   gen_presence_absence_set (def, FALSE, FALSE);
@@ -1468,7 +1888,7 @@ gen_absence_set (rtx def)
    This gives information about a cpu unit reservation requirements.
    We fill a struct unit_pattern_rel_decl (absence) with information
    used later by `expand_automata'.  */
-static void
+void
 gen_final_absence_set (rtx def)
 {
   gen_presence_absence_set (def, FALSE, TRUE);
@@ -1479,7 +1899,7 @@ gen_final_absence_set (rtx def)
    This gives information about a finite state automaton used for
    recognizing pipeline hazards.  We fill a struct automaton_decl
    with information used later by `expand_automata'.  */
-static void
+void
 gen_automaton (rtx def)
 {
   decl_t decl;
@@ -1487,7 +1907,8 @@ gen_automaton (rtx def)
   int vect_length;
   int i;
 
-  str_automata = get_str_vect (XSTR (def, 0), &vect_length, ',', FALSE);
+  str_automata = get_str_vect ((char *) XSTR (def, 0), &vect_length, ',',
+			       FALSE);
   if (str_automata == NULL)
     fatal ("invalid string `%s' in define_automaton", XSTR (def, 0));
   for (i = 0; i < vect_length; i++)
@@ -1496,7 +1917,8 @@ gen_automaton (rtx def)
       decl->mode = dm_automaton;
       decl->pos = 0;
       DECL_AUTOMATON (decl)->name = check_name (str_automata [i], decl->pos);
-      VEC_safe_push (decl_t,heap, decls, decl);
+      VLA_PTR_ADD (decls, decl);
+      num_dfa_decls++;
     }
 }
 
@@ -1504,7 +1926,7 @@ gen_automaton (rtx def)
 
    This gives information how to generate finite state automaton used
    for recognizing pipeline hazards.  */
-static void
+void
 gen_automata_option (rtx def)
 {
   if (strcmp (XSTR (def, 0), NO_MINIMIZATION_OPTION + 1) == 0)
@@ -1528,14 +1950,13 @@ gen_automata_option (rtx def)
 
 /* The following string contains original reservation string being
    parsed.  */
-static const char *reserv_str;
+static char *reserv_str;
 
 /* Parse an element in STR.  */
 static regexp_t
-gen_regexp_el (const char *str)
+gen_regexp_el (char *str)
 {
   regexp_t regexp;
-  char *dstr;
   int len;
 
   if (*str == '(')
@@ -1543,10 +1964,8 @@ gen_regexp_el (const char *str)
       len = strlen (str);
       if (str [len - 1] != ')')
 	fatal ("garbage after ) in reservation `%s'", reserv_str);
-      dstr = alloca (len - 1);
-      memcpy (dstr, str + 1, len - 2);
-      dstr [len-2] = '\0';
-      regexp = gen_regexp_sequence (dstr);
+      str [len - 1] = '\0';
+      regexp = gen_regexp_sequence (str + 1);
     }
   else if (strcmp (str, NOTHING_NAME) == 0)
     {
@@ -1564,7 +1983,7 @@ gen_regexp_el (const char *str)
 
 /* Parse construction `repeat' in STR.  */
 static regexp_t
-gen_regexp_repeat (const char *str)
+gen_regexp_repeat (char *str)
 {
   regexp_t regexp;
   regexp_t repeat;
@@ -1597,7 +2016,7 @@ gen_regexp_repeat (const char *str)
 
 /* Parse reservation STR which possibly contains separator '+'.  */
 static regexp_t
-gen_regexp_allof (const char *str)
+gen_regexp_allof (char *str)
 {
   regexp_t allof;
   char **allof_vect;
@@ -1623,7 +2042,7 @@ gen_regexp_allof (const char *str)
 
 /* Parse reservation STR which possibly contains separator '|'.  */
 static regexp_t
-gen_regexp_oneof (const char *str)
+gen_regexp_oneof (char *str)
 {
   regexp_t oneof;
   char **oneof_vect;
@@ -1649,7 +2068,7 @@ gen_regexp_oneof (const char *str)
 
 /* Parse reservation STR which possibly contains separator ','.  */
 static regexp_t
-gen_regexp_sequence (const char *str)
+gen_regexp_sequence (char *str)
 {
   regexp_t sequence;
   char **sequence_vect;
@@ -1674,7 +2093,7 @@ gen_regexp_sequence (const char *str)
 
 /* Parse construction reservation STR.  */
 static regexp_t
-gen_regexp (const char *str)
+gen_regexp (char *str)
 {
   reserv_str = str;
   return gen_regexp_sequence (str);;
@@ -1685,7 +2104,7 @@ gen_regexp (const char *str)
    This gives information about a reservation of cpu units.  We fill
    in a struct reserv_decl with information used later by
    `expand_automata'.  */
-static void
+void
 gen_reserv (rtx def)
 {
   decl_t decl;
@@ -1693,9 +2112,10 @@ gen_reserv (rtx def)
   decl = create_node (sizeof (struct decl));
   decl->mode = dm_reserv;
   decl->pos = 0;
-  DECL_RESERV (decl)->name = check_name (XSTR (def, 0), decl->pos);
-  DECL_RESERV (decl)->regexp = gen_regexp (XSTR (def, 1));
-  VEC_safe_push (decl_t,heap, decls, decl);
+  DECL_RESERV (decl)->name = check_name ((char *) XSTR (def, 0), decl->pos);
+  DECL_RESERV (decl)->regexp = gen_regexp ((char *) XSTR (def, 1));
+  VLA_PTR_ADD (decls, decl);
+  num_dfa_decls++;
 }
 
 /* Process a DEFINE_INSN_RESERVATION.
@@ -1703,7 +2123,7 @@ gen_reserv (rtx def)
    This gives information about the reservation of cpu units by an
    insn.  We fill a struct insn_reserv_decl with information used
    later by `expand_automata'.  */
-static void
+void
 gen_insn_reserv (rtx def)
 {
   decl_t decl;
@@ -1712,11 +2132,12 @@ gen_insn_reserv (rtx def)
   decl->mode = dm_insn_reserv;
   decl->pos = 0;
   DECL_INSN_RESERV (decl)->name
-    = check_name (XSTR (def, 0), decl->pos);
+    = check_name ((char *) XSTR (def, 0), decl->pos);
   DECL_INSN_RESERV (decl)->default_latency = XINT (def, 1);
   DECL_INSN_RESERV (decl)->condexp = XEXP (def, 2);
-  DECL_INSN_RESERV (decl)->regexp = gen_regexp (XSTR (def, 3));
-  VEC_safe_push (decl_t,heap, decls, decl);
+  DECL_INSN_RESERV (decl)->regexp = gen_regexp ((char *) XSTR (def, 3));
+  VLA_PTR_ADD (decls, decl);
+  num_dfa_decls++;
 }
 
 
@@ -1801,7 +2222,7 @@ static struct decl work_automaton_decl;
    declaration.  The function returns node found in the table, NULL if
    such node does not exist in the table.  */
 static decl_t
-find_automaton_decl (const char *name)
+find_automaton_decl (char *name)
 {
   void *entry;
 
@@ -1900,7 +2321,7 @@ static struct decl work_insn_decl;
    declaration.  The function returns node found in the table, NULL if
    such node does not exist in the table.  */
 static decl_t
-find_insn_decl (const char *name)
+find_insn_decl (char *name)
 {
   void *entry;
 
@@ -2000,7 +2421,7 @@ static struct decl work_decl;
    returns node found in the table, NULL if such node does not exist
    in the table.  */
 static decl_t
-find_decl (const char *name)
+find_decl (char *name)
 {
   void *entry;
 
@@ -2303,7 +2724,7 @@ add_presence_absence (unit_set_el_t dest_list,
 			}
 		      else
 			warning
-			  (0, "unit `%s' excludes and requires presence of `%s'",
+			  ("unit `%s' excludes and requires presence of `%s'",
 			   dst->unit_decl->name, unit->name);
 		    }
 		}
@@ -2323,7 +2744,7 @@ add_presence_absence (unit_set_el_t dest_list,
 		      }
 		    else
 		      warning
-			(0, "unit `%s' requires absence and presence of `%s'",
+			("unit `%s' requires absence and presence of `%s'",
 			 dst->unit_decl->name, unit->name);
 		  }
 	    if (no_error_flag)
@@ -2405,7 +2826,7 @@ process_decls (void)
 		error ("repeated declaration of automaton `%s'",
 		       DECL_AUTOMATON (decl)->name);
 	      else
-		warning (0, "repeated declaration of automaton `%s'",
+		warning ("repeated declaration of automaton `%s'",
 			 DECL_AUTOMATON (decl)->name);
 	    }
 	}
@@ -2418,6 +2839,8 @@ process_decls (void)
       decl = description->decls [i];
       if (decl->mode == dm_insn_reserv)
 	{
+          DECL_INSN_RESERV (decl)->condexp
+	    = check_attr_test (DECL_INSN_RESERV (decl)->condexp, 0, 0);
 	  if (DECL_INSN_RESERV (decl)->default_latency < 0)
 	    error ("define_insn_reservation `%s' has negative latency time",
 		   DECL_INSN_RESERV (decl)->name);
@@ -2523,7 +2946,7 @@ process_decls (void)
 			   DECL_BYPASS (decl)->in_insn_name);
 		      else
 			warning
-			  (0, "the same bypass `%s - %s' is already defined",
+			  ("the same bypass `%s - %s' is already defined",
 			   DECL_BYPASS (decl)->out_insn_name,
 			   DECL_BYPASS (decl)->in_insn_name);
 		    }
@@ -2633,7 +3056,7 @@ check_automaton_usage (void)
 	  if (!w_flag)
 	    error ("automaton `%s' is not used", DECL_AUTOMATON (decl)->name);
 	  else
-	    warning (0, "automaton `%s' is not used",
+	    warning ("automaton `%s' is not used",
 		     DECL_AUTOMATON (decl)->name);
 	}
     }
@@ -2747,14 +3170,14 @@ check_usage (void)
 	  if (!w_flag)
 	    error ("unit `%s' is not used", DECL_UNIT (decl)->name);
 	  else
-	    warning (0, "unit `%s' is not used", DECL_UNIT (decl)->name);
+	    warning ("unit `%s' is not used", DECL_UNIT (decl)->name);
 	}
       else if (decl->mode == dm_reserv && !DECL_RESERV (decl)->reserv_is_used)
 	{
 	  if (!w_flag)
 	    error ("reservation `%s' is not used", DECL_RESERV (decl)->name);
 	  else
-	    warning (0, "reservation `%s' is not used", DECL_RESERV (decl)->name);
+	    warning ("reservation `%s' is not used", DECL_RESERV (decl)->name);
 	}
     }
 }
@@ -3113,12 +3536,13 @@ add_advance_cycle_insn_decl (void)
   advance_cycle_insn_decl->mode = dm_insn_reserv;
   advance_cycle_insn_decl->pos = no_pos;
   DECL_INSN_RESERV (advance_cycle_insn_decl)->regexp = NULL;
-  DECL_INSN_RESERV (advance_cycle_insn_decl)->name = "$advance_cycle";
+  DECL_INSN_RESERV (advance_cycle_insn_decl)->name = (char *) "$advance_cycle";
   DECL_INSN_RESERV (advance_cycle_insn_decl)->insn_num
     = description->insns_num;
   description->decls [description->decls_num] = advance_cycle_insn_decl;
   description->decls_num++;
   description->insns_num++;
+  num_dfa_decls++;
 }
 
 
@@ -3203,50 +3627,47 @@ alt_state_cmp (const void *alt_state_ptr_1, const void *alt_state_ptr_2)
 /* The function sorts ALT_STATES_LIST and removes duplicated alt
    states from the list.  The comparison key is alt state unique
    number.  */
-
 static alt_state_t
 uniq_sort_alt_states (alt_state_t alt_states_list)
 {
   alt_state_t curr_alt_state;
-  VEC(alt_state_t,heap) *alt_states;
+  vla_ptr_t alt_states;
   size_t i;
   size_t prev_unique_state_ind;
   alt_state_t result;
+  alt_state_t *result_ptr;
 
-  if (alt_states_list == 0)
-    return 0;
-  if (alt_states_list->next_alt_state == 0)
-    return alt_states_list;
-
-  alt_states = VEC_alloc (alt_state_t,heap, 150);
+  VLA_PTR_CREATE (alt_states, 150, "alt_states");
   for (curr_alt_state = alt_states_list;
        curr_alt_state != NULL;
        curr_alt_state = curr_alt_state->next_alt_state)
-    VEC_safe_push (alt_state_t,heap, alt_states, curr_alt_state);
-
-  qsort (VEC_address (alt_state_t, alt_states),
-	 VEC_length  (alt_state_t, alt_states),
+    VLA_PTR_ADD (alt_states, curr_alt_state);
+  qsort (VLA_PTR_BEGIN (alt_states), VLA_PTR_LENGTH (alt_states),
 	 sizeof (alt_state_t), alt_state_cmp);
-
-  prev_unique_state_ind = 0;
-  for (i = 1; i < VEC_length (alt_state_t, alt_states); i++)
-    if (VEC_index (alt_state_t, alt_states, prev_unique_state_ind)->state
-	!= VEC_index (alt_state_t, alt_states, i)->state)
-      {
-	prev_unique_state_ind++;
-	VEC_replace (alt_state_t, alt_states, prev_unique_state_ind,
-		     VEC_index (alt_state_t, alt_states, i));
-      }
-  VEC_truncate (alt_state_t, alt_states, prev_unique_state_ind + 1);
-
-  for (i = 1; i < VEC_length (alt_state_t, alt_states); i++)
-    VEC_index (alt_state_t, alt_states, i-1)->next_sorted_alt_state
-      = VEC_index (alt_state_t, alt_states, i);
-  VEC_last (alt_state_t, alt_states)->next_sorted_alt_state = 0;
-
-  result = VEC_index (alt_state_t, alt_states, 0);
-
-  VEC_free (alt_state_t,heap, alt_states);
+  if (VLA_PTR_LENGTH (alt_states) == 0)
+    result = NULL;
+  else
+    {
+      result_ptr = VLA_PTR_BEGIN (alt_states);
+      prev_unique_state_ind = 0;
+      for (i = 1; i < VLA_PTR_LENGTH (alt_states); i++)
+        if (result_ptr [prev_unique_state_ind]->state != result_ptr [i]->state)
+          {
+            prev_unique_state_ind++;
+            result_ptr [prev_unique_state_ind] = result_ptr [i];
+          }
+#if 0
+      for (i = prev_unique_state_ind + 1; i < VLA_PTR_LENGTH (alt_states); i++)
+        free_alt_state (result_ptr [i]);
+#endif
+      VLA_PTR_SHORTEN (alt_states, i - prev_unique_state_ind - 1);
+      result_ptr = VLA_PTR_BEGIN (alt_states);
+      for (i = 1; i < VLA_PTR_LENGTH (alt_states); i++)
+        result_ptr [i - 1]->next_sorted_alt_state = result_ptr [i];
+      result_ptr [i - 1]->next_sorted_alt_state = NULL;
+      result = *result_ptr;
+    }
+  VLA_PTR_DELETE (alt_states);
   return result;
 }
 
@@ -3314,7 +3735,11 @@ static int els_in_cycle_reserv;
    variable value * number of bits in set_el_t.  */
 static int els_in_reservs;
 
-/* Array of pointers to unit declarations.  */
+/* VLA for representation of array of pointers to unit
+   declarations.  */
+static vla_ptr_t units_container;
+
+/* The start address of the array.  */
 static unit_decl_t *units_array;
 
 /* Temporary reservation of maximal length.  */
@@ -3323,9 +3748,9 @@ static reserv_sets_t temp_reserv;
 /* The state table itself is represented by the following variable.  */
 static htab_t state_table;
 
-/* Linked list of free 'state' structures to be recycled.  The
-   next_equiv_class_state pointer is borrowed for a free list.  */
-static state_t first_free_state;
+/* VLA for representation of array of pointers to free nodes
+   `state'.  */
+static vla_ptr_t free_states;
 
 static int curr_unique_state_num;
 
@@ -3433,6 +3858,23 @@ test_unit_reserv (reserv_sets_t reservs, int cycle_num, int unit_num)
   gcc_assert (cycle_num < max_cycles_num);
   return TEST_BIT (reservs, cycle_num * els_in_cycle_reserv
 		   * sizeof (set_el_t) * CHAR_BIT + unit_num);
+}
+
+/* The function checks that the reservation set represents no one unit
+   reservation.  */
+static int
+it_is_empty_reserv_sets (reserv_sets_t operand)
+{
+  set_el_t *reserv_ptr;
+  int reservs_num;
+
+  gcc_assert (operand);
+  for (reservs_num = els_in_reservs, reserv_ptr = operand;
+       reservs_num != 0;
+       reserv_ptr++, reservs_num--)
+    if (*reserv_ptr != 0)
+      return 0;
+  return 1;
 }
 
 /* The function checks that the reservation sets are intersected,
@@ -3610,12 +4052,10 @@ get_free_state (int with_reservs, automaton_t automaton)
   state_t result;
 
   gcc_assert (max_cycles_num > 0 && automaton);
-  if (first_free_state)
+  if (VLA_PTR_LENGTH (free_states) != 0)
     {
-      result = first_free_state;
-      first_free_state = result->next_equiv_class_state;
-
-      result->next_equiv_class_state = NULL;
+      result = VLA_PTR (free_states, VLA_PTR_LENGTH (free_states) - 1);
+      VLA_PTR_SHORTEN (free_states, 1);
       result->automaton = automaton;
       result->first_out_arc = NULL;
       result->it_was_placed_in_stack_for_NDFA_forming = 0;
@@ -3650,8 +4090,7 @@ static void
 free_state (state_t state)
 {
   free_alt_states (state->component_states);
-  state->next_equiv_class_state = first_free_state;
-  first_free_state = state;
+  VLA_PTR_ADD (free_states, state);
 }
 
 /* Hash value of STATE.  If STATE represents deterministic state it is
@@ -3792,11 +4231,10 @@ initiate_states (void)
   decl_t decl;
   int i;
 
-  if (description->units_num)
-    units_array = XNEWVEC (unit_decl_t, description->units_num);
-  else
-    units_array = 0;
-
+  VLA_PTR_CREATE (units_container, description->units_num, "units_container");
+  units_array
+    = (description->decls_num && description->units_num
+       ? VLA_PTR_BEGIN (units_container) : NULL);
   for (i = 0; i < description->decls_num; i++)
     {
       decl = description->decls [i];
@@ -3810,6 +4248,7 @@ initiate_states (void)
   els_in_reservs = els_in_cycle_reserv * max_cycles_num;
   curr_unique_state_num = 0;
   initiate_alt_states ();
+  VLA_PTR_CREATE (free_states, 1500, "free states");
   state_table = htab_create (1500, state_hash, state_eq_p, (htab_del) 0);
   temp_reserv = alloc_empty_reserv_sets ();
 }
@@ -3818,10 +4257,9 @@ initiate_states (void)
 static void
 finish_states (void)
 {
-  free (units_array);
-  units_array = 0;
+  VLA_PTR_DELETE (units_container);
   htab_delete (state_table);
-  first_free_state = NULL;
+  VLA_PTR_DELETE (free_states);
   finish_alt_states ();
 }
 
@@ -3864,7 +4302,6 @@ remove_arc (state_t from_state, arc_t arc)
     from_state->first_out_arc = arc->next_out_arc;
   else
     prev_arc->next_out_arc = arc->next_out_arc;
-  from_state->num_out_arcs--;
   free_arc (arc);
 }
 
@@ -3881,10 +4318,12 @@ find_arc (state_t from_state, state_t to_state, ainsn_t insn)
   return NULL;
 }
 
-/* The function adds arc from FROM_STATE to TO_STATE marked by AINSN.
-   The function returns added arc (or already existing arc).  */
+/* The function adds arc from FROM_STATE to TO_STATE marked by AINSN
+   and with given STATE_ALTS.  The function returns added arc (or
+   already existing arc).  */
 static arc_t
-add_arc (state_t from_state, state_t to_state, ainsn_t ainsn)
+add_arc (state_t from_state, state_t to_state, ainsn_t ainsn,
+	 int state_alts)
 {
   arc_t new_arc;
 
@@ -3911,8 +4350,8 @@ add_arc (state_t from_state, state_t to_state, ainsn_t ainsn)
   ainsn->arc_exists_p = 1;
   new_arc->next_out_arc = from_state->first_out_arc;
   from_state->first_out_arc = new_arc;
-  from_state->num_out_arcs++;
   new_arc->next_arc_marked_by_insn = NULL;
+  new_arc->state_alts = state_alts;
   return new_arc;
 }
 
@@ -4897,10 +5336,6 @@ struct unit_usage
      same alternative.  */
   struct unit_usage *next;
 };
-typedef struct unit_usage *unit_usage_t;
-
-DEF_VEC_P(unit_usage_t);
-DEF_VEC_ALLOC_P(unit_usage_t,heap);
 
 /* Obstack for unit_usage structures.  */
 static struct obstack unit_usages;
@@ -4911,7 +5346,7 @@ static struct obstack unit_usages;
    alternative with given number are referred through element with
    index equals to the cycle * number of all alternatives in the regexp
    + the alternative number.  */
-static VEC(unit_usage_t,heap) *cycle_alt_unit_usages;
+static vla_ptr_t cycle_alt_unit_usages;
 
 /* The following function creates the structure unit_usage for UNIT on
    CYCLE in REGEXP alternative with ALT_NUM.  The structure is made
@@ -4920,26 +5355,29 @@ static void
 store_alt_unit_usage (regexp_t regexp, regexp_t unit, int cycle,
 		      int alt_num)
 {
-  size_t length;
+  size_t i, length, old_length;
   unit_decl_t unit_decl;
-  unit_usage_t unit_usage_ptr;
+  struct unit_usage *unit_usage_ptr;
   int index;
 
   gcc_assert (regexp && regexp->mode == rm_oneof
 	      && alt_num < REGEXP_ONEOF (regexp)->regexps_num);
   unit_decl = REGEXP_UNIT (unit)->unit_decl;
-
+  old_length = VLA_PTR_LENGTH (cycle_alt_unit_usages);
   length = (cycle + 1) * REGEXP_ONEOF (regexp)->regexps_num;
-  while (VEC_length (unit_usage_t, cycle_alt_unit_usages) < length)
-    VEC_safe_push (unit_usage_t,heap, cycle_alt_unit_usages, 0);
-  
+  if (old_length < length)
+    {
+      VLA_PTR_EXPAND (cycle_alt_unit_usages, length - old_length);
+      for (i = old_length; i < length; i++)
+	VLA_PTR (cycle_alt_unit_usages, i) = NULL;
+    }
   obstack_blank (&unit_usages, sizeof (struct unit_usage));
   unit_usage_ptr = (struct unit_usage *) obstack_base (&unit_usages);
   obstack_finish (&unit_usages);
   unit_usage_ptr->unit_decl = unit_decl;
   index = cycle * REGEXP_ONEOF (regexp)->regexps_num + alt_num;
-  unit_usage_ptr->next = VEC_index (unit_usage_t, cycle_alt_unit_usages, index);
-  VEC_replace (unit_usage_t, cycle_alt_unit_usages, index, unit_usage_ptr);
+  unit_usage_ptr->next = VLA_PTR (cycle_alt_unit_usages, index);
+  VLA_PTR (cycle_alt_unit_usages, index) = unit_usage_ptr;
   unit_decl->last_distribution_check_cycle = -1; /* undefined */
 }
 
@@ -4957,8 +5395,7 @@ check_regexp_units_distribution (const char *insn_reserv_name,
     return;
   /* Store all unit usages in the regexp:  */
   obstack_init (&unit_usages);
-  cycle_alt_unit_usages = 0;
-
+  VLA_PTR_CREATE (cycle_alt_unit_usages, 100, "unit usages on cycles");
   for (i = REGEXP_ONEOF (regexp)->regexps_num - 1; i >= 0; i--)
     {
       seq = REGEXP_ONEOF (regexp)->regexps [i];
@@ -5025,33 +5462,31 @@ check_regexp_units_distribution (const char *insn_reserv_name,
 	}
     }
   /* Check distribution:  */
-  for (i = 0; i < (int) VEC_length (unit_usage_t, cycle_alt_unit_usages); i++)
+  for (i = 0; i < (int) VLA_PTR_LENGTH (cycle_alt_unit_usages); i++)
     {
       cycle = i / REGEXP_ONEOF (regexp)->regexps_num;
-      for (unit_usage_ptr = VEC_index (unit_usage_t, cycle_alt_unit_usages, i);
+      for (unit_usage_ptr = VLA_PTR (cycle_alt_unit_usages, i);
 	   unit_usage_ptr != NULL;
 	   unit_usage_ptr = unit_usage_ptr->next)
 	if (cycle != unit_usage_ptr->unit_decl->last_distribution_check_cycle)
 	  {
 	    unit_usage_ptr->unit_decl->last_distribution_check_cycle = cycle;
 	    for (k = cycle * REGEXP_ONEOF (regexp)->regexps_num;
-		 k < (int) VEC_length (unit_usage_t, cycle_alt_unit_usages)
+		 k < (int) VLA_PTR_LENGTH (cycle_alt_unit_usages)
 		   && k == cycle * REGEXP_ONEOF (regexp)->regexps_num;
 		 k++)
 	      {
-		for (other_unit_usage_ptr
-		       = VEC_index (unit_usage_t, cycle_alt_unit_usages, k);
+		for (other_unit_usage_ptr = VLA_PTR (cycle_alt_unit_usages, k);
 		     other_unit_usage_ptr != NULL;
 		     other_unit_usage_ptr = other_unit_usage_ptr->next)
 		  if (unit_usage_ptr->unit_decl->automaton_decl
 		      == other_unit_usage_ptr->unit_decl->automaton_decl)
 		    break;
 		if (other_unit_usage_ptr == NULL
-		    && (VEC_index (unit_usage_t, cycle_alt_unit_usages, k)
-			!= NULL))
+		    && VLA_PTR (cycle_alt_unit_usages, k) != NULL)
 		  break;
 	      }
-	    if (k < (int) VEC_length (unit_usage_t, cycle_alt_unit_usages)
+	    if (k < (int) VLA_PTR_LENGTH (cycle_alt_unit_usages)
 		&& k == cycle * REGEXP_ONEOF (regexp)->regexps_num)
 	      {
 		if (!annotation_message_reported_p)
@@ -5067,7 +5502,7 @@ check_regexp_units_distribution (const char *insn_reserv_name,
 	      }
 	  }
     }
-  VEC_free (unit_usage_t,heap, cycle_alt_unit_usages);
+  VLA_PTR_DELETE (cycle_alt_unit_usages);
   obstack_free (&unit_usages, NULL);
 }
 
@@ -5243,14 +5678,16 @@ create_alt_states (automaton_t automaton)
 
 /* The function forms list of ainsns of AUTOMATON with the same
    reservation.  */
-
 static void
 form_ainsn_with_same_reservs (automaton_t automaton)
 {
   ainsn_t curr_ainsn;
   size_t i;
-  VEC(ainsn_t,heap) *last_insns = VEC_alloc (ainsn_t,heap, 150);
+  vla_ptr_t first_insns;
+  vla_ptr_t last_insns;
 
+  VLA_PTR_CREATE (first_insns, 150, "first insns with the same reservs");
+  VLA_PTR_CREATE (last_insns, 150, "last insns with the same reservs");
   for (curr_ainsn = automaton->ainsn_list;
        curr_ainsn != NULL;
        curr_ainsn = curr_ainsn->next_ainsn)
@@ -5262,26 +5699,28 @@ form_ainsn_with_same_reservs (automaton_t automaton)
       }
     else
       {
-        for (i = 0; i < VEC_length (ainsn_t, last_insns); i++)
+        for (i = 0; i < VLA_PTR_LENGTH (first_insns); i++)
           if (alt_states_eq
               (curr_ainsn->sorted_alt_states,
-               VEC_index (ainsn_t, last_insns, i)->sorted_alt_states))
+               ((ainsn_t) VLA_PTR (first_insns, i))->sorted_alt_states))
             break;
         curr_ainsn->next_same_reservs_insn = NULL;
-        if (i < VEC_length (ainsn_t, last_insns))
+        if (i < VLA_PTR_LENGTH (first_insns))
           {
             curr_ainsn->first_insn_with_same_reservs = 0;
-	    VEC_index (ainsn_t, last_insns, i)->next_same_reservs_insn
+	    ((ainsn_t) VLA_PTR (last_insns, i))->next_same_reservs_insn
 	      = curr_ainsn;
-            VEC_replace (ainsn_t, last_insns, i, curr_ainsn);
+            VLA_PTR (last_insns, i) = curr_ainsn;
           }
         else
           {
-            VEC_safe_push (ainsn_t, heap, last_insns, curr_ainsn);
+            VLA_PTR_ADD (first_insns, curr_ainsn);
+            VLA_PTR_ADD (last_insns, curr_ainsn);
             curr_ainsn->first_insn_with_same_reservs = 1;
           }
       }
-  VEC_free (ainsn_t,heap, last_insns);
+  VLA_PTR_DELETE (first_insns);
+  VLA_PTR_DELETE (last_insns);
 }
 
 /* Forming unit reservations which can affect creating the automaton
@@ -5313,7 +5752,8 @@ form_reservs_matter (automaton_t automaton)
   return reservs_matter;
 }
 
-/* The following function creates all states of nondeterministic AUTOMATON.  */
+/* The following function creates all states of nondeterministic (if
+   NDFA_FLAG has nonzero value) or deterministic AUTOMATON.  */
 static void
 make_automaton (automaton_t automaton)
 {
@@ -5325,19 +5765,21 @@ make_automaton (automaton_t automaton)
   state_t state2;
   ainsn_t advance_cycle_ainsn;
   arc_t added_arc;
-  VEC(state_t,heap) *state_stack = VEC_alloc(state_t,heap, 150);
+  vla_ptr_t state_stack;
   int states_n;
   reserv_sets_t reservs_matter = form_reservs_matter (automaton);
 
+  VLA_PTR_CREATE (state_stack, 150, "state stack");
   /* Create the start state (empty state).  */
   start_state = insert_state (get_free_state (1, automaton));
   automaton->start_state = start_state;
   start_state->it_was_placed_in_stack_for_NDFA_forming = 1;
-  VEC_safe_push (state_t,heap, state_stack, start_state);
+  VLA_PTR_ADD (state_stack, start_state);
   states_n = 1;
-  while (VEC_length (state_t, state_stack) != 0)
+  while (VLA_PTR_LENGTH (state_stack) != 0)
     {
-      state = VEC_pop (state_t, state_stack);
+      state = VLA_PTR (state_stack, VLA_PTR_LENGTH (state_stack) - 1);
+      VLA_PTR_SHORTEN (state_stack, 1);
       advance_cycle_ainsn = NULL;
       for (ainsn = automaton->ainsn_list;
 	   ainsn != NULL;
@@ -5362,22 +5804,27 @@ make_automaton (automaton_t automaton)
                           {
                             state2->it_was_placed_in_stack_for_NDFA_forming
 			      = 1;
-                            VEC_safe_push (state_t,heap, state_stack, state2);
+                            VLA_PTR_ADD (state_stack, state2);
 			    states_n++;
 			    if (progress_flag && states_n % 100 == 0)
 			      fprintf (stderr, ".");
                           }
-			added_arc = add_arc (state, state2, ainsn);
+			added_arc = add_arc (state, state2, ainsn, 1);
 			if (!ndfa_flag)
 			  break;
                       }
                   }
 		if (!ndfa_flag && added_arc != NULL)
 		  {
+		    added_arc->state_alts = 0;
 		    for (alt_state = ainsn->alt_states;
 			 alt_state != NULL;
 			 alt_state = alt_state->next_alt_state)
-		      state2 = alt_state->state;
+		      {
+			state2 = alt_state->state;
+			if (!intersected_state_reservs_p (state, state2))
+			  added_arc->state_alts++;
+		      }
 		  }
               }
             else
@@ -5388,15 +5835,15 @@ make_automaton (automaton_t automaton)
       if (!state2->it_was_placed_in_stack_for_NDFA_forming)
         {
           state2->it_was_placed_in_stack_for_NDFA_forming = 1;
-          VEC_safe_push (state_t,heap, state_stack, state2);
+          VLA_PTR_ADD (state_stack, state2);
 	  states_n++;
 	  if (progress_flag && states_n % 100 == 0)
 	    fprintf (stderr, ".");
         }
       gcc_assert (advance_cycle_ainsn);
-      add_arc (state, state2, advance_cycle_ainsn);
+      add_arc (state, state2, advance_cycle_ainsn, 1);
     }
-  VEC_free (state_t,heap, state_stack);
+  VLA_PTR_DELETE (state_stack);
 }
 
 /* Foms lists of all arcs of STATE marked by the same ainsn.  */
@@ -5426,10 +5873,9 @@ form_arcs_marked_by_insn (state_t state)
    ORIGINAL_STATE and list of arcs ARCS_MARKED_BY_INSN marked by the
    same insn.  If the composed state is not in STATE_STACK yet, it is
    pushed into STATE_STACK.  */
-
 static int
 create_composed_state (state_t original_state, arc_t arcs_marked_by_insn,
-		       VEC(state_t,heap) **state_stack)
+		       vla_ptr_t *state_stack)
 {
   state_t state;
   alt_state_t alt_state, curr_alt_state;
@@ -5502,7 +5948,7 @@ create_composed_state (state_t original_state, arc_t arcs_marked_by_insn,
                 for (curr_arc = first_out_arc (curr_alt_state->state);
                      curr_arc != NULL;
                      curr_arc = next_out_arc (curr_arc))
-		  add_arc (state, curr_arc->to_state, curr_arc->insn);
+		  add_arc (state, curr_arc->to_state, curr_arc->insn, 1);
             }
           arcs_marked_by_insn->to_state = state;
           for (alts_number = 0,
@@ -5514,39 +5960,39 @@ create_composed_state (state_t original_state, arc_t arcs_marked_by_insn,
               remove_arc (original_state, curr_arc);
 	      alts_number++;
             }
+	  arcs_marked_by_insn->state_alts = alts_number;
         }
     }
   if (!state->it_was_placed_in_stack_for_DFA_forming)
     {
       state->it_was_placed_in_stack_for_DFA_forming = 1;
-      VEC_safe_push (state_t,heap, *state_stack, state);
+      VLA_PTR_ADD (*state_stack, state);
     }
   return new_state_p;
 }
 
 /* The function transforms nondeterministic AUTOMATON into
    deterministic.  */
-
 static void
 NDFA_to_DFA (automaton_t automaton)
 {
   state_t start_state;
   state_t state;
   decl_t decl;
-  VEC(state_t,heap) *state_stack;
+  vla_ptr_t state_stack;
   int i;
   int states_n;
 
-  state_stack = VEC_alloc (state_t,heap, 0);
-
+  VLA_PTR_CREATE (state_stack, 150, "state stack");
   /* Create the start state (empty state).  */
   start_state = automaton->start_state;
   start_state->it_was_placed_in_stack_for_DFA_forming = 1;
-  VEC_safe_push (state_t,heap, state_stack, start_state);
+  VLA_PTR_ADD (state_stack, start_state);
   states_n = 1;
-  while (VEC_length (state_t, state_stack) != 0)
+  while (VLA_PTR_LENGTH (state_stack) != 0)
     {
-      state = VEC_pop (state_t, state_stack);
+      state = VLA_PTR (state_stack, VLA_PTR_LENGTH (state_stack) - 1);
+      VLA_PTR_SHORTEN (state_stack, 1);
       form_arcs_marked_by_insn (state);
       for (i = 0; i < description->decls_num; i++)
 	{
@@ -5562,7 +6008,7 @@ NDFA_to_DFA (automaton_t automaton)
 	    }
 	}
     }
-  VEC_free (state_t,heap, state_stack);
+  VLA_PTR_DELETE (state_stack);
 }
 
 /* The following variable value is current number (1, 2, ...) of passing
@@ -5604,34 +6050,41 @@ initiate_pass_states (void)
 
 /* The following vla is used for storing pointers to all achieved
    states.  */
-static VEC(state_t,heap) *all_achieved_states;
+static vla_ptr_t all_achieved_states;
 
 /* This function is called by function pass_states to add an achieved
    STATE.  */
 static void
 add_achieved_state (state_t state)
 {
-  VEC_safe_push (state_t,heap, all_achieved_states, state);
+  VLA_PTR_ADD (all_achieved_states, state);
 }
 
 /* The function sets up equivalence numbers of insns which mark all
    out arcs of STATE by equiv_class_num_1 (if ODD_ITERATION_FLAG has
    nonzero value) or by equiv_class_num_2 of the destination state.
    The function returns number of out arcs of STATE.  */
-static void
+static int
 set_out_arc_insns_equiv_num (state_t state, int odd_iteration_flag)
 {
+  int state_out_arcs_num;
   arc_t arc;
 
+  state_out_arcs_num = 0;
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
     {
-      gcc_assert (!arc->insn->insn_reserv_decl->equiv_class_num);
+      gcc_assert (!arc->insn->insn_reserv_decl->equiv_class_num
+		  && !arc->insn->insn_reserv_decl->state_alts);
+      state_out_arcs_num++;
       arc->insn->insn_reserv_decl->equiv_class_num
 	= (odd_iteration_flag
            ? arc->to_state->equiv_class_num_1
 	   : arc->to_state->equiv_class_num_2);
-      gcc_assert (arc->insn->insn_reserv_decl->equiv_class_num);
+      arc->insn->insn_reserv_decl->state_alts = arc->state_alts;
+      gcc_assert (arc->insn->insn_reserv_decl->equiv_class_num
+		  && arc->insn->insn_reserv_decl->state_alts > 0);
     }
+  return state_out_arcs_num;
 }
 
 /* The function clears equivalence numbers and alt_states in all insns
@@ -5642,48 +6095,40 @@ clear_arc_insns_equiv_num (state_t state)
   arc_t arc;
 
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
-    arc->insn->insn_reserv_decl->equiv_class_num = 0;
+    {
+      arc->insn->insn_reserv_decl->equiv_class_num = 0;
+      arc->insn->insn_reserv_decl->state_alts = 0;
+    }
 }
 
+/* The function copies pointers to equivalent states from vla FROM
+   into vla TO.  */
+static void
+copy_equiv_class (vla_ptr_t *to, const vla_ptr_t *from)
+{
+  state_t *class_ptr;
+
+  VLA_PTR_NULLIFY (*to);
+  for (class_ptr = VLA_PTR_BEGIN (*from);
+       class_ptr <= (state_t *) VLA_PTR_LAST (*from);
+       class_ptr++)
+    VLA_PTR_ADD (*to, *class_ptr);
+}
 
 /* The following function returns TRUE if STATE reserves the unit with
    UNIT_NUM on the first cycle.  */
 static int
 first_cycle_unit_presence (state_t state, int unit_num)
 {
-  alt_state_t alt_state;
+  int presence_p;
 
   if (state->component_states == NULL)
-    return test_unit_reserv (state->reservs, 0, unit_num);
+    presence_p = test_unit_reserv (state->reservs, 0, unit_num);
   else
-    {
-      for (alt_state = state->component_states;
-	   alt_state != NULL;
-	   alt_state = alt_state->next_sorted_alt_state)
-	if (test_unit_reserv (alt_state->state->reservs, 0, unit_num))
-	  return true;
-    }
-  return false;
-}
-
-/* This fills in the presence_signature[] member of STATE.  */
-static void
-cache_presence (state_t state)
-{
-  int i, num = 0;
-  unsigned int sz;
-  sz = (description->query_units_num + sizeof (int) * CHAR_BIT - 1)
-        / (sizeof (int) * CHAR_BIT);
-  
-  state->presence_signature = create_node (sz * sizeof (int));
-  for (i = 0; i < description->units_num; i++)
-    if (units_array [i]->query_p)
-      {
-	int presence1_p = first_cycle_unit_presence (state, i);
-	state->presence_signature[num / (sizeof (int) * CHAR_BIT)]
-	  |= (!!presence1_p) << (num % (sizeof (int) * CHAR_BIT));
-	num++;
-      }
+    presence_p
+      = test_unit_reserv (state->component_states->state->reservs,
+			  0, unit_num);
+  return presence_p;
 }
 
 /* The function returns nonzero value if STATE is not equivalent to
@@ -5693,134 +6138,95 @@ cache_presence (state_t state)
    by ODD_ITERATION_FLAG.  */
 static int
 state_is_differed (state_t state, state_t another_state,
-		   int odd_iteration_flag)
+		   int another_state_out_arcs_num, int odd_iteration_flag)
 {
   arc_t arc;
-  unsigned int sz, si;
+  int state_out_arcs_num;
+  int i, presence1_p, presence2_p;
 
-  gcc_assert (state->num_out_arcs == another_state->num_out_arcs);
-
-  sz = (description->query_units_num + sizeof (int) * CHAR_BIT - 1)
-	/ (sizeof (int) * CHAR_BIT);
-
-  for (si = 0; si < sz; si++)
-    gcc_assert (state->presence_signature[si]
-		== another_state->presence_signature[si]);
-
+  state_out_arcs_num = 0;
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
     {
+      state_out_arcs_num++;
       if ((odd_iteration_flag
            ? arc->to_state->equiv_class_num_1
 	   : arc->to_state->equiv_class_num_2)
-          != arc->insn->insn_reserv_decl->equiv_class_num)
+          != arc->insn->insn_reserv_decl->equiv_class_num
+	  || (arc->insn->insn_reserv_decl->state_alts != arc->state_alts))
         return 1;
     }
-
-  return 0;
-}
-
-/* Compares two states pointed to by STATE_PTR_1 and STATE_PTR_2
-   and return -1, 0 or 1.  This function can be used as predicate for
-   qsort().  It requires the member presence_signature[] of both
-   states be filled.  */
-static int
-compare_states_for_equiv (const void *state_ptr_1,
-			  const void *state_ptr_2)
-{
-  state_t s1 = *(state_t *)state_ptr_1;
-  state_t s2 = *(state_t *)state_ptr_2;
-  unsigned int sz, si;
-  if (s1->num_out_arcs < s2->num_out_arcs)
-    return -1;
-  else if (s1->num_out_arcs > s2->num_out_arcs)
+  if (state_out_arcs_num != another_state_out_arcs_num)
     return 1;
-
-  sz = (description->query_units_num + sizeof (int) * CHAR_BIT - 1)
-	/ (sizeof (int) * CHAR_BIT);
-
-  for (si = 0; si < sz; si++)
-    if (s1->presence_signature[si] < s2->presence_signature[si])
-      return -1;
-    else if (s1->presence_signature[si] > s2->presence_signature[si])
-      return 1;
+  /* Now we are looking at the states with the point of view of query
+     units.  */
+  for (i = 0; i < description->units_num; i++)
+    if (units_array [i]->query_p)
+      {
+	presence1_p = first_cycle_unit_presence (state, i);
+	presence2_p = first_cycle_unit_presence (another_state, i);
+	if ((presence1_p && !presence2_p) || (!presence1_p && presence2_p))
+	  return 1;
+      }
   return 0;
 }
 
 /* The function makes initial partition of STATES on equivalent
-   classes and saves it into *CLASSES.  This function requires the input
-   to be sorted via compare_states_for_equiv().  */
-static int
-init_equiv_class (VEC(state_t,heap) *states, VEC (state_t,heap) **classes)
+   classes.  */
+static state_t
+init_equiv_class (state_t *states, int states_num)
 {
-  size_t i;
-  state_t prev = 0;
-  int class_num = 1;
+  state_t *state_ptr;
+  state_t result_equiv_class;
 
-  *classes = VEC_alloc (state_t,heap, 150);
-  for (i = 0; i < VEC_length (state_t, states); i++)
+  result_equiv_class = NULL;
+  for (state_ptr = states; state_ptr < states + states_num; state_ptr++)
     {
-      state_t state = VEC_index (state_t, states, i);
-      if (prev)
-        {
-	  if (compare_states_for_equiv (&prev, &state) != 0)
-	    {
-	      VEC_safe_push (state_t,heap, *classes, prev);
-	      class_num++;
-	      prev = NULL;
-	    }
-        }
-      state->equiv_class_num_1 = class_num;
-      state->next_equiv_class_state = prev;
-      prev = state;
+      (*state_ptr)->equiv_class_num_1 = 1;
+      (*state_ptr)->next_equiv_class_state = result_equiv_class;
+      result_equiv_class = *state_ptr;
     }
-  if (prev)
-    VEC_safe_push (state_t,heap, *classes, prev);
-  return class_num;
+  return result_equiv_class;
 }
 
-/* The function copies pointers to equivalent states from vla FROM
-   into vla TO.  */
-static void
-copy_equiv_class (VEC(state_t,heap) **to, VEC(state_t,heap) *from)
-{
-  VEC_free (state_t,heap, *to);
-  *to = VEC_copy (state_t,heap, from);
-}
-
-/* The function processes equivalence class given by its first state,
-   FIRST_STATE, on odd iteration if ODD_ITERATION_FLAG.  If there
+/* The function processes equivalence class given by its pointer
+   EQUIV_CLASS_PTR on odd iteration if ODD_ITERATION_FLAG.  If there
    are not equivalent states, the function partitions the class
    removing nonequivalent states and placing them in
    *NEXT_ITERATION_CLASSES, increments *NEW_EQUIV_CLASS_NUM_PTR ans
    assigns it to the state equivalence number.  If the class has been
    partitioned, the function returns nonzero value.  */
 static int
-partition_equiv_class (state_t first_state, int odd_iteration_flag,
-		       VEC(state_t,heap) **next_iteration_classes,
+partition_equiv_class (state_t *equiv_class_ptr, int odd_iteration_flag,
+		       vla_ptr_t *next_iteration_classes,
 		       int *new_equiv_class_num_ptr)
 {
   state_t new_equiv_class;
   int partition_p;
+  state_t first_state;
   state_t curr_state;
   state_t prev_state;
   state_t next_state;
+  int out_arcs_num;
 
   partition_p = 0;
-
-  while (first_state != NULL)
+  gcc_assert (*equiv_class_ptr);
+  for (first_state = *equiv_class_ptr;
+       first_state != NULL;
+       first_state = new_equiv_class)
     {
       new_equiv_class = NULL;
       if (first_state->next_equiv_class_state != NULL)
 	{
 	  /* There are more one states in the class equivalence.  */
-	  set_out_arc_insns_equiv_num (first_state, odd_iteration_flag);
+	  out_arcs_num = set_out_arc_insns_equiv_num (first_state,
+						      odd_iteration_flag);
 	  for (prev_state = first_state,
 		 curr_state = first_state->next_equiv_class_state;
 	       curr_state != NULL;
 	       curr_state = next_state)
 	    {
 	      next_state = curr_state->next_equiv_class_state;
-	      if (state_is_differed (curr_state, first_state, 
+	      if (state_is_differed (curr_state, first_state, out_arcs_num,
 				     odd_iteration_flag))
 		{
 		  /* Remove curr state from the class equivalence.  */
@@ -5842,65 +6248,62 @@ partition_equiv_class (state_t first_state, int odd_iteration_flag,
 	  clear_arc_insns_equiv_num (first_state);
 	}
       if (new_equiv_class != NULL)
-	VEC_safe_push (state_t,heap, *next_iteration_classes, new_equiv_class);
-      first_state = new_equiv_class;
+	VLA_PTR_ADD  (*next_iteration_classes, new_equiv_class);
     }
   return partition_p;
 }
 
 /* The function finds equivalent states of AUTOMATON.  */
 static void
-evaluate_equiv_classes (automaton_t automaton,
-			VEC(state_t,heap) **equiv_classes)
+evaluate_equiv_classes (automaton_t automaton, vla_ptr_t *equiv_classes)
 {
+  state_t new_equiv_class;
   int new_equiv_class_num;
   int odd_iteration_flag;
   int finish_flag;
-  VEC (state_t,heap) *next_iteration_classes;
-  size_t i;
+  vla_ptr_t next_iteration_classes;
+  state_t *equiv_class_ptr;
+  state_t *state_ptr;
 
-  all_achieved_states = VEC_alloc (state_t,heap, 1500);
+  VLA_PTR_CREATE (all_achieved_states, 1500, "all achieved states");
   pass_states (automaton, add_achieved_state);
-  pass_states (automaton, cache_presence);
-  qsort (VEC_address (state_t, all_achieved_states),
-	 VEC_length (state_t, all_achieved_states),
-         sizeof (state_t), compare_states_for_equiv);
-
+  new_equiv_class = init_equiv_class (VLA_PTR_BEGIN (all_achieved_states),
+                                      VLA_PTR_LENGTH (all_achieved_states));
   odd_iteration_flag = 0;
-  new_equiv_class_num = init_equiv_class (all_achieved_states,
-  					  &next_iteration_classes);
-
+  new_equiv_class_num = 1;
+  VLA_PTR_CREATE (next_iteration_classes, 150, "next iteration classes");
+  VLA_PTR_ADD (next_iteration_classes, new_equiv_class);
   do
     {
       odd_iteration_flag = !odd_iteration_flag;
       finish_flag = 1;
-      copy_equiv_class (equiv_classes, next_iteration_classes);
-
+      copy_equiv_class (equiv_classes, &next_iteration_classes);
       /* Transfer equiv numbers for the next iteration.  */
-      for (i = 0; i < VEC_length (state_t, all_achieved_states); i++)
+      for (state_ptr = VLA_PTR_BEGIN (all_achieved_states);
+	   state_ptr <= (state_t *) VLA_PTR_LAST (all_achieved_states);
+           state_ptr++)
 	if (odd_iteration_flag)
-	  VEC_index (state_t, all_achieved_states, i)->equiv_class_num_2
-	    = VEC_index (state_t, all_achieved_states, i)->equiv_class_num_1;
+	  (*state_ptr)->equiv_class_num_2 = (*state_ptr)->equiv_class_num_1;
 	else
-	  VEC_index (state_t, all_achieved_states, i)->equiv_class_num_1
-	    = VEC_index (state_t, all_achieved_states, i)->equiv_class_num_2;
-
-      for (i = 0; i < VEC_length (state_t, *equiv_classes); i++)
-	if (partition_equiv_class (VEC_index (state_t, *equiv_classes, i),
-				   odd_iteration_flag,
+	  (*state_ptr)->equiv_class_num_1 = (*state_ptr)->equiv_class_num_2;
+      for (equiv_class_ptr = VLA_PTR_BEGIN (*equiv_classes);
+           equiv_class_ptr <= (state_t *) VLA_PTR_LAST (*equiv_classes);
+           equiv_class_ptr++)
+	if (partition_equiv_class (equiv_class_ptr, odd_iteration_flag,
 				   &next_iteration_classes,
 				   &new_equiv_class_num))
 	  finish_flag = 0;
     }
   while (!finish_flag);
-  VEC_free (state_t,heap, next_iteration_classes);
-  VEC_free (state_t,heap, all_achieved_states);
+  VLA_PTR_DELETE (next_iteration_classes);
+  VLA_PTR_DELETE (all_achieved_states);
 }
 
 /* The function merges equivalent states of AUTOMATON.  */
 static void
-merge_states (automaton_t automaton, VEC(state_t,heap) *equiv_classes)
+merge_states (automaton_t automaton, vla_ptr_t *equiv_classes)
 {
+  state_t *equiv_class_ptr;
   state_t curr_state;
   state_t new_state;
   state_t first_class_state;
@@ -5908,92 +6311,88 @@ merge_states (automaton_t automaton, VEC(state_t,heap) *equiv_classes)
   alt_state_t alt_state, new_alt_state;
   arc_t curr_arc;
   arc_t next_arc;
-  size_t i;
 
   /* Create states corresponding to equivalence classes containing two
      or more states.  */
-  for (i = 0; i < VEC_length (state_t, equiv_classes); i++)
-    {
-      curr_state = VEC_index (state_t, equiv_classes, i);
-      if (curr_state->next_equiv_class_state != NULL)
-	{
-	  /* There are more one states in the class equivalence.  */
-	  /* Create new compound state.  */
-	  new_state = get_free_state (0, automaton);
-	  alt_states = NULL;
-	  first_class_state = curr_state;
-	  for (curr_state = first_class_state;
-	       curr_state != NULL;
-	       curr_state = curr_state->next_equiv_class_state)
-	    {
-	      curr_state->equiv_class_state = new_state;
-	      if (curr_state->component_states == NULL)
+  for (equiv_class_ptr = VLA_PTR_BEGIN (*equiv_classes);
+       equiv_class_ptr <= (state_t *) VLA_PTR_LAST (*equiv_classes);
+       equiv_class_ptr++)
+    if ((*equiv_class_ptr)->next_equiv_class_state != NULL)
+      {
+        /* There are more one states in the class equivalence.  */
+        /* Create new compound state.  */
+        new_state = get_free_state (0, automaton);
+        alt_states = NULL;
+        first_class_state = *equiv_class_ptr;
+        for (curr_state = first_class_state;
+             curr_state != NULL;
+             curr_state = curr_state->next_equiv_class_state)
+          {
+            curr_state->equiv_class_state = new_state;
+	    if (curr_state->component_states == NULL)
+	      {
+		new_alt_state = get_free_alt_state ();
+		new_alt_state->state = curr_state;
+		new_alt_state->next_alt_state = alt_states;
+		alt_states = new_alt_state;
+	      }
+	    else
+	      for (alt_state = curr_state->component_states;
+		   alt_state != NULL;
+		   alt_state = alt_state->next_sorted_alt_state)
 		{
 		  new_alt_state = get_free_alt_state ();
-		  new_alt_state->state = curr_state;
+		  new_alt_state->state = alt_state->state;
 		  new_alt_state->next_alt_state = alt_states;
 		  alt_states = new_alt_state;
 		}
-	      else
-		for (alt_state = curr_state->component_states;
-		     alt_state != NULL;
-		     alt_state = alt_state->next_sorted_alt_state)
-		  {
-		    new_alt_state = get_free_alt_state ();
-		    new_alt_state->state = alt_state->state;
-		    new_alt_state->next_alt_state = alt_states;
-		    alt_states = new_alt_state;
-		  }
-	    }
-	  /* Its is important that alt states were sorted before and
-	     after merging to have the same querying results.  */
-	  new_state->component_states = uniq_sort_alt_states (alt_states);
-	}
-      else
-	curr_state->equiv_class_state = curr_state;
-    }
-
-  for (i = 0; i < VEC_length (state_t, equiv_classes); i++)
-    {
-      curr_state = VEC_index (state_t, equiv_classes, i);
-      if (curr_state->next_equiv_class_state != NULL)
-	{
-	  first_class_state = curr_state;
-	  /* Create new arcs output from the state corresponding to
-	     equiv class.  */
-	  for (curr_arc = first_out_arc (first_class_state);
-	       curr_arc != NULL;
-	       curr_arc = next_out_arc (curr_arc))
-	    add_arc (first_class_state->equiv_class_state,
-		     curr_arc->to_state->equiv_class_state,
-		     curr_arc->insn);
-	  /* Delete output arcs from states of given class equivalence.  */
-	  for (curr_state = first_class_state;
-	       curr_state != NULL;
-	       curr_state = curr_state->next_equiv_class_state)
-	    {
-	      if (automaton->start_state == curr_state)
-		automaton->start_state = curr_state->equiv_class_state;
-	      /* Delete the state and its output arcs.  */
-	      for (curr_arc = first_out_arc (curr_state);
-		   curr_arc != NULL;
-		   curr_arc = next_arc)
-		{
-		  next_arc = next_out_arc (curr_arc);
-		  free_arc (curr_arc);
-		}
-	    }
-	}
-      else
-	{
-	  /* Change `to_state' of arcs output from the state of given
-	     equivalence class.  */
-	  for (curr_arc = first_out_arc (curr_state);
-	       curr_arc != NULL;
-	       curr_arc = next_out_arc (curr_arc))
-	    curr_arc->to_state = curr_arc->to_state->equiv_class_state;
-	}
-    }
+          }
+	/* Its is important that alt states were sorted before and
+           after merging to have the same querying results.  */
+        new_state->component_states = uniq_sort_alt_states (alt_states);
+      }
+    else
+      (*equiv_class_ptr)->equiv_class_state = *equiv_class_ptr;
+  for (equiv_class_ptr = VLA_PTR_BEGIN (*equiv_classes);
+       equiv_class_ptr <= (state_t *) VLA_PTR_LAST (*equiv_classes);
+       equiv_class_ptr++)
+    if ((*equiv_class_ptr)->next_equiv_class_state != NULL)
+      {
+        first_class_state = *equiv_class_ptr;
+        /* Create new arcs output from the state corresponding to
+           equiv class.  */
+        for (curr_arc = first_out_arc (first_class_state);
+             curr_arc != NULL;
+             curr_arc = next_out_arc (curr_arc))
+          add_arc (first_class_state->equiv_class_state,
+                   curr_arc->to_state->equiv_class_state,
+		   curr_arc->insn, curr_arc->state_alts);
+        /* Delete output arcs from states of given class equivalence.  */
+        for (curr_state = first_class_state;
+             curr_state != NULL;
+             curr_state = curr_state->next_equiv_class_state)
+          {
+            if (automaton->start_state == curr_state)
+              automaton->start_state = curr_state->equiv_class_state;
+            /* Delete the state and its output arcs.  */
+            for (curr_arc = first_out_arc (curr_state);
+                 curr_arc != NULL;
+                 curr_arc = next_arc)
+              {
+                next_arc = next_out_arc (curr_arc);
+                free_arc (curr_arc);
+              }
+          }
+      }
+    else
+      {
+        /* Change `to_state' of arcs output from the state of given
+           equivalence class.  */
+        for (curr_arc = first_out_arc (*equiv_class_ptr);
+             curr_arc != NULL;
+             curr_arc = next_out_arc (curr_arc))
+          curr_arc->to_state = curr_arc->to_state->equiv_class_state;
+      }
 }
 
 /* The function sets up new_cycle_p for states if there is arc to the
@@ -6014,13 +6413,13 @@ set_new_cycle_flags (state_t state)
 static void
 minimize_DFA (automaton_t automaton)
 {
-  VEC(state_t,heap) *equiv_classes = 0;
+  vla_ptr_t equiv_classes;
 
+  VLA_PTR_CREATE (equiv_classes, 1500, "equivalence classes");
   evaluate_equiv_classes (automaton, &equiv_classes);
-  merge_states (automaton, equiv_classes);
+  merge_states (automaton, &equiv_classes);
   pass_states (automaton, set_new_cycle_flags);
-
-  VEC_free (state_t,heap, equiv_classes);
+  VLA_PTR_DELETE (equiv_classes);
 }
 
 /* Values of two variables are counted number of states and arcs in an
@@ -6219,15 +6618,21 @@ static void
 process_state_for_insn_equiv_partition (state_t state)
 {
   arc_t arc;
-  arc_t *insn_arcs_array = XCNEWVEC (arc_t, description->insns_num);
+  arc_t *insn_arcs_array;
+  int i;
+  vla_ptr_t insn_arcs_vect;
 
+  VLA_PTR_CREATE (insn_arcs_vect, 500, "insn arcs vector");
+  VLA_PTR_EXPAND (insn_arcs_vect, description->insns_num);
+  insn_arcs_array = VLA_PTR_BEGIN (insn_arcs_vect);
   /* Process insns of the arcs.  */
+  for (i = 0; i < description->insns_num; i++)
+    insn_arcs_array [i] = NULL;
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
     insn_arcs_array [arc->insn->insn_reserv_decl->insn_num] = arc;
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
     process_insn_equiv_class (arc->insn, insn_arcs_array);
-
-  free (insn_arcs_array);
+  VLA_PTR_DELETE (insn_arcs_vect);
 }
 
 /* The function searches for equivalent ainsns of AUTOMATON.  */
@@ -6335,53 +6740,56 @@ compare_max_occ_cycle_nums (const void *unit_decl_1,
 
 /* The function makes heuristic assigning automata to units.  Actually
    efficacy of the algorithm has been checked yet??? */
-
 static void
 units_to_automata_heuristic_distr (void)
 {
   double estimation_bound;
+  decl_t decl;
+  decl_t *unit_decl_ptr;
   int automaton_num;
   int rest_units_num;
   double bound_value;
-  unit_decl_t *unit_decls;
-  int i, j;
+  vla_ptr_t unit_decls;
+  int i;
 
   if (description->units_num == 0)
     return;
   estimation_bound = estimate_one_automaton_bound ();
-  unit_decls = XNEWVEC (unit_decl_t, description->units_num);
-
-  for (i = 0, j = 0; i < description->decls_num; i++)
-    if (description->decls[i]->mode == dm_unit)
-      unit_decls[j++] = DECL_UNIT (description->decls[i]);
-  gcc_assert (j == description->units_num);
-
-  qsort (unit_decls, description->units_num,
-         sizeof (unit_decl_t), compare_max_occ_cycle_nums);
-
-  automaton_num = 0;
-  bound_value = unit_decls[0]->max_occ_cycle_num;
-  unit_decls[0]->corresponding_automaton_num = automaton_num;
-
-  for (i = 1; i < description->units_num; i++)
+  VLA_PTR_CREATE (unit_decls, 150, "unit decls");
+  for (i = 0; i < description->decls_num; i++)
     {
-      rest_units_num = description->units_num - i + 1;
+      decl = description->decls [i];
+      if (decl->mode == dm_unit)
+	VLA_PTR_ADD (unit_decls, decl);
+    }
+  qsort (VLA_PTR_BEGIN (unit_decls), VLA_PTR_LENGTH (unit_decls),
+         sizeof (decl_t), compare_max_occ_cycle_nums);
+  automaton_num = 0;
+  unit_decl_ptr = VLA_PTR_BEGIN (unit_decls);
+  bound_value = DECL_UNIT (*unit_decl_ptr)->max_occ_cycle_num;
+  DECL_UNIT (*unit_decl_ptr)->corresponding_automaton_num = automaton_num;
+  for (unit_decl_ptr++;
+       unit_decl_ptr <= (decl_t *) VLA_PTR_LAST (unit_decls);
+       unit_decl_ptr++)
+    {
+      rest_units_num
+	= ((decl_t *) VLA_PTR_LAST (unit_decls) - unit_decl_ptr + 1);
       gcc_assert (automata_num - automaton_num - 1 <= rest_units_num);
       if (automaton_num < automata_num - 1
           && ((automata_num - automaton_num - 1 == rest_units_num)
               || (bound_value
                   > (estimation_bound
-		     / unit_decls[i]->max_occ_cycle_num))))
+		     / (DECL_UNIT (*unit_decl_ptr)->max_occ_cycle_num)))))
         {
-          bound_value = unit_decls[i]->max_occ_cycle_num;
+          bound_value = DECL_UNIT (*unit_decl_ptr)->max_occ_cycle_num;
           automaton_num++;
         }
       else
-        bound_value *= unit_decls[i]->max_occ_cycle_num;
-      unit_decls[i]->corresponding_automaton_num = automaton_num;
+        bound_value *= DECL_UNIT (*unit_decl_ptr)->max_occ_cycle_num;
+      DECL_UNIT (*unit_decl_ptr)->corresponding_automaton_num = automaton_num;
     }
   gcc_assert (automaton_num == automata_num - 1);
-  free (unit_decls);
+  VLA_PTR_DELETE (unit_decls);
 }
 
 /* The functions creates automaton insns for each automata.  Automaton
@@ -6720,30 +7128,76 @@ longest_path_length (state_t state)
   return result;
 }
 
-/* The function outputs all initialization values of VECT.  */
+/* The following variable value is value of the corresponding global
+   variable in the automaton based pipeline interface.  */
+
+static int max_dfa_issue_rate;
+
+/* The following function processes the longest path length staring
+   from STATE to find MAX_DFA_ISSUE_RATE.  */
+
 static void
-output_vect (vla_hwint_t vect)
+process_state_longest_path_length (state_t state)
+{
+  int value;
+
+  value = longest_path_length (state);
+  if (value > max_dfa_issue_rate)
+    max_dfa_issue_rate = value;
+}
+
+/* The following macro value is name of the corresponding global
+   variable in the automaton based pipeline interface.  */
+
+#define MAX_DFA_ISSUE_RATE_VAR_NAME "max_dfa_issue_rate"
+
+/* The following function calculates value of the corresponding
+   global variable and outputs its declaration.  */
+
+static void
+output_dfa_max_issue_rate (void)
+{
+  automaton_t automaton;
+
+  gcc_assert (UNDEFINED_LONGEST_PATH_LENGTH != ON_THE_PATH && ON_THE_PATH < 0);
+  max_dfa_issue_rate = 0;
+  for (automaton = description->first_automaton;
+       automaton != NULL;
+       automaton = automaton->next_automaton)
+    pass_states (automaton, process_state_longest_path_length);
+  fprintf (output_file, "\nint %s = %d;\n",
+	   MAX_DFA_ISSUE_RATE_VAR_NAME, max_dfa_issue_rate);
+}
+
+/* The function outputs all initialization values of VECT with length
+   vect_length.  */
+static void
+output_vect (vect_el_t *vect, int vect_length)
 {
   int els_on_line;
-  size_t vect_length = VEC_length (vect_el_t, vect);
-  size_t i;
 
   els_on_line = 1;
   if (vect_length == 0)
-    fputs ("0 /* This is dummy el because the vect is empty */", output_file);
+    fprintf (output_file,
+             "0 /* This is dummy el because the vect is empty */");
   else
-    for (i = 0; i < vect_length; i++)
-      {
-	fprintf (output_file, "%5ld", (long) VEC_index (vect_el_t, vect, i));
-	if (els_on_line == 10)
-	  {
-	    els_on_line = 0;
-	    fputs (",\n", output_file);
-	  }
-	else if (i < vect_length-1)
-	  fputs (", ", output_file);
-	els_on_line++;
-      }
+    {
+      do
+        {
+          fprintf (output_file, "%5ld", (long) *vect);
+          vect_length--;
+          if (els_on_line == 10)
+	    {
+	      els_on_line = 0;
+	      fprintf (output_file, ",\n");
+	    }
+          else if (vect_length != 0)
+            fprintf (output_file, ", ");
+          els_on_line++;
+          vect++;
+        }
+      while (vect_length != 0);
+    }
 }
 
 /* The following is name of the structure which represents DFA(s) for
@@ -6831,6 +7285,53 @@ output_trans_base_vect_name (FILE *f, automaton_t automaton)
     fprintf (f, "%s_base", automaton->corresponding_automaton_decl->name);
 }
 
+/* Output name for simple alternatives number representation.  */
+static void
+output_state_alts_full_vect_name (FILE *f, automaton_t automaton)
+{
+  if (automaton->corresponding_automaton_decl == NULL)
+    fprintf (f, "state_alts_%d", automaton->automaton_order_num);
+  else
+    fprintf (f, "%s_state_alts",
+             automaton->corresponding_automaton_decl->name);
+}
+
+/* Output name of comb vector of the alternatives number table for given
+   automaton.  */
+static void
+output_state_alts_comb_vect_name (FILE *f, automaton_t automaton)
+{
+  if (automaton->corresponding_automaton_decl == NULL)
+    fprintf (f, "state_alts_%d", automaton->automaton_order_num);
+  else
+    fprintf (f, "%s_state_alts",
+             automaton->corresponding_automaton_decl->name);
+}
+
+/* Output name of check vector of the alternatives number table for given
+   automaton.  */
+static void
+output_state_alts_check_vect_name (FILE *f, automaton_t automaton)
+{
+  if (automaton->corresponding_automaton_decl == NULL)
+    fprintf (f, "check_state_alts_%d", automaton->automaton_order_num);
+  else
+    fprintf (f, "%s_check_state_alts",
+	     automaton->corresponding_automaton_decl->name);
+}
+
+/* Output name of base vector of the alternatives number table for given
+   automaton.  */
+static void
+output_state_alts_base_vect_name (FILE *f, automaton_t automaton)
+{
+  if (automaton->corresponding_automaton_decl == NULL)
+    fprintf (f, "base_state_alts_%d", automaton->automaton_order_num);
+  else
+    fprintf (f, "%s_base_state_alts",
+	     automaton->corresponding_automaton_decl->name);
+}
+
 /* Output name of simple min issue delay table representation.  */
 static void
 output_min_issue_delay_vect_name (FILE *f, automaton_t automaton)
@@ -6864,6 +7365,9 @@ output_reserved_units_table_name (FILE *f, automaton_t automaton)
 }
 
 /* Name of the PHR interface macro.  */
+#define AUTOMATON_STATE_ALTS_MACRO_NAME "AUTOMATON_STATE_ALTS"
+
+/* Name of the PHR interface macro.  */
 #define CPU_UNITS_QUERY_MACRO_NAME "CPU_UNITS_QUERY"
 
 /* Names of an internal functions: */
@@ -6873,6 +7377,8 @@ output_reserved_units_table_name (FILE *f, automaton_t automaton)
 #define STATE_TYPE_NAME "state_t"
 
 #define INTERNAL_TRANSITION_FUNC_NAME "internal_state_transition"
+
+#define INTERNAL_STATE_ALTS_FUNC_NAME "internal_state_alts"
 
 #define INTERNAL_RESET_FUNC_NAME "internal_reset"
 
@@ -6891,6 +7397,8 @@ output_reserved_units_table_name (FILE *f, automaton_t automaton)
 
 #define TRANSITION_FUNC_NAME "state_transition"
 
+#define STATE_ALTS_FUNC_NAME "state_alts"
+
 #define MIN_ISSUE_DELAY_FUNC_NAME "min_issue_delay"
 
 #define MIN_INSN_CONFLICT_DELAY_FUNC_NAME "min_insn_conflict_delay"
@@ -6908,8 +7416,6 @@ output_reserved_units_table_name (FILE *f, automaton_t automaton)
 #define CPU_UNIT_RESERVATION_P_FUNC_NAME "cpu_unit_reservation_p"
 
 #define DFA_CLEAN_INSN_CACHE_FUNC_NAME  "dfa_clean_insn_cache"
-
-#define DFA_CLEAR_SINGLE_INSN_CACHE_FUNC_NAME "dfa_clear_single_insn_cache"
 
 #define DFA_START_FUNC_NAME  "dfa_start"
 
@@ -6951,6 +7457,14 @@ output_reserved_units_table_name (FILE *f, automaton_t automaton)
 /* Name of function (attribute) to translate insn into internal insn
    code with caching.  */
 #define DFA_INSN_CODE_FUNC_NAME "dfa_insn_code"
+
+/* Name of function (attribute) to translate insn into internal insn
+   code.  */
+#define INSN_DEFAULT_LATENCY_FUNC_NAME "insn_default_latency"
+
+/* Name of function (attribute) to translate insn into internal insn
+   code.  */
+#define BYPASS_P_FUNC_NAME "bypass_p"
 
 /* Output C type which is used for representation of codes of states
    of AUTOMATON.  */
@@ -6995,18 +7509,14 @@ output_translate_vect (automaton_t automaton)
   int insn_value;
   vla_hwint_t translate_vect;
 
-  translate_vect = VEC_alloc (vect_el_t,heap, description->insns_num);
-
+  VLA_HWINT_CREATE (translate_vect, 250, "translate vector");
+  VLA_HWINT_EXPAND (translate_vect, description->insns_num);
   for (insn_value = 0; insn_value < description->insns_num; insn_value++)
     /* Undefined value */
-    VEC_quick_push (vect_el_t, translate_vect,
-		    automaton->insn_equiv_classes_num);
-
+    VLA_HWINT (translate_vect, insn_value) = automaton->insn_equiv_classes_num;
   for (ainsn = automaton->ainsn_list; ainsn != NULL; ainsn = ainsn->next_ainsn)
-    VEC_replace (vect_el_t, translate_vect,
-		 ainsn->insn_reserv_decl->insn_num,
-		 ainsn->insn_equiv_class_num);
-
+    VLA_HWINT (translate_vect, ainsn->insn_reserv_decl->insn_num)
+      = ainsn->insn_equiv_class_num;
   fprintf (output_file,
            "/* Vector translating external insn codes to internal ones.*/\n");
   fprintf (output_file, "static const ");
@@ -7014,9 +7524,10 @@ output_translate_vect (automaton_t automaton)
   fprintf (output_file, " ");
   output_translate_vect_name (output_file, automaton);
   fprintf (output_file, "[] ATTRIBUTE_UNUSED = {\n");
-  output_vect (translate_vect);
+  output_vect (VLA_HWINT_BEGIN (translate_vect),
+	       VLA_HWINT_LENGTH (translate_vect));
   fprintf (output_file, "};\n\n");
-  VEC_free (vect_el_t,heap, translate_vect);
+  VLA_HWINT_DELETE (translate_vect);
 }
 
 /* The value in a table state x ainsn -> something which represents
@@ -7028,8 +7539,8 @@ static int undefined_vect_el_value;
 static int
 comb_vect_p (state_ainsn_table_t tab)
 {
-  return  (2 * VEC_length (vect_el_t, tab->full_vect)
-           > 5 * VEC_length (vect_el_t, tab->comb_vect));
+  return  (2 * VLA_HWINT_LENGTH (tab->full_vect)
+           > 5 * VLA_HWINT_LENGTH (tab->comb_vect));
 }
 
 /* The following function creates new table for AUTOMATON.  */
@@ -7042,20 +7553,16 @@ create_state_ainsn_table (automaton_t automaton)
 
   tab = create_node (sizeof (struct state_ainsn_table));
   tab->automaton = automaton;
-
-  tab->comb_vect  = VEC_alloc (vect_el_t,heap, 10000);
-  tab->check_vect = VEC_alloc (vect_el_t,heap, 10000);
-
-  tab->base_vect  = 0;
-  VEC_safe_grow (vect_el_t,heap, tab->base_vect,
-		 automaton->achieved_states_num);
-
+  VLA_HWINT_CREATE (tab->comb_vect, 10000, "comb vector");
+  VLA_HWINT_CREATE (tab->check_vect, 10000, "check vector");
+  VLA_HWINT_CREATE (tab->base_vect, 1000, "base vector");
+  VLA_HWINT_EXPAND (tab->base_vect, automaton->achieved_states_num);
+  VLA_HWINT_CREATE (tab->full_vect, 10000, "full vector");
   full_vect_length = (automaton->insn_equiv_classes_num
                       * automaton->achieved_states_num);
-  tab->full_vect  = VEC_alloc (vect_el_t,heap, full_vect_length);
+  VLA_HWINT_EXPAND (tab->full_vect, full_vect_length);
   for (i = 0; i < full_vect_length; i++)
-    VEC_quick_push (vect_el_t, tab->full_vect, undefined_vect_el_value);
-
+    VLA_HWINT (tab->full_vect, i) = undefined_vect_el_value;
   tab->min_base_vect_el_value = 0;
   tab->max_base_vect_el_value = 0;
   tab->min_comb_vect_el_value = 0;
@@ -7066,7 +7573,7 @@ create_state_ainsn_table (automaton_t automaton)
 /* The following function outputs the best C representation of the
    table TAB of given TABLE_NAME.  */
 static void
-output_state_ainsn_table (state_ainsn_table_t tab, const char *table_name,
+output_state_ainsn_table (state_ainsn_table_t tab, char *table_name,
 			  void (*output_full_vect_name_func) (FILE *, automaton_t),
 			  void (*output_comb_vect_name_func) (FILE *, automaton_t),
 			  void (*output_check_vect_name_func) (FILE *, automaton_t),
@@ -7081,7 +7588,8 @@ output_state_ainsn_table (state_ainsn_table_t tab, const char *table_name,
       fprintf (output_file, " ");
       (*output_full_vect_name_func) (output_file, tab->automaton);
       fprintf (output_file, "[] ATTRIBUTE_UNUSED = {\n");
-      output_vect (tab->full_vect);
+      output_vect (VLA_HWINT_BEGIN (tab->full_vect),
+                   VLA_HWINT_LENGTH (tab->full_vect));
       fprintf (output_file, "};\n\n");
     }
   else
@@ -7093,7 +7601,8 @@ output_state_ainsn_table (state_ainsn_table_t tab, const char *table_name,
       fprintf (output_file, " ");
       (*output_comb_vect_name_func) (output_file, tab->automaton);
       fprintf (output_file, "[] ATTRIBUTE_UNUSED = {\n");
-      output_vect (tab->comb_vect);
+      output_vect (VLA_HWINT_BEGIN (tab->comb_vect),
+                   VLA_HWINT_LENGTH (tab->comb_vect));
       fprintf (output_file, "};\n\n");
       fprintf (output_file, "/* Check vector for %s.  */\n", table_name);
       fprintf (output_file, "static const ");
@@ -7101,7 +7610,8 @@ output_state_ainsn_table (state_ainsn_table_t tab, const char *table_name,
       fprintf (output_file, " ");
       (*output_check_vect_name_func) (output_file, tab->automaton);
       fprintf (output_file, "[] = {\n");
-      output_vect (tab->check_vect);
+      output_vect (VLA_HWINT_BEGIN (tab->check_vect),
+                   VLA_HWINT_LENGTH (tab->check_vect));
       fprintf (output_file, "};\n\n");
       fprintf (output_file, "/* Base vector for %s.  */\n", table_name);
       fprintf (output_file, "static const ");
@@ -7110,18 +7620,22 @@ output_state_ainsn_table (state_ainsn_table_t tab, const char *table_name,
       fprintf (output_file, " ");
       (*output_base_vect_name_func) (output_file, tab->automaton);
       fprintf (output_file, "[] = {\n");
-      output_vect (tab->base_vect);
+      output_vect (VLA_HWINT_BEGIN (tab->base_vect),
+                   VLA_HWINT_LENGTH (tab->base_vect));
       fprintf (output_file, "};\n\n");
     }
 }
 
-/* The following function adds vector VECT to table TAB as its line
-   with number VECT_NUM.  */
+/* The following function adds vector with length VECT_LENGTH and
+   elements pointed by VECT to table TAB as its line with number
+   VECT_NUM.  */
 static void
-add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
+add_vect (state_ainsn_table_t tab, int vect_num, vect_el_t *vect,
+	  int vect_length)
 {
-  int vect_length;
-  size_t real_vect_length;
+  int real_vect_length;
+  vect_el_t *comb_vect_start;
+  vect_el_t *check_vect_start;
   int comb_vect_index;
   int comb_vect_els_num;
   int vect_index;
@@ -7132,30 +7646,23 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
   int i;
   unsigned long vect_mask, comb_vect_mask;
 
-  vect_length = VEC_length (vect_el_t, vect);
   gcc_assert (vect_length);
-  gcc_assert (VEC_last (vect_el_t, vect) != undefined_vect_el_value);
   real_vect_length = tab->automaton->insn_equiv_classes_num;
+  gcc_assert (vect [vect_length - 1] != undefined_vect_el_value);
   /* Form full vector in the table: */
-  {
-    size_t full_base = tab->automaton->insn_equiv_classes_num * vect_num;
-    if (VEC_length (vect_el_t, tab->full_vect) < full_base + vect_length)
-      VEC_safe_grow (vect_el_t,heap, tab->full_vect,
-		     full_base + vect_length);
-    for (i = 0; i < vect_length; i++)
-      VEC_replace (vect_el_t, tab->full_vect, full_base + i,
-		   VEC_index (vect_el_t, vect, i));
-  }
+  for (i = 0; i < vect_length; i++)
+    VLA_HWINT (tab->full_vect,
+               i + tab->automaton->insn_equiv_classes_num * vect_num)
+      = vect [i];
   /* Form comb vector in the table: */
-  gcc_assert (VEC_length (vect_el_t, tab->comb_vect)
-	      == VEC_length (vect_el_t, tab->check_vect));
-
-  comb_vect_els_num = VEC_length (vect_el_t, tab->comb_vect);
+  gcc_assert (VLA_HWINT_LENGTH (tab->comb_vect)
+	      == VLA_HWINT_LENGTH (tab->check_vect));
+  comb_vect_start = VLA_HWINT_BEGIN (tab->comb_vect);
+  comb_vect_els_num = VLA_HWINT_LENGTH (tab->comb_vect);
   for (first_unempty_vect_index = 0;
        first_unempty_vect_index < vect_length;
        first_unempty_vect_index++)
-    if (VEC_index (vect_el_t, vect, first_unempty_vect_index)
-	!= undefined_vect_el_value)
+    if (vect [first_unempty_vect_index] != undefined_vect_el_value)
       break;
 
   /* Search for the place in comb vect for the inserted vect.  */
@@ -7171,10 +7678,8 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
                vect_index < vect_length
                && vect_index + comb_vect_index < comb_vect_els_num;
                vect_index++)
-            if (VEC_index (vect_el_t, vect, vect_index)
-		!= undefined_vect_el_value
-                && (VEC_index (vect_el_t, tab->comb_vect,
-			       vect_index + comb_vect_index)
+            if (vect [vect_index] != undefined_vect_el_value
+                && (comb_vect_start [vect_index + comb_vect_index]
 		    != undefined_vect_el_value))
               break;
           if (vect_index >= vect_length
@@ -7191,7 +7696,7 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
        vect_index++)
     {
       vect_mask = vect_mask << 1;
-      if (VEC_index (vect_el_t, vect, vect_index) != undefined_vect_el_value)
+      if (vect [vect_index] != undefined_vect_el_value)
 	vect_mask |= 1;
     }
 
@@ -7207,7 +7712,7 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
     {
       comb_vect_mask <<= 1;
       if (vect_index + comb_vect_index < comb_vect_els_num
-	  && VEC_index (vect_el_t, tab->comb_vect, vect_index + comb_vect_index)
+	  && comb_vect_start [vect_index + comb_vect_index]
 	     != undefined_vect_el_value)
 	comb_vect_mask |= 1;
     }
@@ -7218,8 +7723,7 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
        comb_vect_index++, i++)
     {
       comb_vect_mask = (comb_vect_mask << 1) | 1;
-      comb_vect_mask ^= (VEC_index (vect_el_t, tab->comb_vect, i)
-			 == undefined_vect_el_value);
+      comb_vect_mask ^= comb_vect_start [i] == undefined_vect_el_value;
       if ((vect_mask & comb_vect_mask) == 0)
 	goto found;
     }
@@ -7240,29 +7744,27 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
   no_state_value = tab->automaton->achieved_states_num;
   while (additional_els_num > 0)
     {
-      VEC_safe_push (vect_el_t,heap, tab->comb_vect, vect_el);
-      VEC_safe_push (vect_el_t,heap, tab->check_vect, no_state_value);
+      VLA_HWINT_ADD (tab->comb_vect, vect_el);
+      VLA_HWINT_ADD (tab->check_vect, no_state_value);
       additional_els_num--;
     }
-  gcc_assert (VEC_length (vect_el_t, tab->comb_vect)
-	      >= comb_vect_index + real_vect_length);
+  comb_vect_start = VLA_HWINT_BEGIN (tab->comb_vect);
+  check_vect_start = VLA_HWINT_BEGIN (tab->check_vect);
+  gcc_assert (VLA_HWINT_LENGTH (tab->comb_vect)
+	      >= (size_t) (comb_vect_index + real_vect_length));
   /* Fill comb and check vectors.  */
   for (vect_index = 0; vect_index < vect_length; vect_index++)
-    if (VEC_index (vect_el_t, vect, vect_index) != undefined_vect_el_value)
+    if (vect [vect_index] != undefined_vect_el_value)
       {
-	vect_el_t x = VEC_index (vect_el_t, vect, vect_index);
-        gcc_assert (VEC_index (vect_el_t, tab->comb_vect,
-			       comb_vect_index + vect_index)
+        gcc_assert (comb_vect_start [comb_vect_index + vect_index]
 		    == undefined_vect_el_value);
-        gcc_assert (x >= 0);
-        if (tab->max_comb_vect_el_value < x)
-          tab->max_comb_vect_el_value = x;
-        if (tab->min_comb_vect_el_value > x)
-          tab->min_comb_vect_el_value = x;
-	VEC_replace (vect_el_t, tab->comb_vect,
-		     comb_vect_index + vect_index, x);
-	VEC_replace (vect_el_t, tab->check_vect,
-		     comb_vect_index + vect_index, vect_num);
+        comb_vect_start [comb_vect_index + vect_index] = vect [vect_index];
+        gcc_assert (vect [vect_index] >= 0);
+        if (tab->max_comb_vect_el_value < vect [vect_index])
+          tab->max_comb_vect_el_value = vect [vect_index];
+        if (tab->min_comb_vect_el_value > vect [vect_index])
+          tab->min_comb_vect_el_value = vect [vect_index];
+        check_vect_start [comb_vect_index + vect_index] = vect_num;
       }
   if (tab->max_comb_vect_el_value < undefined_vect_el_value)
     tab->max_comb_vect_el_value = undefined_vect_el_value;
@@ -7272,8 +7774,7 @@ add_vect (state_ainsn_table_t tab, int vect_num, vla_hwint_t vect)
     tab->max_base_vect_el_value = comb_vect_index;
   if (tab->min_base_vect_el_value > comb_vect_index)
     tab->min_base_vect_el_value = comb_vect_index;
-
-  VEC_replace (vect_el_t, tab->base_vect, vect_num, comb_vect_index);
+  VLA_HWINT (tab->base_vect, vect_num) = comb_vect_index;
 }
 
 /* Return number of out arcs of STATE.  */
@@ -7321,22 +7822,22 @@ add_vect_el (vla_hwint_t *vect, ainsn_t ainsn, int el_value)
 
   gcc_assert (ainsn);
   equiv_class_num = ainsn->insn_equiv_class_num;
-  for (vect_index = VEC_length (vect_el_t, *vect);
+  for (vect_index = VLA_HWINT_LENGTH (*vect);
        vect_index <= equiv_class_num;
        vect_index++)
-    VEC_safe_push (vect_el_t,heap, *vect, undefined_vect_el_value);
-  VEC_replace (vect_el_t, *vect, equiv_class_num, el_value);
+    VLA_HWINT_ADD (*vect, undefined_vect_el_value);
+  VLA_HWINT (*vect, equiv_class_num) = el_value;
 }
 
 /* This is for forming vector of states of an automaton.  */
-static VEC(state_t,heap) *output_states_vect;
+static vla_ptr_t output_states_vect;
 
 /* The function is called by function pass_states.  The function adds
    STATE to `output_states_vect'.  */
 static void
 add_states_vect_el (state_t state)
 {
-  VEC_safe_push (state_t,heap, output_states_vect, state);
+  VLA_PTR_ADD (output_states_vect, state);
 }
 
 /* Form and output vectors (comb, check, base or full vector)
@@ -7344,24 +7845,26 @@ add_states_vect_el (state_t state)
 static void
 output_trans_table (automaton_t automaton)
 {
-  size_t i;
+  state_t *state_ptr;
   arc_t arc;
-  vla_hwint_t transition_vect = 0;
+  vla_hwint_t transition_vect;
 
   undefined_vect_el_value = automaton->achieved_states_num;
   automaton->trans_table = create_state_ainsn_table (automaton);
   /* Create vect of pointers to states ordered by num of transitions
      from the state (state with the maximum num is the first).  */
-  output_states_vect = 0;
+  VLA_PTR_CREATE (output_states_vect, 1500, "output states vector");
   pass_states (automaton, add_states_vect_el);
-  qsort (VEC_address (state_t, output_states_vect),
-	 VEC_length (state_t, output_states_vect),
+  qsort (VLA_PTR_BEGIN (output_states_vect),
+         VLA_PTR_LENGTH (output_states_vect),
          sizeof (state_t), compare_transition_els_num);
-
-  for (i = 0; i < VEC_length (state_t, output_states_vect); i++)
+  VLA_HWINT_CREATE (transition_vect, 500, "transition vector");
+  for (state_ptr = VLA_PTR_BEGIN (output_states_vect);
+       state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+       state_ptr++)
     {
-      VEC_truncate (vect_el_t, transition_vect, 0);
-      for (arc = first_out_arc (VEC_index (state_t, output_states_vect, i));
+      VLA_HWINT_NULLIFY (transition_vect);
+      for (arc = first_out_arc (*state_ptr);
 	   arc != NULL;
 	   arc = next_out_arc (arc))
         {
@@ -7370,17 +7873,63 @@ output_trans_table (automaton_t automaton)
             add_vect_el (&transition_vect, arc->insn,
                          arc->to_state->order_state_num);
         }
-      add_vect (automaton->trans_table,
-		VEC_index (state_t, output_states_vect, i)->order_state_num,
-		transition_vect);
+      add_vect (automaton->trans_table, (*state_ptr)->order_state_num,
+                VLA_HWINT_BEGIN (transition_vect),
+                VLA_HWINT_LENGTH (transition_vect));
     }
   output_state_ainsn_table
-    (automaton->trans_table, "state transitions",
+    (automaton->trans_table, (char *) "state transitions",
      output_trans_full_vect_name, output_trans_comb_vect_name,
      output_trans_check_vect_name, output_trans_base_vect_name);
+  VLA_PTR_DELETE (output_states_vect);
+  VLA_HWINT_DELETE (transition_vect);
+}
 
-  VEC_free (state_t,heap, output_states_vect);
-  VEC_free (vect_el_t,heap, transition_vect);
+/* Form and output vectors (comb, check, base or simple vect)
+   representing alts number table of AUTOMATON.  The table is state x
+   ainsn -> number of possible alternative reservations by the
+   ainsn.  */
+static void
+output_state_alts_table (automaton_t automaton)
+{
+  state_t *state_ptr;
+  arc_t arc;
+  vla_hwint_t state_alts_vect;
+
+  undefined_vect_el_value = 0; /* no alts when transition is not possible */
+  automaton->state_alts_table = create_state_ainsn_table (automaton);
+  /* Create vect of pointers to states ordered by num of transitions
+     from the state (state with the maximum num is the first).  */
+  VLA_PTR_CREATE (output_states_vect, 1500, "output states vector");
+  pass_states (automaton, add_states_vect_el);
+  qsort (VLA_PTR_BEGIN (output_states_vect),
+         VLA_PTR_LENGTH (output_states_vect),
+         sizeof (state_t), compare_transition_els_num);
+  /* Create base, comb, and check vectors.  */
+  VLA_HWINT_CREATE (state_alts_vect, 500, "state alts vector");
+  for (state_ptr = VLA_PTR_BEGIN (output_states_vect);
+       state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+       state_ptr++)
+    {
+      VLA_HWINT_NULLIFY (state_alts_vect);
+      for (arc = first_out_arc (*state_ptr);
+	   arc != NULL;
+	   arc = next_out_arc (arc))
+        {
+          gcc_assert (arc->insn);
+          if (arc->insn->first_ainsn_with_given_equivalence_num)
+            add_vect_el (&state_alts_vect, arc->insn, arc->state_alts);
+        }
+      add_vect (automaton->state_alts_table, (*state_ptr)->order_state_num,
+                VLA_HWINT_BEGIN (state_alts_vect),
+                VLA_HWINT_LENGTH (state_alts_vect));
+    }
+  output_state_ainsn_table
+    (automaton->state_alts_table, (char *) "state insn alternatives",
+     output_state_alts_full_vect_name, output_state_alts_comb_vect_name,
+     output_state_alts_check_vect_name, output_state_alts_base_vect_name);
+  VLA_PTR_DELETE (output_states_vect);
+  VLA_HWINT_DELETE (state_alts_vect);
 }
 
 /* The current number of passing states to find minimal issue delay
@@ -7459,38 +8008,41 @@ output_min_issue_delay_table (automaton_t automaton)
   vla_hwint_t compressed_min_issue_delay_vect;
   vect_el_t min_delay;
   ainsn_t ainsn;
-  size_t i, min_issue_delay_len;
-  size_t compressed_min_issue_delay_len;
-  size_t cfactor;
+  state_t *state_ptr;
+  int i;
 
   /* Create vect of pointers to states ordered by num of transitions
      from the state (state with the maximum num is the first).  */
-  output_states_vect = 0;
+  VLA_PTR_CREATE (output_states_vect, 1500, "output states vector");
   pass_states (automaton, add_states_vect_el);
-
-  min_issue_delay_len = (VEC_length (state_t, output_states_vect)
-			 * automaton->insn_equiv_classes_num);
-  min_issue_delay_vect = VEC_alloc (vect_el_t,heap, min_issue_delay_len);
-  for (i = 0; i < min_issue_delay_len; i++)
-    VEC_quick_push (vect_el_t, min_issue_delay_vect, 0);
-
+  VLA_HWINT_CREATE (min_issue_delay_vect, 1500, "min issue delay vector");
+  VLA_HWINT_EXPAND (min_issue_delay_vect,
+		    VLA_HWINT_LENGTH (output_states_vect)
+		    * automaton->insn_equiv_classes_num);
+  for (i = 0;
+       i < ((int) VLA_HWINT_LENGTH (output_states_vect)
+	    * automaton->insn_equiv_classes_num);
+       i++)
+    VLA_HWINT (min_issue_delay_vect, i) = 0;
   automaton->max_min_delay = 0;
   for (ainsn = automaton->ainsn_list; ainsn != NULL; ainsn = ainsn->next_ainsn)
     if (ainsn->first_ainsn_with_given_equivalence_num)
       {
-	for (i = 0; i < VEC_length (state_t, output_states_vect); i++)
-	  VEC_index (state_t, output_states_vect, i)->min_insn_issue_delay = -1;
-	for (i = 0; i < VEC_length (state_t, output_states_vect); i++)
+	for (state_ptr = VLA_PTR_BEGIN (output_states_vect);
+	     state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+	     state_ptr++)
+	  (*state_ptr)->min_insn_issue_delay = -1;
+	for (state_ptr = VLA_PTR_BEGIN (output_states_vect);
+	     state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+	     state_ptr++)
 	  {
-	    state_t s = VEC_index (state_t, output_states_vect, i);
-            min_delay = min_issue_delay (s, ainsn);
+            min_delay = min_issue_delay (*state_ptr, ainsn);
 	    if (automaton->max_min_delay < min_delay)
 	      automaton->max_min_delay = min_delay;
-	    VEC_replace (vect_el_t, min_issue_delay_vect,
-			 s->order_state_num
-			 * automaton->insn_equiv_classes_num
-			 + ainsn->insn_equiv_class_num,
-			 min_delay);
+	    VLA_HWINT (min_issue_delay_vect,
+		       (*state_ptr)->order_state_num
+		       * automaton->insn_equiv_classes_num
+		       + ainsn->insn_equiv_class_num) = min_delay;
 	  }
       }
   fprintf (output_file, "/* Vector of min issue delay of insns.  */\n");
@@ -7501,84 +8053,87 @@ output_min_issue_delay_table (automaton_t automaton)
   fprintf (output_file, "[] ATTRIBUTE_UNUSED = {\n");
   /* Compress the vector.  */
   if (automaton->max_min_delay < 2)
-    cfactor = 8;
+    automaton->min_issue_delay_table_compression_factor = 8;
   else if (automaton->max_min_delay < 4)
-    cfactor = 4;
+    automaton->min_issue_delay_table_compression_factor = 4;
   else if (automaton->max_min_delay < 16)
-    cfactor = 2;
+    automaton->min_issue_delay_table_compression_factor = 2;
   else
-    cfactor = 1;
-  automaton->min_issue_delay_table_compression_factor = cfactor;
-
-  compressed_min_issue_delay_len = (min_issue_delay_len+cfactor-1) / cfactor;
-  compressed_min_issue_delay_vect
-    = VEC_alloc (vect_el_t,heap, compressed_min_issue_delay_len);
-
-  for (i = 0; i < compressed_min_issue_delay_len; i++)
-    VEC_quick_push (vect_el_t, compressed_min_issue_delay_vect, 0);
-
-  for (i = 0; i < min_issue_delay_len; i++)
-    {
-      size_t ci = i / cfactor;
-      vect_el_t x = VEC_index (vect_el_t, min_issue_delay_vect, i);
-      vect_el_t cx = VEC_index (vect_el_t, compressed_min_issue_delay_vect, ci);
-
-      cx |= x << (8 - (i % cfactor + 1) * (8 / cfactor));
-      VEC_replace (vect_el_t, compressed_min_issue_delay_vect, ci, cx);
-    }
-  output_vect (compressed_min_issue_delay_vect);
+    automaton->min_issue_delay_table_compression_factor = 1;
+  VLA_HWINT_CREATE (compressed_min_issue_delay_vect, 1500,
+		    "compressed min issue delay vector");
+  VLA_HWINT_EXPAND (compressed_min_issue_delay_vect,
+		    (VLA_HWINT_LENGTH (min_issue_delay_vect)
+		     + automaton->min_issue_delay_table_compression_factor
+		     - 1)
+		    / automaton->min_issue_delay_table_compression_factor);
+  for (i = 0;
+       i < (int) VLA_HWINT_LENGTH (compressed_min_issue_delay_vect);
+       i++)
+    VLA_HWINT (compressed_min_issue_delay_vect, i) = 0;
+  for (i = 0; i < (int) VLA_HWINT_LENGTH (min_issue_delay_vect); i++)
+    VLA_HWINT (compressed_min_issue_delay_vect,
+	       i / automaton->min_issue_delay_table_compression_factor)
+      |= (VLA_HWINT (min_issue_delay_vect, i)
+	  << (8 - (i % automaton->min_issue_delay_table_compression_factor
+		   + 1)
+	      * (8 / automaton->min_issue_delay_table_compression_factor)));
+  output_vect (VLA_HWINT_BEGIN (compressed_min_issue_delay_vect),
+               VLA_HWINT_LENGTH (compressed_min_issue_delay_vect));
   fprintf (output_file, "};\n\n");
-  VEC_free (state_t,heap, output_states_vect);
-  VEC_free (vect_el_t,heap, min_issue_delay_vect);
-  VEC_free (vect_el_t,heap, compressed_min_issue_delay_vect);
+  VLA_PTR_DELETE (output_states_vect);
+  VLA_HWINT_DELETE (min_issue_delay_vect);
+  VLA_HWINT_DELETE (compressed_min_issue_delay_vect);
 }
+
+#ifndef NDEBUG
+/* Number of states which contains transition only by advancing cpu
+   cycle.  */
+static int locked_states_num;
+#endif
 
 /* Form and output vector representing the locked states of
    AUTOMATON.  */
 static void
 output_dead_lock_vect (automaton_t automaton)
 {
-  size_t i;
+  state_t *state_ptr;
   arc_t arc;
-  vla_hwint_t dead_lock_vect = 0;
+  vla_hwint_t dead_lock_vect;
 
   /* Create vect of pointers to states ordered by num of
      transitions from the state (state with the maximum num is the
      first).  */
-  automaton->locked_states = 0;
-  output_states_vect = 0;
+  VLA_PTR_CREATE (output_states_vect, 1500, "output states vector");
   pass_states (automaton, add_states_vect_el);
-
-  VEC_safe_grow (vect_el_t,heap, dead_lock_vect, 
-		 VEC_length (state_t, output_states_vect));
-  for (i = 0; i < VEC_length (state_t, output_states_vect); i++)
+  VLA_HWINT_CREATE (dead_lock_vect, 1500, "is dead locked vector");
+  VLA_HWINT_EXPAND (dead_lock_vect, VLA_HWINT_LENGTH (output_states_vect));
+  for (state_ptr = VLA_PTR_BEGIN (output_states_vect);
+       state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+       state_ptr++)
     {
-      state_t s = VEC_index (state_t, output_states_vect, i);
-      arc = first_out_arc (s);
+      arc = first_out_arc (*state_ptr);
       gcc_assert (arc);
-      if (next_out_arc (arc) == NULL
-	  && (arc->insn->insn_reserv_decl
-	      == DECL_INSN_RESERV (advance_cycle_insn_decl)))
-	{
-	  VEC_replace (vect_el_t, dead_lock_vect, s->order_state_num, 1);
-	  automaton->locked_states++;
-	}
-      else
-	VEC_replace (vect_el_t, dead_lock_vect, s->order_state_num, 0);
+      VLA_HWINT (dead_lock_vect, (*state_ptr)->order_state_num)
+        = (next_out_arc (arc) == NULL
+           && (arc->insn->insn_reserv_decl
+               == DECL_INSN_RESERV (advance_cycle_insn_decl)) ? 1 : 0);
+#ifndef NDEBUG
+      if (VLA_HWINT (dead_lock_vect, (*state_ptr)->order_state_num))
+        locked_states_num++;
+#endif
     }
-  if (automaton->locked_states == 0)
-    return;
-
   fprintf (output_file, "/* Vector for locked state flags.  */\n");
   fprintf (output_file, "static const ");
   output_range_type (output_file, 0, 1);
   fprintf (output_file, " ");
   output_dead_lock_vect_name (output_file, automaton);
   fprintf (output_file, "[] = {\n");
-  output_vect (dead_lock_vect);
+  output_vect (VLA_HWINT_BEGIN (dead_lock_vect),
+	       VLA_HWINT_LENGTH (dead_lock_vect));
   fprintf (output_file, "};\n\n");
-  VEC_free (state_t,heap, output_states_vect);
-  VEC_free (vect_el_t,heap, dead_lock_vect);
+  VLA_HWINT_DELETE (dead_lock_vect);
+  VLA_PTR_DELETE (output_states_vect);
 }
 
 /* Form and output vector representing reserved units of the states of
@@ -7586,55 +8141,46 @@ output_dead_lock_vect (automaton_t automaton)
 static void
 output_reserved_units_table (automaton_t automaton)
 {
-  vla_hwint_t reserved_units_table = 0;
-  int state_byte_size;
-  int reserved_units_size;
-  size_t n;
+  state_t *curr_state_ptr;
+  vla_hwint_t reserved_units_table;
+  size_t state_byte_size;
   int i;
 
-  if (description->query_units_num == 0)
-    return;
-
   /* Create vect of pointers to states.  */
-  output_states_vect = 0;
+  VLA_PTR_CREATE (output_states_vect, 1500, "output states vector");
   pass_states (automaton, add_states_vect_el);
   /* Create vector.  */
+  VLA_HWINT_CREATE (reserved_units_table, 1500, "reserved units vector");
   state_byte_size = (description->query_units_num + 7) / 8;
-  reserved_units_size = (VEC_length (state_t, output_states_vect)
-			 * state_byte_size);
-
-  reserved_units_table = VEC_alloc (vect_el_t,heap, reserved_units_size);
-		 
-  for (i = 0; i < reserved_units_size; i++)
-    VEC_quick_push (vect_el_t, reserved_units_table, 0);
-  for (n = 0; n < VEC_length (state_t, output_states_vect); n++)
+  VLA_HWINT_EXPAND (reserved_units_table,
+		    VLA_HWINT_LENGTH (output_states_vect) * state_byte_size);
+  for (i = 0;
+       i < (int) (VLA_HWINT_LENGTH (output_states_vect) * state_byte_size);
+       i++)
+    VLA_HWINT (reserved_units_table, i) = 0;
+  for (curr_state_ptr = VLA_PTR_BEGIN (output_states_vect);
+       curr_state_ptr <= (state_t *) VLA_PTR_LAST (output_states_vect);
+       curr_state_ptr++)
     {
-      state_t s = VEC_index (state_t, output_states_vect, n);
       for (i = 0; i < description->units_num; i++)
 	if (units_array [i]->query_p
-	    && first_cycle_unit_presence (s, i))
-	  {
-	    int ri = (s->order_state_num * state_byte_size
-		      + units_array [i]->query_num / 8);
-	    vect_el_t x = VEC_index (vect_el_t, reserved_units_table, ri);
-
-	    x += 1 << (units_array [i]->query_num % 8);
-	    VEC_replace (vect_el_t, reserved_units_table, ri, x);
-	  }
+	    && first_cycle_unit_presence (*curr_state_ptr, i))
+	  VLA_HWINT (reserved_units_table,
+		     (*curr_state_ptr)->order_state_num * state_byte_size
+		     + units_array [i]->query_num / 8)
+	    += (1 << (units_array [i]->query_num % 8));
     }
-  fprintf (output_file, "\n#if %s\n", CPU_UNITS_QUERY_MACRO_NAME);
   fprintf (output_file, "/* Vector for reserved units of states.  */\n");
   fprintf (output_file, "static const ");
   output_range_type (output_file, 0, 255);
   fprintf (output_file, " ");
   output_reserved_units_table_name (output_file, automaton);
   fprintf (output_file, "[] = {\n");
-  output_vect (reserved_units_table);
-  fprintf (output_file, "};\n#endif /* #if %s */\n\n",
-	   CPU_UNITS_QUERY_MACRO_NAME);
-
-  VEC_free (state_t,heap, output_states_vect);
-  VEC_free (vect_el_t,heap, reserved_units_table);
+  output_vect (VLA_HWINT_BEGIN (reserved_units_table),
+               VLA_HWINT_LENGTH (reserved_units_table));
+  fprintf (output_file, "};\n\n");
+  VLA_HWINT_DELETE (reserved_units_table);
+  VLA_PTR_DELETE (output_states_vect);
 }
 
 /* The function outputs all tables representing DFA(s) used for fast
@@ -7644,6 +8190,9 @@ output_tables (void)
 {
   automaton_t automaton;
 
+#ifndef NDEBUG
+  locked_states_num = 0;
+#endif
   initiate_min_issue_delay_pass_states ();
   for (automaton = description->first_automaton;
        automaton != NULL;
@@ -7651,9 +8200,16 @@ output_tables (void)
     {
       output_translate_vect (automaton);
       output_trans_table (automaton);
+      fprintf (output_file, "\n#if %s\n", AUTOMATON_STATE_ALTS_MACRO_NAME);
+      output_state_alts_table (automaton);
+      fprintf (output_file, "\n#endif /* #if %s */\n\n",
+	       AUTOMATON_STATE_ALTS_MACRO_NAME);
       output_min_issue_delay_table (automaton);
       output_dead_lock_vect (automaton);
+      fprintf (output_file, "\n#if %s\n\n", CPU_UNITS_QUERY_MACRO_NAME);
       output_reserved_units_table (automaton);
+      fprintf (output_file, "\n#endif /* #if %s */\n\n",
+	       CPU_UNITS_QUERY_MACRO_NAME);
     }
   fprintf (output_file, "\n#define %s %d\n\n", ADVANCE_CYCLE_VALUE_NAME,
            DECL_INSN_RESERV (advance_cycle_insn_decl)->insn_num);
@@ -7688,9 +8244,9 @@ output_max_insn_queue_index_def (void)
   for (i = 0; (1 << i) <= max; i++)
     ;
   gcc_assert (i >= 0);
-  fprintf (output_file, "\nconst int max_insn_queue_index = %d;\n\n",
-	   (1 << i) - 1);
+  fprintf (output_file, "\nint max_insn_queue_index = %d;\n\n", (1 << i) - 1);
 }
+
 
 /* The function outputs switch cases for insn reservations using
    function *output_automata_list_code.  */
@@ -8004,6 +8560,99 @@ output_trans_func (void)
 	   INTERNAL_TRANSITION_FUNC_NAME, INTERNAL_INSN_CODE_NAME, STATE_NAME);
 }
 
+/* The function outputs a code for evaluation of alternative states
+   number for insns which have reservations in given AUTOMATA_LIST.  */
+static void
+output_automata_list_state_alts_code (automata_list_el_t automata_list)
+{
+  automata_list_el_t el;
+  automaton_t automaton;
+
+  fprintf (output_file, "      {\n");
+  for (el = automata_list; el != NULL; el = el->next_automata_list_el)
+    if (comb_vect_p (el->automaton->state_alts_table))
+      {
+	fprintf (output_file, "        int %s;\n", TEMPORARY_VARIABLE_NAME);
+	break;
+      }
+  for (el = automata_list; el != NULL; el = el->next_automata_list_el)
+    {
+      automaton = el->automaton;
+      if (comb_vect_p (automaton->state_alts_table))
+	{
+	  fprintf (output_file, "\n        %s = ", TEMPORARY_VARIABLE_NAME);
+	  output_state_alts_base_vect_name (output_file, automaton);
+	  fprintf (output_file, " [%s->", CHIP_PARAMETER_NAME);
+	  output_chip_member_name (output_file, automaton);
+	  fprintf (output_file, "] + ");
+	  output_translate_vect_name (output_file, automaton);
+	  fprintf (output_file, " [%s];\n", INTERNAL_INSN_CODE_NAME);
+	  fprintf (output_file, "        if (");
+	  output_state_alts_check_vect_name (output_file, automaton);
+	  fprintf (output_file, " [%s] != %s->",
+		   TEMPORARY_VARIABLE_NAME, CHIP_PARAMETER_NAME);
+	  output_chip_member_name (output_file, automaton);
+	  fprintf (output_file, ")\n");
+	  fprintf (output_file, "          return 0;\n");
+	  fprintf (output_file, "        else\n");
+	  fprintf (output_file,
+		   (el == automata_list
+		    ? "          %s = " : "          %s += "),
+		   RESULT_VARIABLE_NAME);
+	  output_state_alts_comb_vect_name (output_file, automaton);
+	  fprintf (output_file, " [%s];\n", TEMPORARY_VARIABLE_NAME);
+	}
+      else
+	{
+	  fprintf (output_file,
+		   (el == automata_list
+		    ? "\n        %s = " : "        %s += "),
+		   RESULT_VARIABLE_NAME);
+	  output_state_alts_full_vect_name (output_file, automaton);
+	  fprintf (output_file, " [");
+	  output_translate_vect_name (output_file, automaton);
+	  fprintf (output_file, " [%s] + ", INTERNAL_INSN_CODE_NAME);
+	  fprintf (output_file, "%s->", CHIP_PARAMETER_NAME);
+	  output_chip_member_name (output_file, automaton);
+	  fprintf (output_file, " * %d];\n",
+		   automaton->insn_equiv_classes_num);
+	}
+    }
+  fprintf (output_file, "        break;\n      }\n\n");
+}
+
+/* Output function `internal_state_alts'.  */
+static void
+output_internal_state_alts_func (void)
+{
+  fprintf (output_file,
+	   "static int\n%s (int %s, struct %s *%s)\n",
+	   INTERNAL_STATE_ALTS_FUNC_NAME, INTERNAL_INSN_CODE_NAME,
+	   CHIP_NAME, CHIP_PARAMETER_NAME);
+  fprintf (output_file, "{\n  int %s;\n", RESULT_VARIABLE_NAME);
+  fprintf (output_file, "\n  switch (%s)\n    {\n", INTERNAL_INSN_CODE_NAME);
+  output_insn_code_cases (output_automata_list_state_alts_code);
+  fprintf (output_file,
+	   "\n    default:\n      %s = 0;\n      break;\n    }\n",
+	   RESULT_VARIABLE_NAME);
+  fprintf (output_file, "  return %s;\n", RESULT_VARIABLE_NAME);
+  fprintf (output_file, "}\n\n");
+}
+
+/* The function outputs PHR interface function `state_alts'.  */
+static void
+output_state_alts_func (void)
+{
+  fprintf (output_file, "int\n%s (%s, %s)\n\t%s %s;\n\trtx %s;\n",
+	   STATE_ALTS_FUNC_NAME, STATE_NAME, INSN_PARAMETER_NAME,
+	   STATE_TYPE_NAME, STATE_NAME, INSN_PARAMETER_NAME);
+  fprintf (output_file, "{\n  int %s;\n", INTERNAL_INSN_CODE_NAME);
+  output_internal_insn_code_evaluation (INSN_PARAMETER_NAME,
+					INTERNAL_INSN_CODE_NAME, 0);
+  fprintf (output_file, "  return %s (%s, %s);\n}\n\n",
+	   INTERNAL_STATE_ALTS_FUNC_NAME, INTERNAL_INSN_CODE_NAME, STATE_NAME);
+}
+
 /* Output function `min_issue_delay'.  */
 static void
 output_min_issue_delay_func (void)
@@ -8031,20 +8680,19 @@ output_internal_dead_lock_func (void)
 {
   automaton_t automaton;
 
-  fprintf (output_file, "static int\n%s (struct %s *ARG_UNUSED (%s))\n",
+  fprintf (output_file, "static int\n%s (struct %s *%s)\n",
 	   INTERNAL_DEAD_LOCK_FUNC_NAME, CHIP_NAME, CHIP_PARAMETER_NAME);
   fprintf (output_file, "{\n");
   for (automaton = description->first_automaton;
        automaton != NULL;
        automaton = automaton->next_automaton)
-    if (automaton->locked_states)
-      {
-	fprintf (output_file, "  if (");
-	output_dead_lock_vect_name (output_file, automaton);
-	fprintf (output_file, " [%s->", CHIP_PARAMETER_NAME);
-	output_chip_member_name (output_file, automaton);
-	fprintf (output_file, "])\n    return 1/* TRUE */;\n");
-      }
+    {
+      fprintf (output_file, "  if (");
+      output_dead_lock_vect_name (output_file, automaton);
+      fprintf (output_file, " [%s->", CHIP_PARAMETER_NAME);
+      output_chip_member_name (output_file, automaton);
+      fprintf (output_file, "])\n    return 1/* TRUE */;\n");
+    }
   fprintf (output_file, "  return 0/* FALSE */;\n}\n\n");
 }
 
@@ -8377,25 +9025,23 @@ output_cpu_unit_reservation_p (void)
   fprintf (output_file, "{\n  gcc_assert (%s >= 0 && %s < %d);\n",
 	   CPU_CODE_PARAMETER_NAME, CPU_CODE_PARAMETER_NAME,
 	   description->query_units_num);
-  if (description->query_units_num > 0)
-    for (automaton = description->first_automaton;
-	 automaton != NULL;
-	 automaton = automaton->next_automaton)
-      {
-	fprintf (output_file, "  if ((");
-	output_reserved_units_table_name (output_file, automaton);
-	fprintf (output_file, " [((struct %s *) %s)->", CHIP_NAME, STATE_NAME);
-	output_chip_member_name (output_file, automaton);
-	fprintf (output_file, " * %d + %s / 8] >> (%s %% 8)) & 1)\n",
-		 (description->query_units_num + 7) / 8,
-		 CPU_CODE_PARAMETER_NAME, CPU_CODE_PARAMETER_NAME);
-	fprintf (output_file, "    return 1;\n");
-      }
+  for (automaton = description->first_automaton;
+       automaton != NULL;
+       automaton = automaton->next_automaton)
+    {
+      fprintf (output_file, "  if ((");
+      output_reserved_units_table_name (output_file, automaton);
+      fprintf (output_file, " [((struct %s *) %s)->", CHIP_NAME, STATE_NAME);
+      output_chip_member_name (output_file, automaton);
+      fprintf (output_file, " * %d + %s / 8] >> (%s %% 8)) & 1)\n",
+	       (description->query_units_num + 7) / 8,
+	       CPU_CODE_PARAMETER_NAME, CPU_CODE_PARAMETER_NAME);
+      fprintf (output_file, "    return 1;\n");
+    }
   fprintf (output_file, "  return 0;\n}\n\n");
 }
 
-/* The function outputs PHR interface functions `dfa_clean_insn_cache'
-   and 'dfa_clear_single_insn_cache'.  */
+/* The function outputs PHR interface function `dfa_clean_insn_cache'.  */
 static void
 output_dfa_clean_insn_cache_func (void)
 {
@@ -8407,16 +9053,6 @@ output_dfa_clean_insn_cache_func (void)
 	   I_VARIABLE_NAME, I_VARIABLE_NAME,
 	   DFA_INSN_CODES_LENGTH_VARIABLE_NAME, I_VARIABLE_NAME,
 	   DFA_INSN_CODES_VARIABLE_NAME, I_VARIABLE_NAME);
-
-  fprintf (output_file,
-           "void\n%s (rtx %s)\n{\n  int %s;\n\n",
-           DFA_CLEAR_SINGLE_INSN_CACHE_FUNC_NAME, INSN_PARAMETER_NAME,
-	   I_VARIABLE_NAME);
-  fprintf (output_file,
-           "  %s = INSN_UID (%s);\n  if (%s < %s)\n    %s [%s] = -1;\n}\n\n",
-           I_VARIABLE_NAME, INSN_PARAMETER_NAME, I_VARIABLE_NAME,
-	   DFA_INSN_CODES_LENGTH_VARIABLE_NAME, DFA_INSN_CODES_VARIABLE_NAME,
-	   I_VARIABLE_NAME);
 }
 
 /* The function outputs PHR interface function `dfa_start'.  */
@@ -8584,7 +9220,7 @@ static void
 output_automaton_units (automaton_t automaton)
 {
   decl_t decl;
-  const char *name;
+  char *name;
   int curr_line_length;
   int there_is_an_automaton_unit;
   int i;
@@ -8622,13 +9258,14 @@ output_automaton_units (automaton_t automaton)
 
 /* The following variable is used for forming array of all possible cpu unit
    reservations described by the current DFA state.  */
-static VEC(reserv_sets_t,heap) *state_reservs;
+static vla_ptr_t state_reservs;
 
 /* The function forms `state_reservs' for STATE.  */
 static void
 add_state_reservs (state_t state)
 {
   alt_state_t curr_alt_state;
+  reserv_sets_t reservs;
 
   if (state->component_states != NULL)
     for (curr_alt_state = state->component_states;
@@ -8636,7 +9273,10 @@ add_state_reservs (state_t state)
          curr_alt_state = curr_alt_state->next_sorted_alt_state)
       add_state_reservs (curr_alt_state->state);
   else
-    VEC_safe_push (reserv_sets_t,heap, state_reservs, state->reservs);
+    {
+      reservs = state->reservs;
+      VLA_PTR_ADD (state_reservs, reservs);
+    }
 }
 
 /* The function outputs readable representation of all out arcs of
@@ -8646,7 +9286,7 @@ output_state_arcs (state_t state)
 {
   arc_t arc;
   ainsn_t ainsn;
-  const char *insn_name;
+  char *insn_name;
   int curr_line_length;
 
   for (arc = first_out_arc (state); arc != NULL; arc = next_out_arc (arc))
@@ -8682,8 +9322,8 @@ output_state_arcs (state_t state)
           ainsn = ainsn->next_same_reservs_insn;
         }
       while (ainsn != NULL);
-      fprintf (output_description_file, "    %d \n",
-	       arc->to_state->order_state_num);
+      fprintf (output_description_file, "    %d (%d)\n",
+	       arc->to_state->order_state_num, arc->state_alts);
     }
   fprintf (output_description_file, "\n");
 }
@@ -8702,17 +9342,21 @@ state_reservs_cmp (const void *reservs_ptr_1, const void *reservs_ptr_2)
 static void
 remove_state_duplicate_reservs (void)
 {
-  size_t i, j;
+  reserv_sets_t *reservs_ptr;
+  reserv_sets_t *last_formed_reservs_ptr;
 
-  for (i = 1, j = 0; i < VEC_length (reserv_sets_t, state_reservs); i++)
-    if (reserv_sets_cmp (VEC_index (reserv_sets_t, state_reservs, j),
-			 VEC_index (reserv_sets_t, state_reservs, i)))
+  last_formed_reservs_ptr = NULL;
+  for (reservs_ptr = VLA_PTR_BEGIN (state_reservs);
+       reservs_ptr <= (reserv_sets_t *) VLA_PTR_LAST (state_reservs);
+       reservs_ptr++)
+    if (last_formed_reservs_ptr == NULL)
+      last_formed_reservs_ptr = reservs_ptr;
+    else if (reserv_sets_cmp (*last_formed_reservs_ptr, *reservs_ptr) != 0)
       {
-	j++;
-	VEC_replace (reserv_sets_t, state_reservs, j,
-		     VEC_index (reserv_sets_t, state_reservs, i));
+        ++last_formed_reservs_ptr;
+        *last_formed_reservs_ptr = *reservs_ptr;
       }
-  VEC_truncate (reserv_sets_t, state_reservs, j + 1);
+  VLA_PTR_SHORTEN (state_reservs, reservs_ptr - last_formed_reservs_ptr - 1);
 }
 
 /* The following function output readable representation of DFA(s)
@@ -8722,28 +9366,27 @@ remove_state_duplicate_reservs (void)
 static void
 output_state (state_t state)
 {
-  size_t i;
+  reserv_sets_t *reservs_ptr;
 
-  state_reservs = 0;
-
+  VLA_PTR_CREATE (state_reservs, 150, "state reservations");
   fprintf (output_description_file, "  State #%d", state->order_state_num);
   fprintf (output_description_file,
 	   state->new_cycle_p ? " (new cycle)\n" : "\n");
   add_state_reservs (state);
-  qsort (VEC_address (reserv_sets_t, state_reservs),
-	 VEC_length (reserv_sets_t, state_reservs),
+  qsort (VLA_PTR_BEGIN (state_reservs), VLA_PTR_LENGTH (state_reservs),
          sizeof (reserv_sets_t), state_reservs_cmp);
   remove_state_duplicate_reservs ();
-  for (i = 1; i < VEC_length (reserv_sets_t, state_reservs); i++)
+  for (reservs_ptr = VLA_PTR_BEGIN (state_reservs);
+       reservs_ptr <= (reserv_sets_t *) VLA_PTR_LAST (state_reservs);
+       reservs_ptr++)
     {
       fprintf (output_description_file, "    ");
-      output_reserv_sets (output_description_file,
-			  VEC_index (reserv_sets_t, state_reservs, i));
+      output_reserv_sets (output_description_file, *reservs_ptr);
       fprintf (output_description_file, "\n");
     }
   fprintf (output_description_file, "\n");
   output_state_arcs (state);
-  VEC_free (reserv_sets_t,heap, state_reservs);
+  VLA_PTR_DELETE (state_reservs);
 }
 
 /* The following function output readable representation of
@@ -8780,8 +9423,9 @@ output_statistics (FILE *f)
 #ifndef NDEBUG
   int transition_comb_vect_els = 0;
   int transition_full_vect_els = 0;
+  int state_alts_comb_vect_els = 0;
+  int state_alts_full_vect_els = 0;
   int min_issue_delay_vect_els = 0;
-  int locked_states = 0;
 #endif
 
   for (automaton = description->first_automaton;
@@ -8804,26 +9448,33 @@ output_statistics (FILE *f)
 	}
       fprintf (f, "    %5d all insns      %5d insn equivalence classes\n",
 	       description->insns_num, automaton->insn_equiv_classes_num);
-      fprintf (f, "    %d locked states\n", automaton->locked_states);
 #ifndef NDEBUG
       fprintf
 	(f, "%5ld transition comb vector els, %5ld trans table els: %s\n",
-	 (long) VEC_length (vect_el_t, automaton->trans_table->comb_vect),
-	 (long) VEC_length (vect_el_t, automaton->trans_table->full_vect),
+	 (long) VLA_HWINT_LENGTH (automaton->trans_table->comb_vect),
+	 (long) VLA_HWINT_LENGTH (automaton->trans_table->full_vect),
 	 (comb_vect_p (automaton->trans_table)
 	  ? "use comb vect" : "use simple vect"));
+      fprintf
+        (f, "%5ld state alts comb vector els, %5ld state alts table els: %s\n",
+         (long) VLA_HWINT_LENGTH (automaton->state_alts_table->comb_vect),
+         (long) VLA_HWINT_LENGTH (automaton->state_alts_table->full_vect),
+         (comb_vect_p (automaton->state_alts_table)
+          ? "use comb vect" : "use simple vect"));
       fprintf
         (f, "%5ld min delay table els, compression factor %d\n",
          (long) states_num * automaton->insn_equiv_classes_num,
 	 automaton->min_issue_delay_table_compression_factor);
       transition_comb_vect_els
-	+= VEC_length (vect_el_t, automaton->trans_table->comb_vect);
+	+= VLA_HWINT_LENGTH (automaton->trans_table->comb_vect);
       transition_full_vect_els
-        += VEC_length (vect_el_t, automaton->trans_table->full_vect);
+        += VLA_HWINT_LENGTH (automaton->trans_table->full_vect);
+      state_alts_comb_vect_els
+        += VLA_HWINT_LENGTH (automaton->state_alts_table->comb_vect);
+      state_alts_full_vect_els
+        += VLA_HWINT_LENGTH (automaton->state_alts_table->full_vect);
       min_issue_delay_vect_els
 	+= states_num * automaton->insn_equiv_classes_num;
-      locked_states
-	+= automaton->locked_states;
 #endif
     }
 #ifndef NDEBUG
@@ -8833,8 +9484,11 @@ output_statistics (FILE *f)
 	   allocated_alt_states_num);
   fprintf (f, "%5d all transition comb vector els, %5d all trans table els\n",
 	   transition_comb_vect_els, transition_full_vect_els);
+  fprintf
+    (f, "%5d all state alts comb vector els, %5d all state alts table els\n",
+     state_alts_comb_vect_els, state_alts_full_vect_els);
   fprintf (f, "%5d all min delay table els\n", min_issue_delay_vect_els);
-  fprintf (f, "%5d all locked states\n", locked_states);
+  fprintf (f, "%5d locked states num\n", locked_states_num);
 #endif
 }
 
@@ -8885,6 +9539,160 @@ generate (void)
 
 
 
+/* The following function creates insn attribute whose values are
+   number alternatives in insn reservations.  */
+static void
+make_insn_alts_attr (void)
+{
+  int i, insn_num;
+  decl_t decl;
+  rtx condexp;
+
+  condexp = rtx_alloc (COND);
+  XVEC (condexp, 0) = rtvec_alloc ((description->insns_num - 1) * 2);
+  XEXP (condexp, 1) = make_numeric_value (0);
+  for (i = insn_num = 0; i < description->decls_num; i++)
+    {
+      decl = description->decls [i];
+      if (decl->mode == dm_insn_reserv && decl != advance_cycle_insn_decl)
+	{
+          XVECEXP (condexp, 0, 2 * insn_num)
+	    = DECL_INSN_RESERV (decl)->condexp;
+          XVECEXP (condexp, 0, 2 * insn_num + 1)
+            = make_numeric_value
+	      (DECL_INSN_RESERV (decl)->transformed_regexp->mode != rm_oneof
+	       ? 1 : REGEXP_ONEOF (DECL_INSN_RESERV (decl)
+				   ->transformed_regexp)->regexps_num);
+          insn_num++;
+        }
+    }
+  gcc_assert (description->insns_num == insn_num + 1);
+  make_internal_attr (attr_printf (sizeof ("*")
+				   + strlen (INSN_ALTS_FUNC_NAME) + 1,
+				   "*%s", INSN_ALTS_FUNC_NAME),
+		      condexp, ATTR_NONE);
+}
+
+
+
+/* The following function creates attribute which is order number of
+   insn in pipeline hazard description translator.  */
+static void
+make_internal_dfa_insn_code_attr (void)
+{
+  int i, insn_num;
+  decl_t decl;
+  rtx condexp;
+
+  condexp = rtx_alloc (COND);
+  XVEC (condexp, 0) = rtvec_alloc ((description->insns_num - 1) * 2);
+  XEXP (condexp, 1)
+    = make_numeric_value (DECL_INSN_RESERV (advance_cycle_insn_decl)
+			  ->insn_num + 1);
+  for (i = insn_num = 0; i < description->decls_num; i++)
+    {
+      decl = description->decls [i];
+      if (decl->mode == dm_insn_reserv && decl != advance_cycle_insn_decl)
+	{
+          XVECEXP (condexp, 0, 2 * insn_num)
+	    = DECL_INSN_RESERV (decl)->condexp;
+          XVECEXP (condexp, 0, 2 * insn_num + 1)
+            = make_numeric_value (DECL_INSN_RESERV (decl)->insn_num);
+          insn_num++;
+        }
+    }
+  gcc_assert (description->insns_num == insn_num + 1);
+  make_internal_attr
+    (attr_printf (sizeof ("*")
+		  + strlen (INTERNAL_DFA_INSN_CODE_FUNC_NAME) + 1,
+		  "*%s", INTERNAL_DFA_INSN_CODE_FUNC_NAME),
+     condexp, ATTR_STATIC);
+}
+
+
+
+/* The following function creates attribute which order number of insn
+   in pipeline hazard description translator.  */
+static void
+make_default_insn_latency_attr (void)
+{
+  int i, insn_num;
+  decl_t decl;
+  rtx condexp;
+
+  condexp = rtx_alloc (COND);
+  XVEC (condexp, 0) = rtvec_alloc ((description->insns_num - 1) * 2);
+  XEXP (condexp, 1) = make_numeric_value (0);
+  for (i = insn_num = 0; i < description->decls_num; i++)
+    {
+      decl = description->decls [i];
+      if (decl->mode == dm_insn_reserv && decl != advance_cycle_insn_decl)
+	{
+          XVECEXP (condexp, 0, 2 * insn_num)
+	    = DECL_INSN_RESERV (decl)->condexp;
+          XVECEXP (condexp, 0, 2 * insn_num + 1)
+            = make_numeric_value (DECL_INSN_RESERV (decl)->default_latency);
+          insn_num++;
+        }
+    }
+  gcc_assert (description->insns_num == insn_num + 1);
+  make_internal_attr (attr_printf (sizeof ("*")
+				   + strlen (INSN_DEFAULT_LATENCY_FUNC_NAME)
+				   + 1, "*%s", INSN_DEFAULT_LATENCY_FUNC_NAME),
+		      condexp, ATTR_NONE);
+}
+
+
+
+/* The following function creates attribute which returns 1 if given
+   output insn has bypassing and 0 otherwise.  */
+static void
+make_bypass_attr (void)
+{
+  int i, bypass_insn;
+  int bypass_insns_num = 0;
+  decl_t decl;
+  rtx result_rtx;
+
+  for (i = 0; i < description->decls_num; i++)
+    {
+      decl = description->decls [i];
+      if (decl->mode == dm_insn_reserv
+	  && DECL_INSN_RESERV (decl)->condexp != NULL
+	  && DECL_INSN_RESERV (decl)->bypass_list != NULL)
+	bypass_insns_num++;
+    }
+  if (bypass_insns_num == 0)
+    result_rtx = make_numeric_value (0);
+  else
+    {
+      result_rtx = rtx_alloc (COND);
+      XVEC (result_rtx, 0) = rtvec_alloc (bypass_insns_num * 2);
+      XEXP (result_rtx, 1) = make_numeric_value (0);
+
+      for (i = bypass_insn = 0; i < description->decls_num; i++)
+        {
+          decl = description->decls [i];
+          if (decl->mode == dm_insn_reserv
+	      && DECL_INSN_RESERV (decl)->condexp != NULL
+	      && DECL_INSN_RESERV (decl)->bypass_list != NULL)
+	    {
+              XVECEXP (result_rtx, 0, 2 * bypass_insn)
+		= DECL_INSN_RESERV (decl)->condexp;
+              XVECEXP (result_rtx, 0, 2 * bypass_insn + 1)
+	        = make_numeric_value (1);
+              bypass_insn++;
+            }
+        }
+    }
+  make_internal_attr (attr_printf (sizeof ("*")
+				   + strlen (BYPASS_P_FUNC_NAME) + 1,
+				   "*%s", BYPASS_P_FUNC_NAME),
+		      result_rtx, ATTR_NONE);
+}
+
+
+
 /* This page mainly contains top level functions of pipeline hazards
    description translator.  */
 
@@ -8927,7 +9735,7 @@ base_file_name (const char *file_name)
 
 /* The following is top level function to initialize the work of
    pipeline hazards description translator.  */
-static void
+void
 initiate_automaton_gen (int argc, char **argv)
 {
   const char *base_name;
@@ -8960,7 +9768,7 @@ initiate_automaton_gen (int argc, char **argv)
 	fatal ("option `-split' has not been implemented yet\n");
 	/* split_argument = atoi (argument_vect [i + 1]); */
       }
-
+  VLA_PTR_CREATE (decls, 150, "decls");
   /* Initialize IR storage.  */
   obstack_init (&irp);
   initiate_automaton_decl_table ();
@@ -9006,7 +9814,7 @@ check_automata_insn_issues (void)
 			   reserv_ainsn->insn_reserv_decl->name);
 		  else
 		    warning
-		      (0, "Automaton `%s': Insn `%s' will never be issued",
+		      ("Automaton `%s': Insn `%s' will never be issued",
 		       automaton->corresponding_automaton_decl->name,
 		       reserv_ainsn->insn_reserv_decl->name);
 		}
@@ -9016,7 +9824,7 @@ check_automata_insn_issues (void)
 		    error ("Insn `%s' will never be issued",
 			   reserv_ainsn->insn_reserv_decl->name);
 		  else
-		    warning (0, "Insn `%s' will never be issued",
+		    warning ("Insn `%s' will never be issued",
 			     reserv_ainsn->insn_reserv_decl->name);
 		}
 	  }
@@ -9025,14 +9833,14 @@ check_automata_insn_issues (void)
 
 /* The following vla is used for storing pointers to all achieved
    states.  */
-static VEC(state_t,heap) *automaton_states;
+static vla_ptr_t automaton_states;
 
 /* This function is called by function pass_states to add an achieved
    STATE.  */
 static void
 add_automaton_state (state_t state)
 {
-  VEC_safe_push (state_t,heap, automaton_states, state);
+  VLA_PTR_ADD (automaton_states, state);
 }
 
 /* The following function forms list of important automata (whose
@@ -9041,27 +9849,29 @@ static void
 form_important_insn_automata_lists (void)
 {
   automaton_t automaton;
+  state_t *state_ptr;
   decl_t decl;
   ainsn_t ainsn;
   arc_t arc;
   int i;
-  size_t n;
 
-  automaton_states = 0;
+  VLA_PTR_CREATE (automaton_states, 1500,
+		  "automaton states for forming important insn automata sets");
   /* Mark important ainsns.  */
   for (automaton = description->first_automaton;
        automaton != NULL;
        automaton = automaton->next_automaton)
     {
-      VEC_truncate (state_t, automaton_states, 0);
+      VLA_PTR_NULLIFY (automaton_states);
       pass_states (automaton, add_automaton_state);
-      for (n = 0; n < VEC_length (state_t, automaton_states); n++)
+      for (state_ptr = VLA_PTR_BEGIN (automaton_states);
+	   state_ptr <= (state_t *) VLA_PTR_LAST (automaton_states);
+	   state_ptr++)
 	{
-	  state_t s = VEC_index (state_t, automaton_states, n);
-	  for (arc = first_out_arc (s);
+	  for (arc = first_out_arc (*state_ptr);
 	       arc != NULL;
 	       arc = next_out_arc (arc))
-	    if (arc->to_state != s)
+	    if (arc->to_state != *state_ptr)
 	      {
 		gcc_assert (arc->insn->first_insn_with_same_reservs);
 		for (ainsn = arc->insn;
@@ -9071,8 +9881,7 @@ form_important_insn_automata_lists (void)
 	      }
 	}
     }
-  VEC_free (state_t,heap, automaton_states);
-
+  VLA_PTR_DELETE (automaton_states);
   /* Create automata sets for the insns.  */
   for (i = 0; i < description->decls_num; i++)
     {
@@ -9101,19 +9910,19 @@ form_important_insn_automata_lists (void)
 
 /* The following is top level function to generate automat(a,on) for
    fast recognition of pipeline hazards.  */
-static void
+void
 expand_automata (void)
 {
   int i;
 
   description = create_node (sizeof (struct description)
 			     /* One entry for cycle advancing insn.  */
-			     + sizeof (decl_t) * VEC_length (decl_t, decls));
-  description->decls_num = VEC_length (decl_t, decls);
+			     + sizeof (decl_t) * VLA_PTR_LENGTH (decls));
+  description->decls_num = VLA_PTR_LENGTH (decls);
   description->query_units_num = 0;
   for (i = 0; i < description->decls_num; i++)
     {
-      description->decls [i] = VEC_index (decl_t, decls, i);
+      description->decls [i] = VLA_PTR (decls, i);
       if (description->decls [i]->mode == dm_unit
 	  && DECL_UNIT (description->decls [i])->query_p)
         DECL_UNIT (description->decls [i])->query_num
@@ -9141,18 +9950,35 @@ expand_automata (void)
   if (!have_error)
     {
       form_important_insn_automata_lists ();
+      if (progress_flag)
+	fprintf (stderr, "Generation of attributes...");
+      make_internal_dfa_insn_code_attr ();
+      make_insn_alts_attr ();
+      make_default_insn_latency_attr ();
+      make_bypass_attr ();
+      if (progress_flag)
+	fprintf (stderr, "done\n");
     }
   ticker_off (&generation_time);
+  ticker_off (&all_time);
+  if (progress_flag)
+    fprintf (stderr, "All other genattrtab stuff...");
 }
 
 /* The following is top level function to output PHR and to finish
    work with pipeline description translator.  */
-static void
+void
 write_automata (void)
 {
+  if (progress_flag)
+    fprintf (stderr, "done\n");
+  if (have_error)
+    fatal ("Errors in DFA description");
+  ticker_on (&all_time);
   output_time = create_ticker ();
   if (progress_flag)
     fprintf (stderr, "Forming and outputting automata tables...");
+  output_dfa_max_issue_rate ();
   output_tables ();
   if (progress_flag)
     {
@@ -9169,6 +9995,11 @@ write_automata (void)
 	   DFA_INSN_CODES_LENGTH_VARIABLE_NAME);
   output_dfa_insn_code_func ();
   output_trans_func ();
+  fprintf (output_file, "\n#if %s\n\n", AUTOMATON_STATE_ALTS_MACRO_NAME);
+  output_internal_state_alts_func ();
+  output_state_alts_func ();
+  fprintf (output_file, "\n#endif /* #if %s */\n\n",
+	   AUTOMATON_STATE_ALTS_MACRO_NAME);
   output_min_issue_delay_func ();
   output_internal_dead_lock_func ();
   output_dead_lock_func ();
@@ -9238,110 +10069,4 @@ write_automata (void)
   obstack_free (&irp, NULL);
   if (have_error && output_description_file != NULL)
     remove (output_description_file_name);
-}
-
-int
-main (int argc, char **argv)
-{
-  rtx desc;
-
-  progname = "genautomata";
-
-  if (init_md_reader_args (argc, argv) != SUCCESS_EXIT_CODE)
-    return (FATAL_EXIT_CODE);
-
-  initiate_automaton_gen (argc, argv);
-  while (1)
-    {
-      int lineno;
-      int insn_code_number;
-
-      desc = read_md_rtx (&lineno, &insn_code_number);
-      if (desc == NULL)
-	break;
-
-      switch (GET_CODE (desc))
-	{
-	case DEFINE_CPU_UNIT:
-	  gen_cpu_unit (desc);
-	  break;
-
-	case DEFINE_QUERY_CPU_UNIT:
-	  gen_query_cpu_unit (desc);
-	  break;
-
-	case DEFINE_BYPASS:
-	  gen_bypass (desc);
-	  break;
-
-	case EXCLUSION_SET:
-	  gen_excl_set (desc);
-	  break;
-
-	case PRESENCE_SET:
-	  gen_presence_set (desc);
-	  break;
-
-	case FINAL_PRESENCE_SET:
-	  gen_final_presence_set (desc);
-	  break;
-
-	case ABSENCE_SET:
-	  gen_absence_set (desc);
-	  break;
-
-	case FINAL_ABSENCE_SET:
-	  gen_final_absence_set (desc);
-	  break;
-
-	case DEFINE_AUTOMATON:
-	  gen_automaton (desc);
-	  break;
-
-	case AUTOMATA_OPTION:
-	  gen_automata_option (desc);
-	  break;
-
-	case DEFINE_RESERVATION:
-	  gen_reserv (desc);
-	  break;
-
-	case DEFINE_INSN_RESERVATION:
-	  gen_insn_reserv (desc);
-	  break;
-
-	default:
-	  break;
-	}
-    }
-
-  if (have_error)
-    return FATAL_EXIT_CODE;
-
-  puts ("/* Generated automatically by the program `genautomata'\n"
-	"   from the machine description file `md'.  */\n\n"
-	"#include \"config.h\"\n"
-	"#include \"system.h\"\n"
-	"#include \"coretypes.h\"\n"
-	"#include \"tm.h\"\n"
-	"#include \"rtl.h\"\n"
-	"#include \"tm_p.h\"\n"
-	"#include \"insn-config.h\"\n"
-	"#include \"recog.h\"\n"
-	"#include \"regs.h\"\n"
-	"#include \"real.h\"\n"
-	"#include \"output.h\"\n"
-	"#include \"insn-attr.h\"\n"
-	"#include \"toplev.h\"\n"
-	"#include \"flags.h\"\n"
-	"#include \"function.h\"\n");
-
-  if (VEC_length (decl_t, decls) > 0)
-    {
-      expand_automata ();
-      write_automata ();
-    }
-
-  fflush (stdout);
-  return (ferror (stdout) != 0 ? FATAL_EXIT_CODE : SUCCESS_EXIT_CODE);
 }

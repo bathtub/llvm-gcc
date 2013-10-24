@@ -1,5 +1,4 @@
-/* Copyright (C) 2002, 2003, 2004, 2005, 2006
-   Free Software Foundation, Inc.
+/* Copyright (C) 2002, 2003, 2004 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +24,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with Libgfortran; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 
 /* format.c-- parse a FORMAT string into a binary format suitable for
@@ -38,34 +37,28 @@ Boston, MA 02110-1301, USA.  */
 #include "libgfortran.h"
 #include "io.h"
 
-#define FARRAY_SIZE 64
 
-typedef struct fnode_array
-{
-  struct fnode_array *next;
-  fnode array[FARRAY_SIZE];
-}
-fnode_array;
 
-typedef struct format_data
-{
-  char *format_string, *string;
-  const char *error;
-  format_token saved_token;
-  int value, format_string_len, reversion_ok;
-  fnode *avail;
-  const fnode *saved_format;
-  fnode_array *last;
-  fnode_array array;
-}
-format_data;
+/* Number of format nodes that we can store statically before we have
+ * to resort to dynamic allocation.  The root node is array[0]. */
 
-static const fnode colon_node = { FMT_COLON, 0, NULL, NULL, {{ 0, 0, 0 }}, 0,
-				  NULL };
+#define FARRAY_SIZE 200
+
+static fnode *avail, array[FARRAY_SIZE];
+
+/* Local variables for checking format strings.  The saved_token is
+ * used to back up by a single format token during the parsing process. */
+
+static char *format_string, *string;
+static const char *error;
+static format_token saved_token;
+static int value, format_string_len, reversion_ok;
+
+static fnode *saved_format, colon_node = { FMT_COLON };
 
 /* Error messages */
 
-static const char posint_required[] = "Positive width required in format",
+static char posint_required[] = "Positive width required in format",
   period_required[] = "Period required in format",
   nonneg_required[] = "Nonnegative width required in format",
   unexpected_element[] = "Unexpected element in format",
@@ -80,17 +73,17 @@ static const char posint_required[] = "Positive width required in format",
  * spaces are significant, otherwise they are not. */
 
 static int
-next_char (format_data *fmt, int literal)
+next_char (int literal)
 {
   int c;
 
   do
     {
-      if (fmt->format_string_len == 0)
+      if (format_string_len == 0)
 	return -1;
 
-      fmt->format_string_len--;
-      c = toupper (*fmt->format_string++);
+      format_string_len--;
+      c = toupper (*format_string++);
     }
   while (c == ' ' && !literal);
 
@@ -100,8 +93,7 @@ next_char (format_data *fmt, int literal)
 
 /* unget_char()-- Back up one character position. */
 
-#define unget_char(fmt) \
-  { fmt->format_string--; fmt->format_string_len++; }
+#define unget_char() { format_string--;  format_string_len++; }
 
 
 /* get_fnode()-- Allocate a new format node, inserting it into the
@@ -109,19 +101,17 @@ next_char (format_data *fmt, int literal)
  * static buffer. */
 
 static fnode *
-get_fnode (format_data *fmt, fnode **head, fnode **tail, format_token t)
+get_fnode (fnode ** head, fnode ** tail, format_token t)
 {
   fnode *f;
 
-  if (fmt->avail == &fmt->last->array[FARRAY_SIZE])
+  if (avail - array >= FARRAY_SIZE)
+    f = get_mem (sizeof (fnode));
+  else
     {
-      fmt->last->next = get_mem (sizeof (fnode_array));
-      fmt->last = fmt->last->next;
-      fmt->last->next = NULL;
-      fmt->avail = &fmt->last->array[0];
+      f = avail++;
+      memset (f, '\0', sizeof (fnode));
     }
-  f = fmt->avail++;
-  memset (f, '\0', sizeof (fnode));
 
   if (*head == NULL)
     *head = *tail = f;
@@ -133,54 +123,67 @@ get_fnode (format_data *fmt, fnode **head, fnode **tail, format_token t)
 
   f->format = t;
   f->repeat = -1;
-  f->source = fmt->format_string;
+  f->source = format_string;
   return f;
 }
 
 
-/* free_format_data()-- Free all allocated format data.  */
+/* free_fnode()-- Recursive function to free the given fnode and
+ * everything it points to.  We only have to actually free something
+ * if it is outside of the static array. */
+
+static void
+free_fnode (fnode * f)
+{
+  fnode *next;
+
+  for (; f; f = next)
+    {
+      next = f->next;
+
+      if (f->format == FMT_LPAREN)
+	free_fnode (f->u.child);
+      if (f < array || f >= array + FARRAY_SIZE)
+	free_mem (f);
+    }
+}
+
+
+/* free_fnodes()-- Free the current tree of fnodes.  We only have to
+ * traverse the tree if some nodes were allocated dynamically. */
 
 void
-free_format_data (st_parameter_dt *dtp)
+free_fnodes (void)
 {
-  fnode_array *fa, *fa_next;
-  format_data *fmt = dtp->u.p.fmt;
+  if (avail - array >= FARRAY_SIZE)
+    free_fnode (&array[0]);
 
-  if (fmt == NULL)
-    return;
-
-  for (fa = fmt->array.next; fa; fa = fa_next)
-    {
-      fa_next = fa->next;
-      free_mem (fa);
-    }
-
-  free_mem (fmt);
-  dtp->u.p.fmt = NULL;
+  avail = array;
+  memset(array, 0, sizeof(avail[0]) * FARRAY_SIZE);
 }
 
 
 /* format_lex()-- Simple lexical analyzer for getting the next token
  * in a FORMAT string.  We support a one-level token pushback in the
- * fmt->saved_token variable. */
+ * saved_token variable. */
 
 static format_token
-format_lex (format_data *fmt)
+format_lex (void)
 {
   format_token token;
   int negative_flag;
   int c;
   char delim;
 
-  if (fmt->saved_token != FMT_NONE)
+  if (saved_token != FMT_NONE)
     {
-      token = fmt->saved_token;
-      fmt->saved_token = FMT_NONE;
+      token = saved_token;
+      saved_token = FMT_NONE;
       return token;
     }
 
   negative_flag = 0;
-  c = next_char (fmt, 0);
+  c = next_char (0);
 
   switch (c)
     {
@@ -189,28 +192,28 @@ format_lex (format_data *fmt)
       /* Fall Through */
 
     case '+':
-      c = next_char (fmt, 0);
+      c = next_char (0);
       if (!isdigit (c))
 	{
 	  token = FMT_UNKNOWN;
 	  break;
 	}
 
-      fmt->value = c - '0';
+      value = c - '0';
 
       for (;;)
 	{
-	  c = next_char (fmt, 0);
+	  c = next_char (0);
 	  if (!isdigit (c))
 	    break;
 
-	  fmt->value = 10 * fmt->value + c - '0';
+	  value = 10 * value + c - '0';
 	}
 
-      unget_char (fmt);
+      unget_char ();
 
       if (negative_flag)
-	fmt->value = -fmt->value;
+	value = -value;
       token = FMT_SIGNED_INT;
       break;
 
@@ -224,19 +227,19 @@ format_lex (format_data *fmt)
     case '7':
     case '8':
     case '9':
-      fmt->value = c - '0';
+      value = c - '0';
 
       for (;;)
 	{
-	  c = next_char (fmt, 0);
+	  c = next_char (0);
 	  if (!isdigit (c))
 	    break;
 
-	  fmt->value = 10 * fmt->value + c - '0';
+	  value = 10 * value + c - '0';
 	}
 
-      unget_char (fmt);
-      token = (fmt->value == 0) ? FMT_ZERO : FMT_POSINT;
+      unget_char ();
+      token = (value == 0) ? FMT_ZERO : FMT_POSINT;
       break;
 
     case '.':
@@ -260,7 +263,7 @@ format_lex (format_data *fmt)
       break;
 
     case 'T':
-      switch (next_char (fmt, 0))
+      switch (next_char (0))
 	{
 	case 'L':
 	  token = FMT_TL;
@@ -270,7 +273,7 @@ format_lex (format_data *fmt)
 	  break;
 	default:
 	  token = FMT_T;
-	  unget_char (fmt);
+	  unget_char ();
 	  break;
 	}
 
@@ -289,7 +292,7 @@ format_lex (format_data *fmt)
       break;
 
     case 'S':
-      switch (next_char (fmt, 0))
+      switch (next_char (0))
 	{
 	case 'S':
 	  token = FMT_SS;
@@ -299,14 +302,14 @@ format_lex (format_data *fmt)
 	  break;
 	default:
 	  token = FMT_S;
-	  unget_char (fmt);
+	  unget_char ();
 	  break;
 	}
 
       break;
 
     case 'B':
-      switch (next_char (fmt, 0))
+      switch (next_char (0))
 	{
 	case 'N':
 	  token = FMT_BN;
@@ -316,7 +319,7 @@ format_lex (format_data *fmt)
 	  break;
 	default:
 	  token = FMT_B;
-	  unget_char (fmt);
+	  unget_char ();
 	  break;
 	}
 
@@ -326,39 +329,39 @@ format_lex (format_data *fmt)
     case '"':
       delim = c;
 
-      fmt->string = fmt->format_string;
-      fmt->value = 0;		/* This is the length of the string */
+      string = format_string;
+      value = 0;		/* This is the length of the string */
 
       for (;;)
 	{
-	  c = next_char (fmt, 1);
+	  c = next_char (1);
 	  if (c == -1)
 	    {
 	      token = FMT_BADSTRING;
-	      fmt->error = bad_string;
+	      error = bad_string;
 	      break;
 	    }
 
 	  if (c == delim)
 	    {
-	      c = next_char (fmt, 1);
+	      c = next_char (1);
 
 	      if (c == -1)
 		{
 		  token = FMT_BADSTRING;
-		  fmt->error = bad_string;
+		  error = bad_string;
 		  break;
 		}
 
 	      if (c != delim)
 		{
-		  unget_char (fmt);
+		  unget_char ();
 		  token = FMT_STRING;
 		  break;
 		}
 	    }
 
-	  fmt->value++;
+	  value++;
 	}
 
       break;
@@ -384,7 +387,7 @@ format_lex (format_data *fmt)
       break;
 
     case 'E':
-      switch (next_char (fmt, 0))
+      switch (next_char (0))
 	{
 	case 'N':
 	  token = FMT_EN;
@@ -394,7 +397,7 @@ format_lex (format_data *fmt)
 	  break;
 	default:
 	  token = FMT_E;
-	  unget_char (fmt);
+	  unget_char ();
 	  break;
 	}
 
@@ -438,45 +441,43 @@ format_lex (format_data *fmt)
  * parenthesis node which contains the rest of the list. */
 
 static fnode *
-parse_format_list (st_parameter_dt *dtp)
+parse_format_list (void)
 {
   fnode *head, *tail;
   format_token t, u, t2;
   int repeat;
-  format_data *fmt = dtp->u.p.fmt;
 
   head = tail = NULL;
 
   /* Get the next format item */
  format_item:
-  t = format_lex (fmt);
- format_item_1:
+  t = format_lex ();
   switch (t)
     {
     case FMT_POSINT:
-      repeat = fmt->value;
+      repeat = value;
 
-      t = format_lex (fmt);
+      t = format_lex ();
       switch (t)
 	{
 	case FMT_LPAREN:
-	  get_fnode (fmt, &head, &tail, FMT_LPAREN);
+	  get_fnode (&head, &tail, FMT_LPAREN);
 	  tail->repeat = repeat;
-	  tail->u.child = parse_format_list (dtp);
-	  if (fmt->error != NULL)
+	  tail->u.child = parse_format_list ();
+	  if (error != NULL)
 	    goto finished;
 
 	  goto between_desc;
 
 	case FMT_SLASH:
-	  get_fnode (fmt, &head, &tail, FMT_SLASH);
+	  get_fnode (&head, &tail, FMT_SLASH);
 	  tail->repeat = repeat;
 	  goto optional_comma;
 
 	case FMT_X:
-	  get_fnode (fmt, &head, &tail, FMT_X);
+	  get_fnode (&head, &tail, FMT_X);
 	  tail->repeat = 1;
-	  tail->u.k = fmt->value;
+	  tail->u.k = value;
 	  goto between_desc;
 
 	case FMT_P:
@@ -487,29 +488,29 @@ parse_format_list (st_parameter_dt *dtp)
 	}
 
     case FMT_LPAREN:
-      get_fnode (fmt, &head, &tail, FMT_LPAREN);
+      get_fnode (&head, &tail, FMT_LPAREN);
       tail->repeat = 1;
-      tail->u.child = parse_format_list (dtp);
-      if (fmt->error != NULL)
+      tail->u.child = parse_format_list ();
+      if (error != NULL)
 	goto finished;
 
       goto between_desc;
 
     case FMT_SIGNED_INT:	/* Signed integer can only precede a P format.  */
     case FMT_ZERO:		/* Same for zero.  */
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_P)
 	{
-	  fmt->error = "Expected P edit descriptor in format";
+	  error = "Expected P edit descriptor in format";
 	  goto finished;
 	}
 
     p_descriptor:
-      get_fnode (fmt, &head, &tail, FMT_P);
-      tail->u.k = fmt->value;
+      get_fnode (&head, &tail, FMT_P);
+      tail->u.k = value;
       tail->repeat = 1;
 
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t == FMT_F || t == FMT_EN || t == FMT_ES || t == FMT_D
 	  || t == FMT_G || t == FMT_E)
 	{
@@ -517,11 +518,11 @@ parse_format_list (st_parameter_dt *dtp)
 	  goto data_desc;
 	}
 
-      fmt->saved_token = t;
+      saved_token = t;
       goto optional_comma;
 
     case FMT_P:		/* P and X require a prior number */
-      fmt->error = "P descriptor requires leading scale factor";
+      error = "P descriptor requires leading scale factor";
       goto finished;
 
     case FMT_X:
@@ -531,7 +532,7 @@ parse_format_list (st_parameter_dt *dtp)
    If we would be pedantic in the library, we would have to reject
    an X descriptor without an integer prefix:
 
-      fmt->error = "X descriptor requires leading space count";
+      error = "X descriptor requires leading space count";
       goto finished;
 
    However, this is an extension supported by many Fortran compilers,
@@ -539,16 +540,16 @@ parse_format_list (st_parameter_dt *dtp)
    runtime library, and make the front end reject it if the compiler
    is in pedantic mode.  The interpretation of 'X' is '1X'.
 */
-      get_fnode (fmt, &head, &tail, FMT_X);
+      get_fnode (&head, &tail, FMT_X);
       tail->repeat = 1;
       tail->u.k = 1;
       goto between_desc;
 
     case FMT_STRING:
-      get_fnode (fmt, &head, &tail, FMT_STRING);
+      get_fnode (&head, &tail, FMT_STRING);
 
-      tail->u.string.p = fmt->string;
-      tail->u.string.length = fmt->value;
+      tail->u.string.p = string;
+      tail->u.string.length = value;
       tail->repeat = 1;
       goto optional_comma;
 
@@ -557,38 +558,37 @@ parse_format_list (st_parameter_dt *dtp)
     case FMT_SP:
     case FMT_BN:
     case FMT_BZ:
-      get_fnode (fmt, &head, &tail, t);
+      get_fnode (&head, &tail, t);
       tail->repeat = 1;
       goto between_desc;
 
     case FMT_COLON:
-      get_fnode (fmt, &head, &tail, FMT_COLON);
+      get_fnode (&head, &tail, FMT_COLON);
       tail->repeat = 1;
       goto optional_comma;
 
     case FMT_SLASH:
-      get_fnode (fmt, &head, &tail, FMT_SLASH);
+      get_fnode (&head, &tail, FMT_SLASH);
       tail->repeat = 1;
       tail->u.r = 1;
       goto optional_comma;
 
     case FMT_DOLLAR:
-      get_fnode (fmt, &head, &tail, FMT_DOLLAR);
+      get_fnode (&head, &tail, FMT_DOLLAR);
       tail->repeat = 1;
-      notify_std (&dtp->common, GFC_STD_GNU, "Extension: $ descriptor");
       goto between_desc;
 
     case FMT_T:
     case FMT_TL:
     case FMT_TR:
-      t2 = format_lex (fmt);
+      t2 = format_lex ();
       if (t2 != FMT_POSINT)
 	{
-	  fmt->error = posint_required;
+	  error = posint_required;
 	  goto finished;
 	}
-      get_fnode (fmt, &head, &tail, t);
-      tail->u.n = fmt->value;
+      get_fnode (&head, &tail, t);
+      tail->u.n = value;
       tail->repeat = 1;
       goto between_desc;
 
@@ -608,25 +608,25 @@ parse_format_list (st_parameter_dt *dtp)
       goto data_desc;
 
     case FMT_H:
-      get_fnode (fmt, &head, &tail, FMT_STRING);
+      get_fnode (&head, &tail, FMT_STRING);
 
-      if (fmt->format_string_len < 1)
+      if (format_string_len < 1)
 	{
-	  fmt->error = bad_hollerith;
+	  error = bad_hollerith;
 	  goto finished;
 	}
 
-      tail->u.string.p = fmt->format_string;
+      tail->u.string.p = format_string;
       tail->u.string.length = 1;
       tail->repeat = 1;
 
-      fmt->format_string++;
-      fmt->format_string_len--;
+      format_string++;
+      format_string_len--;
 
       goto between_desc;
 
     case FMT_END:
-      fmt->error = unexpected_end;
+      error = unexpected_end;
       goto finished;
 
     case FMT_BADSTRING:
@@ -636,7 +636,7 @@ parse_format_list (st_parameter_dt *dtp)
       goto finished;
 
     default:
-      fmt->error = unexpected_element;
+      error = unexpected_element;
       goto finished;
     }
 
@@ -646,51 +646,42 @@ parse_format_list (st_parameter_dt *dtp)
   switch (t)
     {
     case FMT_P:
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t == FMT_POSINT)
 	{
-	  fmt->error = "Repeat count cannot follow P descriptor";
+	  error = "Repeat count cannot follow P descriptor";
 	  goto finished;
 	}
 
-      fmt->saved_token = t;
-      get_fnode (fmt, &head, &tail, FMT_P);
+      saved_token = t;
+      get_fnode (&head, &tail, FMT_P);
 
       goto optional_comma;
 
     case FMT_L:
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_POSINT)
 	{
-	  if (notification_std(GFC_STD_GNU) == ERROR)
-	    {
-	      fmt->error = posint_required;
-	      goto finished;
-	    }
-	  else
-	    {
-	      fmt->saved_token = t;
-	      fmt->value = 1;	/* Default width */
-	      notify_std (&dtp->common, GFC_STD_GNU, posint_required);
-	    }
+	  error = posint_required;
+	  goto finished;
 	}
 
-      get_fnode (fmt, &head, &tail, FMT_L);
-      tail->u.n = fmt->value;
+      get_fnode (&head, &tail, FMT_L);
+      tail->u.n = value;
       tail->repeat = repeat;
       break;
 
     case FMT_A:
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_POSINT)
 	{
-	  fmt->saved_token = t;
-	  fmt->value = -1;		/* Width not present */
+	  saved_token = t;
+	  value = -1;		/* Width not present */
 	}
 
-      get_fnode (fmt, &head, &tail, FMT_A);
+      get_fnode (&head, &tail, FMT_A);
       tail->repeat = repeat;
-      tail->u.n = fmt->value;
+      tail->u.n = value;
       break;
 
     case FMT_D:
@@ -699,15 +690,15 @@ parse_format_list (st_parameter_dt *dtp)
     case FMT_G:
     case FMT_EN:
     case FMT_ES:
-      get_fnode (fmt, &head, &tail, t);
+      get_fnode (&head, &tail, t);
       tail->repeat = repeat;
 
-      u = format_lex (fmt);
-      if (t == FMT_F || dtp->u.p.mode == WRITING)
+      u = format_lex ();
+      if (t == FMT_F || g.mode == WRITING)
 	{
 	  if (u != FMT_POSINT && u != FMT_ZERO)
 	    {
-	      fmt->error = nonneg_required;
+	      error = nonneg_required;
 	      goto finished;
 	    }
 	}
@@ -715,36 +706,28 @@ parse_format_list (st_parameter_dt *dtp)
 	{
 	  if (u != FMT_POSINT)
 	    {
-	      fmt->error = posint_required;
+	      error = posint_required;
 	      goto finished;
 	    }
 	}
 
-      tail->u.real.w = fmt->value;
+      tail->u.real.w = value;
       t2 = t;
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_PERIOD)
 	{
-	  /* We treat a missing decimal descriptor as 0.  Note: This is only
-	     allowed if -std=legacy, otherwise an error occurs.  */
-	  if (compile_options.warn_std != 0)
-	    {
-	      fmt->error = period_required;
-	      goto finished;
-	    }
-	  fmt->saved_token = t;
-	  tail->u.real.d = 0;
-	  break;
-	}
-
-      t = format_lex (fmt);
-      if (t != FMT_ZERO && t != FMT_POSINT)
-	{
-	  fmt->error = nonneg_required;
+	  error = period_required;
 	  goto finished;
 	}
 
-      tail->u.real.d = fmt->value;
+      t = format_lex ();
+      if (t != FMT_ZERO && t != FMT_POSINT)
+	{
+	  error = nonneg_required;
+	  goto finished;
+	}
+
+      tail->u.real.d = value;
 
       if (t == FMT_D || t == FMT_F)
 	break;
@@ -752,38 +735,38 @@ parse_format_list (st_parameter_dt *dtp)
       tail->u.real.e = -1;
 
       /* Look for optional exponent */
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_E)
-	fmt->saved_token = t;
+	saved_token = t;
       else
 	{
-	  t = format_lex (fmt);
+	  t = format_lex ();
 	  if (t != FMT_POSINT)
 	    {
-	      fmt->error = "Positive exponent width required in format";
+	      error = "Positive exponent width required in format";
 	      goto finished;
 	    }
 
-	  tail->u.real.e = fmt->value;
+	  tail->u.real.e = value;
 	}
 
       break;
 
     case FMT_H:
-      if (repeat > fmt->format_string_len)
+      if (repeat > format_string_len)
 	{
-	  fmt->error = bad_hollerith;
+	  error = bad_hollerith;
 	  goto finished;
 	}
 
-      get_fnode (fmt, &head, &tail, FMT_STRING);
+      get_fnode (&head, &tail, FMT_STRING);
 
-      tail->u.string.p = fmt->format_string;
+      tail->u.string.p = format_string;
       tail->u.string.length = repeat;
       tail->repeat = 1;
 
-      fmt->format_string += fmt->value;
-      fmt->format_string_len -= repeat;
+      format_string += value;
+      format_string_len -= repeat;
 
       break;
 
@@ -791,16 +774,16 @@ parse_format_list (st_parameter_dt *dtp)
     case FMT_B:
     case FMT_O:
     case FMT_Z:
-      get_fnode (fmt, &head, &tail, t);
+      get_fnode (&head, &tail, t);
       tail->repeat = repeat;
 
-      t = format_lex (fmt);
+      t = format_lex ();
 
-      if (dtp->u.p.mode == READING)
+      if (g.mode == READING)
 	{
 	  if (t != FMT_POSINT)
 	    {
-	      fmt->error = posint_required;
+	      error = posint_required;
 	      goto finished;
 	    }
 	}
@@ -808,47 +791,47 @@ parse_format_list (st_parameter_dt *dtp)
 	{
 	  if (t != FMT_ZERO && t != FMT_POSINT)
 	    {
-	      fmt->error = nonneg_required;
+	      error = nonneg_required;
 	      goto finished;
 	    }
 	}
 
-      tail->u.integer.w = fmt->value;
+      tail->u.integer.w = value;
       tail->u.integer.m = -1;
 
-      t = format_lex (fmt);
+      t = format_lex ();
       if (t != FMT_PERIOD)
 	{
-	  fmt->saved_token = t;
+	  saved_token = t;
 	}
       else
 	{
-	  t = format_lex (fmt);
+	  t = format_lex ();
 	  if (t != FMT_ZERO && t != FMT_POSINT)
 	    {
-	      fmt->error = nonneg_required;
+	      error = nonneg_required;
 	      goto finished;
 	    }
 
-	  tail->u.integer.m = fmt->value;
+	  tail->u.integer.m = value;
 	}
 
       if (tail->u.integer.w != 0 && tail->u.integer.m > tail->u.integer.w)
 	{
-	  fmt->error = "Minimum digits exceeds field width";
+	  error = "Minimum digits exceeds field width";
 	  goto finished;
 	}
 
       break;
 
     default:
-      fmt->error = unexpected_element;
+      error = unexpected_element;
       goto finished;
     }
 
   /* Between a descriptor and what comes next */
  between_desc:
-  t = format_lex (fmt);
+  t = format_lex ();
   switch (t)
     {
     case FMT_COMMA:
@@ -858,28 +841,27 @@ parse_format_list (st_parameter_dt *dtp)
       goto finished;
 
     case FMT_SLASH:
-      get_fnode (fmt, &head, &tail, FMT_SLASH);
+      get_fnode (&head, &tail, FMT_SLASH);
       tail->repeat = 1;
-      goto optional_comma;
+
+      /* Fall Through */
 
     case FMT_COLON:
-      get_fnode (fmt, &head, &tail, FMT_COLON);
-      tail->repeat = 1;
       goto optional_comma;
 
     case FMT_END:
-      fmt->error = unexpected_end;
+      error = unexpected_end;
       goto finished;
 
     default:
-      /* Assume a missing comma, this is a GNU extension */
-      goto format_item_1;
+      error = "Missing comma in format";
+      goto finished;
     }
 
   /* Optional comma is a weird between state where we've just finished
      reading a colon, slash or P descriptor. */
  optional_comma:
-  t = format_lex (fmt);
+  t = format_lex ();
   switch (t)
     {
     case FMT_COMMA:
@@ -889,7 +871,7 @@ parse_format_list (st_parameter_dt *dtp)
       goto finished;
 
     default:			/* Assume that we have another format item */
-      fmt->saved_token = t;
+      saved_token = t;
       break;
     }
 
@@ -905,28 +887,30 @@ parse_format_list (st_parameter_dt *dtp)
  * is assumed to happen at parse time, and the current location of the
  * parser is shown.
  *
- * We generate a message showing where the problem is.  We take extra
- * care to print only the relevant part of the format if it is longer
- * than a standard 80 column display. */
+ * After freeing any dynamically allocated fnodes, generate a message
+ * showing where the problem is.  We take extra care to print only the
+ * relevant part of the format if it is longer than a standard 80
+ * column display. */
 
 void
-format_error (st_parameter_dt *dtp, const fnode *f, const char *message)
+format_error (fnode * f, const char *message)
 {
   int width, i, j, offset;
   char *p, buffer[300];
-  format_data *fmt = dtp->u.p.fmt;
 
   if (f != NULL)
-    fmt->format_string = f->source;
+    format_string = f->source;
+
+  free_fnodes ();
 
   st_sprintf (buffer, "%s\n", message);
 
-  j = fmt->format_string - dtp->format;
+  j = format_string - ioparm.format;
 
   offset = (j > 60) ? j - 40 : 0;
 
   j -= offset;
-  width = dtp->format_len - offset;
+  width = ioparm.format_len - offset;
 
   if (width > 80)
     width = 80;
@@ -935,7 +919,7 @@ format_error (st_parameter_dt *dtp, const fnode *f, const char *message)
 
   p = strchr (buffer, '\0');
 
-  memcpy (p, dtp->format + offset, width);
+  memcpy (p, ioparm.format + offset, width);
 
   p += width;
   *p++ = '\n';
@@ -948,49 +932,42 @@ format_error (st_parameter_dt *dtp, const fnode *f, const char *message)
   *p++ = '^';
   *p = '\0';
 
-  generate_error (&dtp->common, ERROR_FORMAT, buffer);
+  generate_error (ERROR_FORMAT, buffer);
 }
 
 
 /* parse_format()-- Parse a format string.  */
 
 void
-parse_format (st_parameter_dt *dtp)
+parse_format (void)
 {
-  format_data *fmt;
+  format_string = ioparm.format;
+  format_string_len = ioparm.format_len;
 
-  dtp->u.p.fmt = fmt = get_mem (sizeof (format_data));
-  fmt->format_string = dtp->format;
-  fmt->format_string_len = dtp->format_len;
-
-  fmt->string = NULL;
-  fmt->saved_token = FMT_NONE;
-  fmt->error = NULL;
-  fmt->value = 0;
+  saved_token = FMT_NONE;
+  error = NULL;
 
   /* Initialize variables used during traversal of the tree */
 
-  fmt->reversion_ok = 0;
-  fmt->saved_format = NULL;
+  reversion_ok = 0;
+  g.reversion_flag = 0;
+  saved_format = NULL;
 
   /* Allocate the first format node as the root of the tree */
 
-  fmt->last = &fmt->array;
-  fmt->last->next = NULL;
-  fmt->avail = &fmt->array.array[0];
+  avail = array;
 
-  memset (fmt->avail, 0, sizeof (*fmt->avail));
-  fmt->avail->format = FMT_LPAREN;
-  fmt->avail->repeat = 1;
-  fmt->avail++;
+  avail->format = FMT_LPAREN;
+  avail->repeat = 1;
+  avail++;
 
-  if (format_lex (fmt) == FMT_LPAREN)
-    fmt->array.array[0].u.child = parse_format_list (dtp);
+  if (format_lex () == FMT_LPAREN)
+    array[0].u.child = parse_format_list ();
   else
-    fmt->error = "Missing initial left parenthesis in format";
+    error = "Missing initial left parenthesis in format";
 
-  if (fmt->error)
-    format_error (dtp, NULL, fmt->error);
+  if (error)
+    format_error (NULL, error);
 }
 
 
@@ -1002,23 +979,22 @@ parse_format (st_parameter_dt *dtp)
  * level. */
 
 static void
-revert (st_parameter_dt *dtp)
+revert (void)
 {
   fnode *f, *r;
-  format_data *fmt = dtp->u.p.fmt;
 
-  dtp->u.p.reversion_flag = 1;
+  g.reversion_flag = 1;
 
   r = NULL;
 
-  for (f = fmt->array.array[0].u.child; f; f = f->next)
+  for (f = array[0].u.child; f; f = f->next)
     if (f->format == FMT_LPAREN)
       r = f;
 
   /* If r is NULL because no node was found, the whole tree will be used */
 
-  fmt->array.array[0].current = r;
-  fmt->array.array[0].count = 0;
+  array[0].current = r;
+  array[0].count = 0;
 }
 
 
@@ -1027,10 +1003,10 @@ revert (st_parameter_dt *dtp)
  * Parenthesis nodes are incremented after the list has been
  * exhausted, other nodes are incremented before they are returned. */
 
-static const fnode *
+static fnode *
 next_format0 (fnode * f)
 {
-  const fnode *r;
+  fnode *r;
 
   if (f == NULL)
     return NULL;
@@ -1068,44 +1044,45 @@ next_format0 (fnode * f)
 /* next_format()-- Return the next format node.  If the format list
  * ends up being exhausted, we do reversion.  Reversion is only
  * allowed if the we've seen a data descriptor since the
- * initialization or the last reversion.  We return NULL if there
+ * initialization or the last reversion.  We return NULL if the there
  * are no more data descriptors to return (which is an error
  * condition). */
 
-const fnode *
-next_format (st_parameter_dt *dtp)
+fnode *
+next_format (void)
 {
   format_token t;
-  const fnode *f;
-  format_data *fmt = dtp->u.p.fmt;
+  fnode *f;
 
-  if (fmt->saved_format != NULL)
+  if (saved_format != NULL)
     {				/* Deal with a pushed-back format node */
-      f = fmt->saved_format;
-      fmt->saved_format = NULL;
+      f = saved_format;
+      saved_format = NULL;
       goto done;
     }
 
-  f = next_format0 (&fmt->array.array[0]);
+  f = next_format0 (&array[0]);
   if (f == NULL)
     {
-      if (!fmt->reversion_ok)
-	return NULL;
+      if (!reversion_ok)
+	{
+	  return NULL;
+	}
 
-      fmt->reversion_ok = 0;
-      revert (dtp);
+      reversion_ok = 0;
+      revert ();
 
-      f = next_format0 (&fmt->array.array[0]);
+      f = next_format0 (&array[0]);
       if (f == NULL)
 	{
-	  format_error (dtp, NULL, reversion_error);
+	  format_error (NULL, reversion_error);
 	  return NULL;
 	}
 
       /* Push the first reverted token and return a colon node in case
        * there are no more data items. */
 
-      fmt->saved_format = f;
+      saved_format = f;
       return &colon_node;
     }
 
@@ -1113,11 +1090,11 @@ next_format (st_parameter_dt *dtp)
  done:
   t = f->format;
 
-  if (!fmt->reversion_ok &&
+  if (!reversion_ok &&
       (t == FMT_I || t == FMT_B || t == FMT_O || t == FMT_Z || t == FMT_F ||
        t == FMT_E || t == FMT_EN || t == FMT_ES || t == FMT_G || t == FMT_L ||
        t == FMT_A || t == FMT_D))
-    fmt->reversion_ok = 1;
+    reversion_ok = 1;
   return f;
 }
 
@@ -1130,8 +1107,183 @@ next_format (st_parameter_dt *dtp)
  * which calls the library back with the data item (or not). */
 
 void
-unget_format (st_parameter_dt *dtp, const fnode *f)
+unget_format (fnode * f)
 {
-  dtp->u.p.fmt->saved_format = f;
+  saved_format = f;
 }
 
+
+
+
+#if 0
+
+static void dump_format1 (fnode * f);
+
+/* dump_format0()-- Dump a single format node */
+
+void
+dump_format0 (fnode * f)
+{
+  char *p;
+  int i;
+
+  switch (f->format)
+    {
+    case FMT_COLON:
+      st_printf (" :");
+      break;
+    case FMT_SLASH:
+      st_printf (" %d/", f->u.r);
+      break;
+    case FMT_DOLLAR:
+      st_printf (" $");
+      break;
+    case FMT_T:
+      st_printf (" T%d", f->u.n);
+      break;
+    case FMT_TR:
+      st_printf (" TR%d", f->u.n);
+      break;
+    case FMT_TL:
+      st_printf (" TL%d", f->u.n);
+      break;
+    case FMT_X:
+      st_printf (" %dX", f->u.n);
+      break;
+    case FMT_S:
+      st_printf (" S");
+      break;
+    case FMT_SS:
+      st_printf (" SS");
+      break;
+    case FMT_SP:
+      st_printf (" SP");
+      break;
+
+    case FMT_LPAREN:
+      if (f->repeat == 1)
+	st_printf (" (");
+      else
+	st_printf (" %d(", f->repeat);
+
+      dump_format1 (f->u.child);
+      st_printf (" )");
+      break;
+
+    case FMT_STRING:
+      st_printf (" '");
+      p = f->u.string.p;
+      for (i = f->u.string.length; i > 0; i--)
+	st_printf ("%c", *p++);
+
+      st_printf ("'");
+      break;
+
+    case FMT_P:
+      st_printf (" %dP", f->u.k);
+      break;
+    case FMT_I:
+      st_printf (" %dI%d.%d", f->repeat, f->u.integer.w, f->u.integer.m);
+      break;
+
+    case FMT_B:
+      st_printf (" %dB%d.%d", f->repeat, f->u.integer.w, f->u.integer.m);
+      break;
+
+    case FMT_O:
+      st_printf (" %dO%d.%d", f->repeat, f->u.integer.w, f->u.integer.m);
+      break;
+
+    case FMT_Z:
+      st_printf (" %dZ%d.%d", f->repeat, f->u.integer.w, f->u.integer.m);
+      break;
+
+    case FMT_BN:
+      st_printf (" BN");
+      break;
+    case FMT_BZ:
+      st_printf (" BZ");
+      break;
+    case FMT_D:
+      st_printf (" %dD%d.%d", f->repeat, f->u.real.w, f->u.real.d);
+      break;
+
+    case FMT_EN:
+      st_printf (" %dEN%d.%dE%d", f->repeat, f->u.real.w, f->u.real.d,
+		 f->u.real.e);
+      break;
+
+    case FMT_ES:
+      st_printf (" %dES%d.%dE%d", f->repeat, f->u.real.w, f->u.real.d,
+		 f->u.real.e);
+      break;
+
+    case FMT_F:
+      st_printf (" %dF%d.%d", f->repeat, f->u.real.w, f->u.real.d);
+      break;
+
+    case FMT_E:
+      st_printf (" %dE%d.%dE%d", f->repeat, f->u.real.w, f->u.real.d,
+		 f->u.real.e);
+      break;
+
+    case FMT_G:
+      st_printf (" %dG%d.%dE%d", f->repeat, f->u.real.w, f->u.real.d,
+		 f->u.real.e);
+      break;
+
+    case FMT_L:
+      st_printf (" %dL%d", f->repeat, f->u.w);
+      break;
+    case FMT_A:
+      st_printf (" %dA%d", f->repeat, f->u.w);
+      break;
+
+    default:
+      st_printf (" ???");
+      break;
+    }
+}
+
+
+/* dump_format1()-- Dump a string of format nodes */
+
+static void
+dump_format1 (fnode * f)
+{
+  for (; f; f = f->next)
+    dump_format1 (f);
+}
+
+/* dump_format()-- Dump the whole format node tree */
+
+void
+dump_format (void)
+{
+  st_printf ("format = ");
+  dump_format0 (&array[0]);
+  st_printf ("\n");
+}
+
+
+void
+next_test (void)
+{
+  fnode *f;
+  int i;
+
+  for (i = 0; i < 20; i++)
+    {
+      f = next_format ();
+      if (f == NULL)
+	{
+	  st_printf ("No format!\n");
+	  break;
+	}
+
+      dump_format1 (f);
+      st_printf ("\n");
+    }
+}
+
+#endif

@@ -28,10 +28,9 @@
 #include <ffi.h>
 
 	.text
-	.level 1.1
 	.align 4
 
-	/* void ffi_call_pa32(void (*)(char *, extended_cif *),
+	/* void ffi_call_LINUX(void (*)(char *, extended_cif *),
 			       extended_cif *ecif,
 			       unsigned bytes,
 			       unsigned flags,
@@ -39,12 +38,12 @@
 			       void (*fn)());
 	 */
 
-	.export ffi_call_pa32,code
-	.import ffi_prep_args_pa32,code
+	.export ffi_call_LINUX,code
+	.import ffi_prep_args_LINUX,code
 
-	.type ffi_call_pa32, @function
+	.type ffi_call_LINUX, @function
 .LFB1:
-ffi_call_pa32:
+ffi_call_LINUX:
 	.proc
 	.callinfo FRAME=64,CALLS,SAVE_RP,SAVE_SP,ENTRY_GR=4
 	.entry
@@ -63,7 +62,7 @@ ffi_call_pa32:
 	   [ 64-bytes register save area               ] <- %r4
 
 	   [ Stack space for actual call, passed as    ] <- %arg0
-	   [     arg0 to ffi_prep_args_pa32           ]
+	   [     arg0 to ffi_prep_args_LINUX           ]
 
 	   [ Stack for calling prep_args               ] <- %sp
 	 */
@@ -73,14 +72,14 @@ ffi_call_pa32:
 .LCFI13:
 	copy %sp, %r4
 
-	addl %arg2, %r4, %arg0      /* arg stack */
-	stw %arg3, -48(%r3)         /* save flags; we need it later */
+	addl %arg2, %r4, %arg0                  /* arg stack */
+	stw %arg3, -48(%r3)                     /* save flags; we need it later */
 
 	/* Call prep_args:
 	   %arg0(stack) -- set up above
 	   %arg1(ecif) -- same as incoming param
 	   %arg2(bytes) -- same as incoming param */
-	bl ffi_prep_args_pa32,%r2
+	bl ffi_prep_args_LINUX,%r2
 	ldo 64(%arg0), %sp
 	ldo -64(%sp), %sp
 
@@ -106,139 +105,65 @@ ffi_call_pa32:
 
 	/* Store the result according to the return type.  */
 
-.Lcheckint:
-	comib,<>,n FFI_TYPE_INT, %r21, .Lcheckint8
-	b	.Ldone
-	stw	%ret0, 0(%r20)
+checksmst1:
+	comib,<>,n FFI_TYPE_SMALL_STRUCT1, %r21, checksmst2
+	/* There is maybe a better way to handle 3 byte structs.  */
+	sh2add %ret0,0,%ret0
+	sh2add %ret0,0,%ret0
+	sh2add %ret0,0,%ret0
+	sh2add %ret0,0,%ret0
+	b done
+	stw %ret0, 0(%r20)
 
-.Lcheckint8:
-	comib,<>,n FFI_TYPE_UINT8, %r21, .Lcheckint16
-	b	.Ldone
-	stb	%ret0, 0(%r20)
+checksmst2:
+	comib,<>,n FFI_TYPE_SMALL_STRUCT2, %r21, checkint8
+	/* Up to now I don't have a way to handle 6/7 byte structs.
+	   The values are left bounded in the registers. In the struct
+	   itself they are left bounded.  */
+	stw %ret0, 0(%r20)
+	b done
+	stw %ret1, 4(%r20)
 
-.Lcheckint16:
-	comib,<>,n FFI_TYPE_UINT16, %r21, .Lcheckdbl
-	b	.Ldone
-	sth	%ret0, 0(%r20)
+checkint8:
+	comib,<>,n FFI_TYPE_UINT8, %r21, checkint16
+	b done
+	stb %ret0, 0(%r20)
 
-.Lcheckdbl:
-	comib,<>,n FFI_TYPE_DOUBLE, %r21, .Lcheckfloat
-	b	.Ldone
-	fstd	%fr4,0(%r20)
+checkint16:
+	comib,<>,n FFI_TYPE_UINT16, %r21, checkint32
+	b done
+	sth %ret0, 0(%r20)
 
-.Lcheckfloat:
-	comib,<>,n FFI_TYPE_FLOAT, %r21, .Lcheckll
-	b	.Ldone
-	fstw	%fr4L,0(%r20)
+checkint32:
+	comib,<>,n FFI_TYPE_UINT32, %r21, checkint
+	b done
+	stw %ret0, 0(%r20)
 
-.Lcheckll:
-	comib,<>,n FFI_TYPE_UINT64, %r21, .Lchecksmst2
-	stw	%ret0, 0(%r20)
-	b	.Ldone
-	stw	%ret1, 4(%r20)
+checkint:
+	comib,<>,n FFI_TYPE_INT, %r21, checkll
+	b done
+	stw %ret0, 0(%r20)
 
-.Lchecksmst2:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT2, %r21, .Lchecksmst3
-	/* 2-byte structs are returned in ret0 as ????xxyy.  */
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret0, 0(%r20)
+checkll:
+	comib,<>,n FFI_TYPE_UINT64, %r21, checkdbl
+	stw %ret0, 0(%r20)
+	b done
+	stw %ret1, 4(%r20)
 
-.Lchecksmst3:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT3, %r21, .Lchecksmst4
-	/* 3-byte structs are returned in ret0 as ??xxyyzz.  */
-	extru	%ret0, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret0, 0(%r20)
+checkdbl:
+	comib,<>,n FFI_TYPE_DOUBLE, %r21, checkfloat
+	b done
+	fstd %fr4,0(%r20)
 
-.Lchecksmst4:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT4, %r21, .Lchecksmst5
-	/* 4-byte structs are returned in ret0 as wwxxyyzz.  */
-	extru	%ret0, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret0, 0(%r20)
+checkfloat:
+	comib,<>,n FFI_TYPE_FLOAT, %r21, done
+	fstw %fr4L,0(%r20)
 
-.Lchecksmst5:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT5, %r21, .Lchecksmst6
-	/* 5 byte values are returned right justified:
-	      ret0     ret1
-	   5: ??????aa bbccddee */
-	stbs,ma	%ret0, 1(%r20)
-	extru	%ret1, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret1, 0(%r20)
+	/* structure returns are either handled by one of the
+	   INT/UINT64 cases above, or, if passed by pointer,
+	   is handled by the callee.  */
 
-.Lchecksmst6:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT6, %r21, .Lchecksmst7
-	/* 6 byte values are returned right justified:
-	      ret0     ret1
-	   6: ????aabb ccddeeff */
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	stbs,ma	%ret0, 1(%r20)
-	extru	%ret1, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret1, 0(%r20)
-
-.Lchecksmst7:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT7, %r21, .Lchecksmst8
-	/* 7 byte values are returned right justified:
-	      ret0     ret1
-	   7: ??aabbcc ddeeffgg */
-	extru	%ret0, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	stbs,ma	%ret0, 1(%r20)
-	extru	%ret1, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	b	.Ldone
-	stb	%ret1, 0(%r20)
-
-.Lchecksmst8:
-	comib,<>,n FFI_TYPE_SMALL_STRUCT8, %r21, .Ldone
-	/* 8 byte values are returned right justified:
-	      ret0     ret1
-	   8: aabbccdd eeffgghh */
-	extru	%ret0, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret0, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	stbs,ma	%ret0, 1(%r20)
-	extru	%ret1, 7, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 15, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	extru	%ret1, 23, 8, %r22
-	stbs,ma	%r22, 1(%r20)
-	stb	%ret1, 0(%r20)
-
-.Ldone:
+done:
 	/* all done, return */
 	copy %r4, %sp                           /* pop arg stack */
 	ldw 12(%r3), %r4
@@ -250,14 +175,14 @@ ffi_call_pa32:
 	.procend
 .LFE1:
 
-	/* void ffi_closure_pa32(void);
+	/* void ffi_closure_LINUX(void);
 	   Called with closure argument in %r21 */
-	.export ffi_closure_pa32,code
-	.import ffi_closure_inner_pa32,code
+	.export ffi_closure_LINUX,code
+	.import ffi_closure_inner_LINUX,code
 
-	.type ffi_closure_pa32, @function
+	.type ffi_closure_LINUX, @function
 .LFB2:
-ffi_closure_pa32:
+ffi_closure_LINUX:
 	.proc
 	.callinfo FRAME=64,CALLS,SAVE_RP,SAVE_SP,ENTRY_GR=3
 	.entry
@@ -277,7 +202,7 @@ ffi_closure_pa32:
 	stw %arg3, -48(%r3)
 
 	copy %r21, %arg0
-	bl ffi_closure_inner_pa32, %r2
+	bl ffi_closure_inner_LINUX, %r2
 	copy %r3, %arg1
 
 	ldwm -64(%sp), %r3
@@ -348,7 +273,7 @@ ffi_closure_pa32:
 	.sleb128 -5
 
 	.byte   0x4     ;# DW_CFA_advance_loc4
-	.word   .LCFI22-.LCFI21
+	.word   .LCFI12-.LCFI11
 	.byte   0xd     ;# DW_CFA_def_cfa_register = r3
 	.uleb128 0x3
 

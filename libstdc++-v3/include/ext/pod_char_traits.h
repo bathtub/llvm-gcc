@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -39,8 +39,8 @@
 
 #include <string>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
-
+namespace __gnu_cxx
+{
   // POD character abstraction.
   // NB: The char_type parameter is a subset of int_type, as to allow
   // int_type to properly hold the full range of char_type values as
@@ -83,11 +83,10 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     inline bool
     operator<(const character<V, I, S>& lhs, const character<V, I, S>& rhs)
     { return lhs.value < rhs.value; }
+} // namespace __gnu_cxx
 
-_GLIBCXX_END_NAMESPACE
-
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   /// char_traits<__gnu_cxx::character> specialization.
   template<typename V, typename I, typename S>
     struct char_traits<__gnu_cxx::character<V, I, S> >
@@ -181,7 +180,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       not_eof(const int_type& __c)
       { return eq_int_type(__c, eof()) ? int_type() : __c; }
     };
-
-_GLIBCXX_END_NAMESPACE
+}
 
 #endif

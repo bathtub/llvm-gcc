@@ -1,6 +1,6 @@
 // String based streams -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2002, 2003, 2004
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,13 +28,13 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
-/** @file sstream
- *  This is a Standard C++ Library header.
- */
-
 //
 // ISO C++ 14882: 27.7  String-based streams
 //
+
+/** @file sstream
+ *  This is a Standard C++ Library header.
+ */
 
 #ifndef _GLIBCXX_SSTREAM
 #define _GLIBCXX_SSTREAM 1
@@ -44,8 +44,8 @@
 #include <istream>
 #include <ostream>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   // [27.7.1] template class basic_stringbuf
   /**
    *  @brief  The actual work of input and output (for std::string).
@@ -127,18 +127,16 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       __string_type
       str() const
       {
-	__string_type __ret;
 	if (this->pptr())
 	  {
 	    // The current egptr() may not be the actual string end.
 	    if (this->pptr() > this->egptr())
-	      __ret = __string_type(this->pbase(), this->pptr());
+	      return __string_type(this->pbase(), this->pptr());
 	    else
- 	      __ret = __string_type(this->pbase(), this->egptr());
+ 	      return __string_type(this->pbase(), this->egptr());
 	  }
 	else
-	  __ret = _M_string;
-	return __ret;
+	  return _M_string;
       }
 
       /**
@@ -153,7 +151,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       {
 	// Cannot use _M_string = __s, since v3 strings are COW.
 	_M_string.assign(__s.data(), __s.size());
-	_M_stringbuf_init(_M_mode);
+	_M_stringbuf_init(this->_M_mode);
       }
 
     protected:
@@ -161,23 +159,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       void
       _M_stringbuf_init(ios_base::openmode __mode)
       {
-	_M_mode = __mode;
+	this->_M_mode = __mode;
+
 	__size_type __len = 0;
-	if (_M_mode & (ios_base::ate | ios_base::app))
+	if (this->_M_mode & (ios_base::ate | ios_base::app))
 	  __len = _M_string.size();
 	_M_sync(const_cast<char_type*>(_M_string.data()), 0, __len);
-      }
-
-      virtual streamsize
-      showmanyc()
-      { 
-	streamsize __ret = -1;
-	if (_M_mode & ios_base::in)
-	  {
-	    _M_update_egptr();
-	    __ret = this->egptr() - this->gptr();
-	  }
-	return __ret;
       }
 
       virtual int_type
@@ -211,10 +198,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	    // things will quickly blow up.
 	    
 	    // Step 1: Destroy the current internal array.
-	    _M_string.clear();
+	    _M_string.assign(__s, __n);
 	    
 	    // Step 2: Use the external array.
-	    _M_sync(__s, __n, 0);
+	    _M_sync(__s, 0, 0);
 	  }
 	return this;
       }
@@ -228,17 +215,45 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	      ios_base::openmode __mode = ios_base::in | ios_base::out);
 
       // Internal function for correctly updating the internal buffer
-      // for a particular _M_string, due to initialization or re-sizing
-      // of an existing _M_string.
+      // for a particular _M_string, due to initialization or
+      // re-sizing of an existing _M_string.
+      // Assumes: contents of _M_string and internal buffer match exactly.
+      // __i == _M_in_cur - _M_in_beg
+      // __o == _M_out_cur - _M_out_beg
       void
-      _M_sync(char_type* __base, __size_type __i, __size_type __o);
+      _M_sync(char_type* __base, __size_type __i, __size_type __o)
+      {
+	const bool __testin = this->_M_mode & ios_base::in;
+	const bool __testout = this->_M_mode & ios_base::out;
+	char_type* __end = __base + _M_string.size();
+
+	if (__testin)
+	  this->setg(__base, __base + __i, __end);
+	if (__testout)
+	  {
+	    // If __base comes from setbuf we cannot trust capacity()
+	    // to match the size of the buffer area: in general, after
+	    // Step 1 above, _M_string.capacity() >= __n.
+	    if (__base == _M_string.data())
+	      this->setp(__base, __base + _M_string.capacity());
+	    else
+	      this->setp(__base, __end);
+	    this->pbump(__o);
+	    // egptr() always tracks the string end. When !__testin,
+	    // for the correct functioning of the streambuf inlines
+	    // the other get area pointers are identical.
+	    if (!__testin)
+	      this->setg(__end, __end, __end);
+	  }
+      }
 
       // Internal function for correctly updating egptr() to the actual
       // string end.
       void
       _M_update_egptr()
       {
-	const bool __testin = _M_mode & ios_base::in;
+	const bool __testin = this->_M_mode & ios_base::in;
+
 	if (this->pptr() && this->pptr() > this->egptr())
 	  if (__testin)
 	    this->setg(this->eback(), this->gptr(), this->pptr());
@@ -581,8 +596,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       str(const __string_type& __s)
       { _M_stringbuf.str(__s); }
     };
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/sstream.tcc>

@@ -18,7 +18,7 @@
 
 ## You should have received a copy of the GNU General Public License along
 ## with this library; see the file COPYING.  If not, write to the Free
-## Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+## Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 ## USA.
 
 AUTOMAKE_OPTIONS = dejagnu nostdinc
@@ -27,6 +27,46 @@ include $(top_srcdir)/fragment.am
 
 AM_MAKEFLAGS = -j1
 AM_RUNTESTFLAGS =
+
+## CXX is actually a "C" compiler. These are real C++ programs.
+testsuite_flags_script=${glibcxx_builddir}/scripts/testsuite_flags
+CXX         = $(shell ${testsuite_flags_script} --build-cxx)
+GLIBCXX_INCLUDES = $(shell ${testsuite_flags_script} --build-includes)
+AM_CXXFLAGS = $(shell ${testsuite_flags_script} --cxxflags)
+
+GLIBGCC_DIR=`$(CC) -print-libgcc-file-name | sed 's,/[^/]*$$,,'`
+GLIBCXX_DIR=${glibcxx_builddir}/src/.libs
+
+CXXLINK = \
+	$(LIBTOOL) --tag=CXX --mode=link $(CXX) \
+	-R $(GLIBGCC_DIR) -R $(GLIBCXX_DIR) \
+	$(AM_CXXFLAGS) $(CXXFLAGS) $(LDFLAGS) -lv3test -L. -o $@
+
+## Build support library.
+noinst_LIBRARIES = libv3test.a
+libv3test_a_SOURCES = \
+	testsuite_abi.cc \
+	testsuite_allocator.cc \
+	testsuite_character.cc \
+	testsuite_hooks.cc 
+
+all-local: stamp_wchar stamp_thread testsuite_files
+
+# Enable wchar_t tests if capable.
+if GLIBCXX_TEST_WCHAR_T
+stamp_wchar:
+	touch testsuite_wchar_t
+else
+stamp_wchar:
+endif
+
+# Enable thread tests if capable.
+if GLIBCXX_TEST_THREAD
+stamp_thread:
+	touch testsuite_thread
+else
+stamp_thread:
+endif
 
 # Generated lists of files to run.  All of these names are valid make
 # targets, if you wish to generate a list manually.
@@ -67,7 +107,6 @@ site.exp: Makefile
 	@test ! -f site.exp || mv site.exp site.bak
 	@mv site.tmp site.exp
 
-
 baseline_file = ${baseline_dir}/baseline_symbols.txt
 extract_symvers = $(glibcxx_srcdir)/scripts/extract_symvers
 
@@ -91,7 +130,7 @@ new-abi-baseline:
 
 # Use 'new-abi-baseline' to create an initial symbol file.  Then run
 # 'check-abi' to test for changes against that file.
-check-abi: site.exp baseline_symbols 
+check-abi: baseline_symbols current_symbols.txt site.exp
 	-@runtest --tool libstdc++ abi.exp
 
 # Runs the testsuite, but in compile only mode.
@@ -108,20 +147,10 @@ check-compile: testsuite_files ${compile_script}
 # Some of these tests create large (~75MB) files, allocate huge
 # ammounts of memory, or otherwise tie up machine resources. Thus,
 # running this is off by default.
-# XXX Need to add dependency on libtestc++.a
-check_performance_script=${glibcxx_srcdir}/scripts/check_performance
+performance_script=${glibcxx_srcdir}/scripts/check_performance
 check-performance: testsuite_files_performance ${performance_script}
-	-@(chmod + ${check_performance_script}; \
-	  ${check_performance_script} ${glibcxx_srcdir} ${glibcxx_builddir})
-
-# Generates the plots and graphs for performance testing.
-doc_performance_script=${glibcxx_srcdir}/scripts/make_graphs.py
-doc-performance:
-	-@(chmod + ${doc_performance_script}; \
-	${doc_performance_script} ${glibcxx_srcdir} \
-	${glibcxx_builddir}/testsuite \
-	${glibcxx_srcdir}/testsuite/data/make_graph_htmls.xml \
-	${glibcxx_srcdir}/testsuite/data/make_graph_test_infos.xml local g++)
+	-@(chmod + ${performance_script}; \
+	  ${performance_script} ${glibcxx_srcdir} ${glibcxx_builddir})
 
 
 .PHONY: baseline_symbols new-abi-baseline \
@@ -129,5 +158,4 @@ doc-performance:
 
 # By adding these files here, automake will remove them for 'make clean'
 CLEANFILES = *.txt *.tst *.exe core* filebuf_* tmp* ostream_* *.log *.sum \
-	     testsuite_* site.exp abi_check baseline_symbols *TEST* *.dat \
-	     *.o *.cc *.a *.so *.xml
+	     testsuite_* site.exp abi_check baseline_symbols *TEST*

@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -52,7 +52,6 @@ internal_pack (gfc_array_char * source)
   int n;
   int packed;
   index_type size;
-  int type;
 
   if (source->dim[0].stride == 0)
     {
@@ -60,36 +59,14 @@ internal_pack (gfc_array_char * source)
       return source->data;
     }
 
-  type = GFC_DESCRIPTOR_TYPE (source);
   size = GFC_DESCRIPTOR_SIZE (source);
-  switch (type)
+  switch (size)
     {
-    case GFC_DTYPE_INTEGER:
-    case GFC_DTYPE_LOGICAL:
-    case GFC_DTYPE_REAL:
-      switch (size)
-	{
-	case 4:
-	  return internal_pack_4 ((gfc_array_i4 *)source);
-	  
-	case 8:
-	  return internal_pack_8 ((gfc_array_i8 *)source);
-	}
-      break;
+    case 4:
+      return internal_pack_4 ((gfc_array_i4 *)source);
 
-    case GFC_DTYPE_COMPLEX:
-      switch (size)
-	{
-	case 8:
-	  return internal_pack_c4 ((gfc_array_c4 *)source);
-	  
-	case 16:
-	  return internal_pack_c8 ((gfc_array_c8 *)source);
-	}
-      break;
-
-    default:
-      break;
+    case 8:
+      return internal_pack_8 ((gfc_array_i8 *)source);
     }
 
   dim = GFC_DESCRIPTOR_RANK (source);
@@ -138,7 +115,7 @@ internal_pack (gfc_array_char * source)
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           src -= stride[n] * extent[n] * size;
           n++;
           if (n == dim)

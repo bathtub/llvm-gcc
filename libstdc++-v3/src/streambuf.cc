@@ -1,6 +1,6 @@
 // Stream buffer classes -*- C++ -*-
 
-// Copyright (C) 2004, 2005, 2006 Free Software Foundation, Inc.
+// Copyright (C) 2004 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -33,40 +33,33 @@
 
 #include <streambuf>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   template<>
     streamsize
-    __copy_streambufs_eof(basic_streambuf<char>* __sbin,
-			  basic_streambuf<char>* __sbout, bool& __ineof)
+    __copy_streambufs(basic_streambuf<char>* __sbin,
+		      basic_streambuf<char>* __sbout)
     {
       typedef basic_streambuf<char>::traits_type traits_type;
       streamsize __ret = 0;
-      __ineof = true;
       traits_type::int_type __c = __sbin->sgetc();
       while (!traits_type::eq_int_type(__c, traits_type::eof()))
 	{
-	  const streamsize __n = __sbin->egptr() - __sbin->gptr();
+	  const size_t __n = __sbin->egptr() - __sbin->gptr();
 	  if (__n > 1)
 	    {
-	      const streamsize __wrote = __sbout->sputn(__sbin->gptr(), __n);
+	      const size_t __wrote = __sbout->sputn(__sbin->gptr(), __n);
 	      __sbin->gbump(__wrote);
 	      __ret += __wrote;
 	      if (__wrote < __n)
-		{
-		  __ineof = false;
-		  break;
-		}
+		break;
 	      __c = __sbin->underflow();
 	    }
 	  else
 	    {
 	      __c = __sbout->sputc(traits_type::to_char_type(__c));
 	      if (traits_type::eq_int_type(__c, traits_type::eof()))
-		{
-		  __ineof = false;
-		  break;
-		}
+		break;
 	      ++__ret;
 	      __c = __sbin->snextc();
 	    }
@@ -77,36 +70,29 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 #ifdef _GLIBCXX_USE_WCHAR_T
   template<>
     streamsize
-    __copy_streambufs_eof(basic_streambuf<wchar_t>* __sbin,
-			  basic_streambuf<wchar_t>* __sbout, bool& __ineof)
+    __copy_streambufs(basic_streambuf<wchar_t>* __sbin,
+		      basic_streambuf<wchar_t>* __sbout)
     {
       typedef basic_streambuf<wchar_t>::traits_type traits_type;
       streamsize __ret = 0;
-      __ineof = true;
       traits_type::int_type __c = __sbin->sgetc();
       while (!traits_type::eq_int_type(__c, traits_type::eof()))
 	{
-	  const streamsize __n = __sbin->egptr() - __sbin->gptr();
+	  const size_t __n = __sbin->egptr() - __sbin->gptr();
 	  if (__n > 1)
 	    {
-	      const streamsize __wrote = __sbout->sputn(__sbin->gptr(), __n);
+	      const size_t __wrote = __sbout->sputn(__sbin->gptr(), __n);
 	      __sbin->gbump(__wrote);
 	      __ret += __wrote;
 	      if (__wrote < __n)
-		{
-		  __ineof = false;
-		  break;
-		}
+		break;
 	      __c = __sbin->underflow();
 	    }
 	  else
 	    {
 	      __c = __sbout->sputc(traits_type::to_char_type(__c));
 	      if (traits_type::eq_int_type(__c, traits_type::eof()))
-		{
-		  __ineof = false;
-		  break;
-		}
+		break;
 	      ++__ret;
 	      __c = __sbin->snextc();
 	    }
@@ -114,5 +100,4 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
       return __ret;
     }
 #endif
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std

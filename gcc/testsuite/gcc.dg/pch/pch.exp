@@ -12,7 +12,7 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  
 
 # GCC testsuite for precompiled header interaction,
 # that uses the `dg.exp' driver.
@@ -25,6 +25,41 @@ load_lib dg-pch.exp
 dg-init
 
 set old_dg_do_what_default "${dg-do-what-default}"
+
+# APPLE LOCAL begin
+# Test MACOSX_DEPLOYMENT_TARGET 
+# Due to a TCL bug (Radar 5823211), unsetenv() does not work properly.
+# The var will be set to empty, not unset, and then the linker complains.
+#set macosx_deployment_target_saved 0
+#if [info exists env(MACOSX_DEPLOYMENT_TARGET)] {
+#    set macosx_deployment_target "$env(MACOSX_DEPLOYMENT_TARGET)"
+#    set macosx_deployment_target_saved 1
+#}
+#setenv MACOSX_DEPLOYMENT_TARGET 10.4
+set test "cfstring-1.c"
+set f [open $test w]
+set v 0
+puts $f "#include \"cfstring-1.h\""
+puts $f "/* { dg-options \"-I./ -Winvalid-pch -save-temps\" } */"
+puts $f "void foo\(\) { x = 0; }"
+puts $f ""
+close $f
+set testh "cfstring-1.hs"
+set f [open $testh w]
+puts $f "int x;"
+puts $f ""
+close $f
+dg-pch $subdir $test [concat [list {-O0 -g}] $torture_without_loops] ".h"    
+# Due to a TCL bug (Radar 5823211), unsetenv() does not work properly.
+# The var will be set to empty, not unset, and then the linker complains.
+#if { ${macosx_deployment_target_saved} == 1 } {
+#    setenv MACOSX_DEPLOYMENT_TARGET "$macosx_deployment_target"
+#} else {
+#    unsetenv MACOSX_DEPLOYMENT_TARGET
+#}
+file delete $test
+file delete $testh
+# APPLE LOCAL end
 
 # Main loop.
 foreach test [lsort [glob -nocomplain $srcdir/$subdir/*.c]] {

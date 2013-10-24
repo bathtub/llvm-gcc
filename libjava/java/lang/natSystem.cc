@@ -1,6 +1,6 @@
 // natSystem.cc - Native code implementing System class.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2006 Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003 Free Software Foundation
 
    This file is part of libgcj.
 
@@ -124,16 +124,23 @@ java::lang::System::currentTimeMillis (void)
   return _Jv_platform_gettimeofday ();
 }
 
-jlong
-java::lang::System::nanoTime ()
-{
-  return _Jv_platform_nanotime ();
-}
-
 jint
 java::lang::System::identityHashCode (jobject obj)
 {
   return _Jv_HashCode (obj);
+}
+
+jboolean
+java::lang::System::isWordsBigEndian (void)
+{
+  union
+  {
+    long lval;
+    char cval;
+  } u;
+
+  u.lval = 1;
+  return u.cval == 0;
 }
 
 jstring

@@ -7,5 +7,5 @@ program main
   close(nout)
   open(nout, file="foo.dat", status="new",err=100)
   call abort                 ! This should never happen
-100 call unlink ("foo.dat")
+100 continue
 end program main

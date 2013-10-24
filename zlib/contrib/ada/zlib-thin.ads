@@ -6,11 +6,10 @@
 --  Open source license information is in the zlib.ads file.  --
 ----------------------------------------------------------------
 
---  $Id: zlib-thin.ads,v 1.11 2004/07/23 06:33:11 vagul Exp $
+--  $Id: zlib-thin.ads,v 1.8 2003/08/12 13:16:51 vagul Exp $
 
 with Interfaces.C.Strings;
-
-with System;
+with System.Address_To_Access_Conversions;
 
 private package ZLib.Thin is
 
@@ -37,18 +36,18 @@ private package ZLib.Thin is
                                                 --  zconf.h:216
    type Int is new Interfaces.C.int;
 
-   type ULong is new Interfaces.C.unsigned_long;     --  32 bits or more
-                                                     --  zconf.h:217
+   type ULong is new Interfaces.C.unsigned;     --  32 bits or more
+                                                --  zconf.h:217
    subtype Chars_Ptr is Interfaces.C.Strings.chars_ptr;
 
    type ULong_Access is access ULong;
    type Int_Access is access Int;
-
    subtype Voidp is System.Address;            --  zconf.h:232
 
-   subtype Byte_Access is Voidp;
+   package Bytes is new System.Address_To_Access_Conversions (Byte);
 
-   Nul : constant Voidp := System.Null_Address;
+   subtype Byte_Access is Bytes.Object_Pointer;
+
    --  end from zconf
 
    Z_NO_FLUSH : constant := 8#0000#;   --  zlib.h:125
@@ -252,6 +251,12 @@ private package ZLib.Thin is
       stream_size : Int)
       return        Int;
 
+   function Deflate_Init
+     (strm  : in Z_Streamp;
+      level : in Int := Z_DEFAULT_COMPRESSION)
+      return  Int;
+   pragma Inline (Deflate_Init);
+
    function deflateInit2
      (strm        : Z_Streamp;
       level       : Int;
@@ -278,6 +283,9 @@ private package ZLib.Thin is
       version     : Chars_Ptr;
       stream_size : Int)
       return        Int;
+
+   function Inflate_Init (strm : Z_Streamp) return Int;
+   pragma Inline (Inflate_Init);
 
    function inflateInit2
      (strm        : in Z_Streamp;
@@ -310,11 +318,31 @@ private package ZLib.Thin is
    --  has dropped to zero. The application must initialize zalloc, zfree and
    --  opaque before calling the init function.
 
+   function Need_In (strm : in Z_Stream) return Boolean;
+   --  return true when we do not need to setup Next_In and Avail_In fields.
+   pragma Inline (Need_In);
+
+   function Need_Out (strm : in Z_Stream) return Boolean;
+   --  return true when we do not need to setup Next_Out and Avail_Out field.
+   pragma Inline (Need_Out);
+
+   procedure Set_In
+     (Strm   : in out Z_Stream;
+      Buffer : in Byte_Access;
+      Size   : in UInt);
+   pragma Inline (Set_In);
+
    procedure Set_In
      (Strm   : in out Z_Stream;
       Buffer : in Voidp;
       Size   : in UInt);
    pragma Inline (Set_In);
+
+   procedure Set_Out
+     (Strm   : in out Z_Stream;
+      Buffer : in Byte_Access;
+      Size   : in UInt);
+   pragma Inline (Set_Out);
 
    procedure Set_Out
      (Strm   : in out Z_Stream;
@@ -360,13 +388,19 @@ private package ZLib.Thin is
 
    function zlibCompileFlags return ULong;
 
+   function deflatePrime
+     (strm     : Z_Streamp;
+      bits     : Int;
+      value    : Int)
+      return     Int;
+
 private
 
    type Z_Stream is record            -- zlib.h:68
-      Next_In   : Voidp      := Nul;  -- next input byte
+      Next_In   : Byte_Access;        -- next input byte
       Avail_In  : UInt       := 0;    -- number of bytes available at next_in
       Total_In  : ULong      := 0;    -- total nb of input bytes read so far
-      Next_Out  : Voidp      := Nul;  -- next output byte should be put there
+      Next_Out  : Byte_Access;        -- next output byte should be put there
       Avail_Out : UInt       := 0;    -- remaining free space at next_out
       Total_Out : ULong      := 0;    -- total nb of bytes output so far
       msg       : Chars_Ptr;          -- last error message, NULL if no error
@@ -426,13 +460,14 @@ private
    pragma Import (C, inflateSyncPoint, "inflateSyncPoint");
    pragma Import (C, get_crc_table, "get_crc_table");
 
-   --  since zlib 1.2.0:
+   --  added in zlib 1.2.1:
 
    pragma Import (C, inflateCopy, "inflateCopy");
    pragma Import (C, compressBound, "compressBound");
    pragma Import (C, deflateBound, "deflateBound");
    pragma Import (C, gzungetc, "gzungetc");
    pragma Import (C, zlibCompileFlags, "zlibCompileFlags");
+   pragma Import (C, deflatePrime, "deflatePrime");
 
    pragma Import (C, inflateBackInit, "inflateBackInit_");
 

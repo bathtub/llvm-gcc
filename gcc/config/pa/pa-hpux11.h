@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for HP PA-RISC
-   Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004, 2005
+   Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -16,8 +16,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* GCC always defines __STDC__.  HP C++ compilers don't define it.  This
    causes trouble when sys/stdsyms.h is included.  As a work around,
@@ -82,7 +82,7 @@ Boston, MA 02110-1301, USA.  */
 		  builtin_define ("_INCLUDE_XOPEN_SOURCE_500");		\
 	      }								\
 	    else if (flag_isoc94 || flag_isoc99 || c_dialect_cxx ())	\
-	      warning (0, "-munix=98 option required for C89 "		\
+	      warning ("-munix=98 option required for C89 "		\
 		       "Amendment 1 features.\n");			\
 	  }								\
 	if (TARGET_SIO)							\
@@ -95,6 +95,12 @@ Boston, MA 02110-1301, USA.  */
 	  }								\
     }									\
   while (0)
+
+#undef SUBTARGET_OPTIONS
+#define SUBTARGET_OPTIONS						\
+  { "unix=",			&pa_unix_string,			\
+    N_("Specify UNIX standard for predefines and linking.\n"		\
+       "Supported values are 93 and 95."), 0}
 
 #undef CPP_SPEC
 #define CPP_SPEC \
@@ -129,15 +135,12 @@ Boston, MA 02110-1301, USA.  */
    %{static:-a archive} %{shared:-b}"
 #endif
 
-/* HP-UX 11 has posix threads.  HP libc contains pthread stubs so that
-   non-threaded applications can be linked with a thread-safe libc
-   without a subsequent loss of performance.  For more details, see
-   <http://docs.hp.com/en/1896/pthreads.html>.  */
+/* hpux 11 has posix threads.  */
 #undef LIB_SPEC
 #define LIB_SPEC \
   "%{!shared:\
      %{mt|pthread:-lpthread} -lc \
-     %{static:%{!nolibdld:-a shared -ldld -a archive -lpthread -lc}}}"
+     %{static:%{!nolibdld:-a shared -ldld -a archive -lc}}}"
 
 #undef STARTFILE_SPEC
 #define STARTFILE_SPEC \
@@ -147,7 +150,9 @@ Boston, MA 02110-1301, USA.  */
 /* Under hpux11, the normal location of the `ld' and `as' programs is the
    /usr/ccs/bin directory.  */
 
-#ifndef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifndef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef MD_EXEC_PREFIX
 #define MD_EXEC_PREFIX "/usr/ccs/bin/"
 #endif
@@ -156,7 +161,9 @@ Boston, MA 02110-1301, USA.  */
    the /usr/ccs/lib directory.  However, the profiling files are in
    /opt/langtools/lib.  */
 
-#ifndef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifndef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef MD_STARTFILE_PREFIX
 #define MD_STARTFILE_PREFIX "/usr/ccs/lib/"
 #define MD_STARTFILE_PREFIX_1 "/opt/langtools/lib/"

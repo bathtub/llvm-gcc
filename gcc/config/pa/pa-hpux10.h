@@ -17,8 +17,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* GCC always defines __STDC__.  HP C++ compilers don't define it.  This
    causes trouble when sys/stdsyms.h is included.  As a work around,
@@ -78,6 +78,12 @@ Boston, MA 02110-1301, USA.  */
     }									\
   while (0)
 
+#undef SUBTARGET_OPTIONS
+#define SUBTARGET_OPTIONS                                               \
+  { "unix=",                    &pa_unix_string,                        \
+    N_("Specify UNIX standard for predefines and linking.\n"            \
+       "Supported value is 93."), 0}
+
 #define CPP_SPEC "%{threads: -D_REENTRANT -D_DCE_THREADS}"
 
 /* We can debug dynamically linked executables on hpux9; we also want
@@ -122,7 +128,9 @@ Boston, MA 02110-1301, USA.  */
 /* Under hpux10, the normal location of the `ld' and `as' programs is the
    /usr/ccs/bin directory.  */
 
-#ifndef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifndef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef MD_EXEC_PREFIX
 #define MD_EXEC_PREFIX "/usr/ccs/bin/"
 #endif
@@ -131,7 +139,9 @@ Boston, MA 02110-1301, USA.  */
    the /usr/ccs/lib directory.  However, the profiling files are in
    /opt/langtools/lib.  */
 
-#ifndef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifndef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef MD_STARTFILE_PREFIX
 #define MD_STARTFILE_PREFIX "/usr/ccs/lib/"
 #define MD_STARTFILE_PREFIX_1 "/opt/langtools/lib/"

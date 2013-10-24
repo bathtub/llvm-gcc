@@ -1,6 +1,6 @@
 // Locale support -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,14 +28,14 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
+//
+// ISO C++ 14882: 22.1  Locales
+//
+
 /** @file localefwd.h
  *  This is an internal header file, included by other library headers.
  *  You should not attempt to use it directly.
  */
-
-//
-// ISO C++ 14882: 22.1  Locales
-//
 
 #ifndef _LOCALE_FWD_H
 #define _LOCALE_FWD_H 1
@@ -47,8 +47,8 @@
 #include <iosfwd>		// For ostreambuf_iterator, istreambuf_iterator
 #include <bits/functexcept.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   // 22.1.1 Locale
   class locale;
 
@@ -129,12 +129,10 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     class codecvt_byname;
 
   // 22.2.2 and 22.2.3 numeric
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
   template<typename _CharT, typename _InIter = istreambuf_iterator<_CharT> >
     class num_get;
   template<typename _CharT, typename _OutIter = ostreambuf_iterator<_CharT> >
     class num_put;
-_GLIBCXX_END_LDBL_NAMESPACE
   template<typename _CharT> class numpunct;
   template<typename _CharT> class numpunct_byname;
 
@@ -157,12 +155,10 @@ _GLIBCXX_END_LDBL_NAMESPACE
 
   // 22.2.6 money
   class money_base;
-_GLIBCXX_BEGIN_LDBL_NAMESPACE
   template<typename _CharT, typename _InIter =  istreambuf_iterator<_CharT> >
     class money_get;
   template<typename _CharT, typename _OutIter = ostreambuf_iterator<_CharT> >
     class money_put;
-_GLIBCXX_END_LDBL_NAMESPACE
   template<typename _CharT, bool _Intl = false>
     class moneypunct;
   template<typename _CharT, bool _Intl = false>
@@ -191,7 +187,6 @@ _GLIBCXX_END_LDBL_NAMESPACE
 	__throw_bad_cast();
       return *__f;
     }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #endif

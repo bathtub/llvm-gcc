@@ -21,13 +21,12 @@ import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.util.Vector;
 
-public class XEventLoop implements Runnable
+public class XEventLoop
 {
   Display display;
   EventQueue queue;
   XAnyEvent anyEvent;
-  private Thread eventLoopThread;
-  
+
   LightweightRedirector lightweightRedirector = new LightweightRedirector();
     
   public XEventLoop(Display display, EventQueue queue)
@@ -36,31 +35,22 @@ public class XEventLoop implements Runnable
     this.queue = queue;
     
     anyEvent = new XAnyEvent(display);
-    eventLoopThread = new Thread(this, "AWT thread for XEventLoop");
-    eventLoopThread.start();
   }
 
-  public void run ()
+  void interrupt()
   {
-    // FIXME: do we need an interrupt mechanism for window shutdown?
-    while (true)
-      postNextEvent (true);
+    anyEvent.interrupt();
   }
-  
-  /** If there's an event available, post it.
-   * @return true if an event was posted
-   */
-  boolean postNextEvent(boolean block)
+
+  void postNextEvent(boolean block)
   {
     AWTEvent evt = getNextEvent(block);
     if (evt != null)
       queue.postEvent(evt);
-    return evt != null;
   }
     
-  /** Get the next event.
-   * @param block If true, block until an event becomes available
-   */
+  /** get next event. Will block until events become available. */
+ 
   public AWTEvent getNextEvent(boolean block)
   {
     // ASSERT:
@@ -70,9 +60,9 @@ public class XEventLoop implements Runnable
     AWTEvent event = null;
     if (loadNextEvent(block))
       {
-        event = createEvent(); 
+        event = createEvent();        
         event = lightweightRedirector.redirect(event);
-      }
+      }    
     return event;
   }
 
@@ -179,7 +169,7 @@ public class XEventLoop implements Runnable
         return null;
         
       default:
-        String msg = "Do not know how to handle event (" + anyEvent + ")";
+        String msg = "Do no know how to handle event (" + anyEvent + ")";
         throw new RuntimeException (msg);
     }
   }

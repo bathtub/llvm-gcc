@@ -1,6 +1,8 @@
-/* The code should call objc_msgSend directly, not through a pointer.  */
+/* APPLE LOCAL file ObjC direct dispatch */
+/* The code should call to fffeff00 directly, not through objc_msgSend.  */
 /* { dg-do compile { target powerpc*-*-darwin* } } */
-/* { dg-options "-O0 -fnext-runtime" } */
+/* APPLE LOCAL ObjC direct dispatch */
+/* { dg-options "-O0 -fobjc-direct-dispatch -fnext-runtime" } */
 /* { dg-skip-if "" { powerpc*-*-darwin* } { "-m64" } { "" } } */
 /* Radar 4015820 */
 
@@ -10,4 +12,7 @@ void foo(void) {
   Object *o;
   [o++ free];
 }
-/* { dg-final { scan-assembler-not "L_objc_msgSend\\\$non_lazy_ptr" } } */
+/* APPLE LOCAL begin ObjC direct dispatch */
+/* { dg-final { scan-assembler-not "objc_msgSend" } } */
+/* { dg-final { scan-assembler "bla.*fffeff00" } } */
+/* APPLE LOCAL end ObjC direct dispatch */

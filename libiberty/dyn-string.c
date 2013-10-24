@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU CC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -56,7 +56,9 @@ Boston, MA 02110-1301, USA.  */
    fails, returns 0.  Otherwise returns 1.  */
 
 int
-dyn_string_init (struct dyn_string *ds_struct_ptr, int space)
+dyn_string_init (ds_struct_ptr, space)
+     struct dyn_string *ds_struct_ptr;
+     int space;
 {
   /* We need at least one byte in which to store the terminating NUL.  */
   if (space == 0)
@@ -67,7 +69,7 @@ dyn_string_init (struct dyn_string *ds_struct_ptr, int space)
   if (ds_struct_ptr->s == NULL)
     return 0;
 #else
-  ds_struct_ptr->s = XNEWVEC (char, space);
+  ds_struct_ptr->s = (char *) xmalloc (space);
 #endif
   ds_struct_ptr->allocated = space;
   ds_struct_ptr->length = 0;
@@ -83,7 +85,8 @@ dyn_string_init (struct dyn_string *ds_struct_ptr, int space)
    returns the newly allocated string.  */
 
 dyn_string_t 
-dyn_string_new (int space)
+dyn_string_new (space)
+     int space;
 {
   dyn_string_t result;
 #ifdef RETURN_ON_ALLOCATION_FAILURE
@@ -96,7 +99,7 @@ dyn_string_new (int space)
       return NULL;
     }
 #else
-  result = XNEW (struct dyn_string);
+  result = (dyn_string_t) xmalloc (sizeof (struct dyn_string));
   dyn_string_init (result, space);
 #endif
   return result;
@@ -105,7 +108,8 @@ dyn_string_new (int space)
 /* Free the memory used by DS.  */
 
 void 
-dyn_string_delete (dyn_string_t ds)
+dyn_string_delete (ds)
+     dyn_string_t ds;
 {
   free (ds->s);
   free (ds);
@@ -116,7 +120,8 @@ dyn_string_delete (dyn_string_t ds)
    DS is then set to the empty string.  Deletes DS itself.  */
 
 char*
-dyn_string_release (dyn_string_t ds)
+dyn_string_release (ds)
+     dyn_string_t ds;
 {
   /* Store the old buffer.  */
   char* result = ds->s;
@@ -136,7 +141,9 @@ dyn_string_release (dyn_string_t ds)
    operation fails, deletes DS and returns NULL.  */
 
 dyn_string_t 
-dyn_string_resize (dyn_string_t ds, int space)
+dyn_string_resize (ds, space)
+     dyn_string_t ds;
+     int space;
 {
   int new_allocated = ds->allocated;
 
@@ -159,7 +166,7 @@ dyn_string_resize (dyn_string_t ds, int space)
 	  return NULL;
 	}
 #else
-      ds->s = XRESIZEVEC (char, ds->s, ds->allocated);
+      ds->s = (char *) xrealloc (ds->s, ds->allocated);
 #endif
     }
 
@@ -169,7 +176,8 @@ dyn_string_resize (dyn_string_t ds, int space)
 /* Sets the contents of DS to the empty string.  */
 
 void
-dyn_string_clear (dyn_string_t ds)
+dyn_string_clear (ds)
+     dyn_string_t ds;
 {
   /* A dyn_string always has room for at least the NUL terminator.  */
   ds->s[0] = '\0';
@@ -181,7 +189,9 @@ dyn_string_clear (dyn_string_t ds)
    RETURN_ON_ALLOCATION_FAILURE, deletes DEST and returns 0.  */
 
 int
-dyn_string_copy (dyn_string_t dest, dyn_string_t src)
+dyn_string_copy (dest, src)
+     dyn_string_t dest;
+     dyn_string_t src;
 {
   if (dest == src)
     abort ();
@@ -201,7 +211,9 @@ dyn_string_copy (dyn_string_t dest, dyn_string_t src)
    and returns 0.  */
 
 int
-dyn_string_copy_cstr (dyn_string_t dest, const char *src)
+dyn_string_copy_cstr (dest, src)
+     dyn_string_t dest;
+     const char *src;
 {
   int length = strlen (src);
   /* Make room in DEST.  */
@@ -220,7 +232,9 @@ dyn_string_copy_cstr (dyn_string_t dest, const char *src)
    returns 0.  */
 
 int
-dyn_string_prepend (dyn_string_t dest, dyn_string_t src)
+dyn_string_prepend (dest, src)
+     dyn_string_t dest;
+     dyn_string_t src;
 {
   return dyn_string_insert (dest, 0, src);
 }
@@ -230,7 +244,9 @@ dyn_string_prepend (dyn_string_t dest, dyn_string_t src)
    if RETURN_ON_ALLOCATION_FAILURE, deletes DEST and returns 0. */
 
 int
-dyn_string_prepend_cstr (dyn_string_t dest, const char *src)
+dyn_string_prepend_cstr (dest, src)
+     dyn_string_t dest;
+     const char *src;
 {
   return dyn_string_insert_cstr (dest, 0, src);
 }
@@ -241,7 +257,10 @@ dyn_string_prepend_cstr (dyn_string_t dest, const char *src)
    and returns 0.  */
 
 int
-dyn_string_insert (dyn_string_t dest, int pos, dyn_string_t src)
+dyn_string_insert (dest, pos, src)
+     dyn_string_t dest;
+     int pos;
+     dyn_string_t src;
 {
   int i;
 
@@ -266,7 +285,10 @@ dyn_string_insert (dyn_string_t dest, int pos, dyn_string_t src)
    and returns 0.  */
 
 int
-dyn_string_insert_cstr (dyn_string_t dest, int pos, const char *src)
+dyn_string_insert_cstr (dest, pos, src)
+     dyn_string_t dest;
+     int pos;
+     const char *src;
 {
   int i;
   int length = strlen (src);
@@ -288,7 +310,10 @@ dyn_string_insert_cstr (dyn_string_t dest, int pos, const char *src)
    RETURN_ON_ALLOCATION_FAILURE, deletes DEST and returns 0.  */
 
 int
-dyn_string_insert_char (dyn_string_t dest, int pos, int c)
+dyn_string_insert_char (dest, pos, c)
+     dyn_string_t dest;
+     int pos;
+     int c;
 {
   int i;
 
@@ -309,7 +334,9 @@ dyn_string_insert_char (dyn_string_t dest, int pos, int c)
    returns 0.  */
 
 int
-dyn_string_append (dyn_string_t dest, dyn_string_t s)
+dyn_string_append (dest, s)
+     dyn_string_t dest;
+     dyn_string_t s;
 {
   if (dyn_string_resize (dest, dest->length + s->length) == 0)
     return 0;
@@ -323,7 +350,9 @@ dyn_string_append (dyn_string_t dest, dyn_string_t s)
    deletes DEST and returns 0.  */
 
 int
-dyn_string_append_cstr (dyn_string_t dest, const char *s)
+dyn_string_append_cstr (dest, s)
+     dyn_string_t dest;
+     const char *s;
 {
   int len = strlen (s);
 
@@ -340,7 +369,9 @@ dyn_string_append_cstr (dyn_string_t dest, const char *s)
    if RETURN_ON_ALLOCATION_FAILURE, deletes DEST and returns 0.  */
 
 int
-dyn_string_append_char (dyn_string_t dest, int c)
+dyn_string_append_char (dest, c)
+     dyn_string_t dest;
+     int c;
 {
   /* Make room for the extra character.  */
   if (dyn_string_resize (dest, dest->length + 1) == NULL)
@@ -361,8 +392,11 @@ dyn_string_append_char (dyn_string_t dest, int c)
    deletes DEST and returns 0.  */
 
 int
-dyn_string_substring (dyn_string_t dest, dyn_string_t src,
-                      int start, int end)
+dyn_string_substring (dest, src, start, end)
+     dyn_string_t dest;
+     dyn_string_t src;
+     int start;
+     int end;
 {
   int i;
   int length = end - start;
@@ -387,7 +421,9 @@ dyn_string_substring (dyn_string_t dest, dyn_string_t src,
 /* Returns non-zero if DS1 and DS2 have the same contents.  */
 
 int
-dyn_string_eq (dyn_string_t ds1, dyn_string_t ds2)
+dyn_string_eq (ds1, ds2)
+     dyn_string_t ds1;
+     dyn_string_t ds2;
 {
   /* If DS1 and DS2 have different lengths, they must not be the same.  */
   if (ds1->length != ds2->length)

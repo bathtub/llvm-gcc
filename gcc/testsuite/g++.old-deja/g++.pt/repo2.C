@@ -21,5 +21,3 @@ int main ()
 {
   int i = g (42);
 }
-
-// { dg-final { cleanup-repo-files } }

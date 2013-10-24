@@ -13,7 +13,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -38,14 +38,8 @@ using namespace std;
 
 typedef int test_type;
 
-// This can take extremely long on simulators, timing out the test.
-// { dg-options "-DITERATIONS=10" { target simulator } }
-#ifndef ITERATIONS
-#define ITERATIONS 10000
-#endif
-
 // The number of iterations to be performed.
-int iterations = ITERATIONS;
+int iterations = 10000;
 
 // The number of values to insert in the container, 32 will cause 5
 // (re)allocations to be performed (sizes 4, 8, 16, 32 and 64)
@@ -81,7 +75,7 @@ template<typename Container>
 
 template<typename Container>
   void
-  test_container(Container, bool run_threaded = false)
+  test_container(Container obj, bool run_threaded = false)
   {
     do_loop<Container>();
     std::ostringstream comment;

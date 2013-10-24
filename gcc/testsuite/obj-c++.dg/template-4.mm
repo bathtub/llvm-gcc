@@ -1,8 +1,15 @@
+/* APPLE LOCAL file mainline */
 /* Author:  Ziemowit Laski <zlaski@apple.com>.  */
+/* APPLE LOCAL radar 4842177 , radar 5706927 */
+/* { dg-options "-fnext-runtime -mmacosx-version-min=10.3 -fno-constant-cfstrings" { target powerpc*-*-darwin* } } */
+/* { dg-options "-fnext-runtime -fno-constant-cfstrings" { target arm*-*-darwin* } } */
+/* APPLE LOCAL Radar 5706927 */
+/* { dg-do run { target powerpc*-*-darwin* } } */
+/* APPLE LOCAL radar 4894756 */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
 
-/* { dg-do run } */
-
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <stdarg.h>
 #include <stdlib.h>
 
@@ -19,23 +26,23 @@
 template <class ARR, class TYPE> class TestT
 {
 public:
-  TYPE k;
-  int abc(ARR *array) {
-    return [array count] * k;
-  }
-  TestT(TYPE _k): k(_k) { }
+	TYPE k;
+	int abc( ARR *array ) {
+		return [array count] * k;
+	}
+	TestT(TYPE _k): k(_k) { }
 };
 
 template <class TYPE>
 const char *getDesc(void) {
-  return [TYPE name];
+	return [TYPE name];
 }
 
 @class Array;
 
 template <class TYPE>
-int abc(TYPE *xyz, Array *array) {
-  return [xyz count] + [array count];
+int abc( TYPE *xyz, Array *array ) {
+	return [xyz count] + [array count];
 }
 
 @interface Array: Object {
@@ -67,15 +74,16 @@ int abc(TYPE *xyz, Array *array) {
 }
 @end
 
-int main(void) {
-  CHECK_IF(!strcmp ([@"Object" cString], getDesc<Object>()));
-  CHECK_IF(!strcmp ([@"Array" cString], getDesc<Array>()));
+int main(void)
+{
+	CHECK_IF(!strcmp ([@"Object" cString], getDesc<Object>()));
+	CHECK_IF(!strcmp ([@"Array" cString], getDesc<Array>()));
 
-  Array* a1 = [Array arrayWithObjects:@"One", @"Two", @"Three", nil];
-  Array* a2 = [Array arrayWithObjects:@"Four", @"Five", nil];
+	Array* a1 = [Array arrayWithObjects:@"One", @"Two", @"Three", nil];
+	Array* a2 = [Array arrayWithObjects:@"Four", @"Five", nil];
 
-  TestT<Array, int> t(7);
-  CHECK_IF(t.abc(a1) + t.abc(a2) == 35);
-  CHECK_IF(abc(a1, a2) * t.k == 35);
-  return 0;
+	TestT<Array, int> t(7);
+	CHECK_IF(t.abc(a1) + t.abc(a2) == 35);
+        CHECK_IF(abc(a1, a2) * t.k == 35);
+	return 0;
 }

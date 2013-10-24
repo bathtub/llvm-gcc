@@ -1,5 +1,5 @@
 /* Locale.java -- i18n locales
-   Copyright (C) 1998, 1999, 2001, 2002, 2005, 2006  Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2001, 2002 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -37,8 +37,6 @@ exception statement from your version. */
 
 
 package java.util;
-
-import gnu.classpath.SystemProperties;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -78,56 +76,55 @@ import java.io.Serializable;
  * @author Jochen Hoenicke
  * @author Paul Fisher
  * @author Eric Blake (ebb9@email.byu.edu)
- * @author Andrew John Hughes (gnu_andrew@member.fsf.org)
  * @since 1.1
  * @status updated to 1.4
  */
 public final class Locale implements Serializable, Cloneable
 {
   /** Locale which represents the English language. */
-  public static final Locale ENGLISH = getLocale("en");
+  public static final Locale ENGLISH = new Locale("en");
 
   /** Locale which represents the French language. */
-  public static final Locale FRENCH = getLocale("fr");
+  public static final Locale FRENCH = new Locale("fr");
 
   /** Locale which represents the German language. */
-  public static final Locale GERMAN = getLocale("de");
+  public static final Locale GERMAN = new Locale("de");
 
   /** Locale which represents the Italian language. */
-  public static final Locale ITALIAN = getLocale("it");
+  public static final Locale ITALIAN = new Locale("it");
 
   /** Locale which represents the Japanese language. */
-  public static final Locale JAPANESE = getLocale("ja");
+  public static final Locale JAPANESE = new Locale("ja");
 
   /** Locale which represents the Korean language. */
-  public static final Locale KOREAN = getLocale("ko");
+  public static final Locale KOREAN = new Locale("ko");
 
   /** Locale which represents the Chinese language. */
-  public static final Locale CHINESE = getLocale("zh");
+  public static final Locale CHINESE = new Locale("zh");
 
   /** Locale which represents the Chinese language as used in China. */
-  public static final Locale SIMPLIFIED_CHINESE = getLocale("zh", "CN");
+  public static final Locale SIMPLIFIED_CHINESE = new Locale("zh", "CN");
 
   /**
    * Locale which represents the Chinese language as used in Taiwan.
    * Same as TAIWAN Locale.
    */
-  public static final Locale TRADITIONAL_CHINESE = getLocale("zh", "TW");
+  public static final Locale TRADITIONAL_CHINESE = new Locale("zh", "TW");
 
   /** Locale which represents France. */
-  public static final Locale FRANCE = getLocale("fr", "FR");
+  public static final Locale FRANCE = new Locale("fr", "FR");
 
   /** Locale which represents Germany. */
-  public static final Locale GERMANY = getLocale("de", "DE");
+  public static final Locale GERMANY = new Locale("de", "DE");
 
   /** Locale which represents Italy. */
-  public static final Locale ITALY = getLocale("it", "IT");
+  public static final Locale ITALY = new Locale("it", "IT");
 
   /** Locale which represents Japan. */
-  public static final Locale JAPAN = getLocale("ja", "JP");
+  public static final Locale JAPAN = new Locale("ja", "JP");
 
   /** Locale which represents Korea. */
-  public static final Locale KOREA = getLocale("ko", "KR");
+  public static final Locale KOREA = new Locale("ko", "KR");
 
   /**
    * Locale which represents China.
@@ -148,16 +145,16 @@ public final class Locale implements Serializable, Cloneable
   public static final Locale TAIWAN = TRADITIONAL_CHINESE;
 
   /** Locale which represents the United Kingdom. */
-  public static final Locale UK = getLocale("en", "GB");
+  public static final Locale UK = new Locale("en", "GB");
 
   /** Locale which represents the United States. */
-  public static final Locale US = getLocale("en", "US");
+  public static final Locale US = new Locale("en", "US");
 
   /** Locale which represents the English speaking portion of Canada. */
-  public static final Locale CANADA = getLocale("en", "CA");
+  public static final Locale CANADA = new Locale("en", "CA");
 
   /** Locale which represents the French speaking portion of Canada. */
-  public static final Locale CANADA_FRENCH = getLocale("fr", "CA");
+  public static final Locale CANADA_FRENCH = new Locale("fr", "CA");
 
   /**
    * Compatible with JDK 1.1+.
@@ -190,7 +187,7 @@ public final class Locale implements Serializable, Cloneable
    *
    * @serial should be -1 in serial streams
    */
-  private int hashcode;
+  private transient int hashcode;
 
   /**
    * The default locale. Except for during bootstrapping, this should never be
@@ -198,48 +195,10 @@ public final class Locale implements Serializable, Cloneable
    * bootstrapping has completed.
    */
   private static Locale defaultLocale =
-    getLocale(SystemProperties.getProperty("user.language", "en"),
-              SystemProperties.getProperty("user.region", ""),
-              SystemProperties.getProperty("user.variant", ""));
+    new Locale(System.getProperty("user.language", "en"),
+               System.getProperty("user.region", ""),
+               System.getProperty("user.variant", ""));
 
-  /**
-   * Retrieves the locale with the specified language from the cache.
-   *
-   * @param language the language of the locale to retrieve.
-   * @return the locale.
-   */ 
-  private static Locale getLocale(String language)
-  {
-    return getLocale(language, "", "");
-  }
-  
-  /**
-   * Retrieves the locale with the specified language and region
-   * from the cache.
-   *
-   * @param language the language of the locale to retrieve.
-   * @param region the region of the locale to retrieve.
-   * @return the locale.
-   */ 
-  private static Locale getLocale(String language, String region)
-  {
-    return getLocale(language, region, "");
-  }
-  
-  /**
-   * Retrieves the locale with the specified language, region
-   * and variant from the cache.
-   *
-   * @param language the language of the locale to retrieve.
-   * @param region the region of the locale to retrieve.
-   * @param variant the variant of the locale to retrieve.
-   * @return the locale.
-   */ 
-  private static Locale getLocale(String language, String region, String variant)
-  {
-    return new Locale(language, region, variant);
-  }
-  
   /**
    * Convert new iso639 codes to the old ones.
    *
@@ -570,36 +529,19 @@ public final class Locale implements Serializable, Cloneable
   }
 
   /**
-   * <p>
-   * Gets the name of the language specified by this locale, in a form suitable
-   * for display to the user.  If possible, the display name will be localized
-   * to the specified locale.  For example, if the locale instance is
-   * <code>Locale.GERMANY</code>, and the specified locale is <code>Locale.UK</code>,
-   * the result would be 'German'.  Using the German locale would instead give
-   * 'Deutsch'.  If the display name can not be localized to the supplied
-   * locale, it will fall back on other output in the following order:
-   * </p>
-   * <ul>
-   * <li>the display name in the default locale</li>
-   * <li>the display name in English</li>
-   * <li>the ISO code</li>
-   * </ul>
-   * <p>
-   * If the language is unspecified by this locale, then the empty string is
-   * returned.
-   * </p>
+   * Gets the language name suitable for display to the user, formatted
+   * for a specified locale.
    *
-   * @param inLocale the locale to use for formatting the display string.
+   * @param locale locale to use for formatting
    * @return the language name of this locale localized to the given locale,
-   *         with the default locale, English and the ISO code as backups.
-   * @throws NullPointerException if the supplied locale is null.
+   *         with the ISO code as backup
    */
-  public String getDisplayLanguage(Locale inLocale)
+  public String getDisplayLanguage(Locale locale)
   {
     try
       {
         ResourceBundle bundle
-          = ResourceBundle.getBundle("gnu.java.locale.iso639", inLocale);
+          = ResourceBundle.getBundle("gnu.java.locale.iso639", locale);
         return bundle.getString(language);
       }
     catch (MissingResourceException ex)
@@ -625,36 +567,19 @@ public final class Locale implements Serializable, Cloneable
   }
 
   /**
-   * <p>
-   * Gets the name of the country specified by this locale, in a form suitable
-   * for display to the user.  If possible, the display name will be localized
-   * to the specified locale.  For example, if the locale instance is
-   * <code>Locale.GERMANY</code>, and the specified locale is <code>Locale.UK</code>,
-   * the result would be 'Germany'.  Using the German locale would instead give
-   * 'Deutschland'.  If the display name can not be localized to the supplied
-   * locale, it will fall back on other output in the following order:
-   * </p>
-   * <ul>
-   * <li>the display name in the default locale</li>
-   * <li>the display name in English</li>
-   * <li>the ISO code</li>
-   * </ul>
-   * <p>
-   * If the country is unspecified by this locale, then the empty string is
-   * returned.
-   * </p>
+   * Gets the country name suitable for display to the user, formatted
+   * for a specified locale.
    *
-   * @param inLocale the locale to use for formatting the display string.
+   * @param locale locale to use for formatting
    * @return the country name of this locale localized to the given locale,
-   *         with the default locale, English and the ISO code as backups.
-   * @throws NullPointerException if the supplied locale is null.
+   *         with the ISO code as backup
    */
-  public String getDisplayCountry(Locale inLocale)
+  public String getDisplayCountry(Locale locale)
   {
     try
       {
         ResourceBundle bundle =
-          ResourceBundle.getBundle("gnu.java.locale.iso3166", inLocale);
+          ResourceBundle.getBundle("gnu.java.locale.iso3166", locale);
         return bundle.getString(country);
       }
     catch (MissingResourceException ex)
@@ -680,31 +605,15 @@ public final class Locale implements Serializable, Cloneable
   }
 
   /**
-   * <p>
-   * Gets the name of the variant specified by this locale, in a form suitable
-   * for display to the user.  If possible, the display name will be localized
-   * to the specified locale.  For example, if the locale instance is a revised
-   * variant, and the specified locale is <code>Locale.UK</code>, the result
-   * would be 'REVISED'.  Using the German locale would instead give
-   * 'Revidiert'.  If the display name can not be localized to the supplied
-   * locale, it will fall back on other output in the following order:
-   * </p>
-   * <ul>
-   * <li>the display name in the default locale</li>
-   * <li>the display name in English</li>
-   * <li>the ISO code</li>
-   * </ul>
-   * <p>
-   * If the variant is unspecified by this locale, then the empty string is
-   * returned.
-   * </p>
+   * Returns the variant name of this locale localized to the
+   * given locale. If the localized is not found, the variant code
+   * itself is returned.
    *
-   * @param inLocale the locale to use for formatting the display string.
-   * @return the variant name of this locale localized to the given locale,
-   *         with the default locale, English and the ISO code as backups.
-   * @throws NullPointerException if the supplied locale is null.
+   * @param locale locale to use for formatting
+   * @return the variant code of this locale localized to the given locale,
+   *         with the ISO code as backup
    */
-  public String getDisplayVariant(Locale inLocale)
+  public String getDisplayVariant(Locale locale)
   {
     // XXX - load a bundle?
     return variant;
@@ -839,9 +748,11 @@ public final class Locale implements Serializable, Cloneable
   private void writeObject(ObjectOutputStream s)
     throws IOException
   {
-    ObjectOutputStream.PutField fields = s.putFields();
-    fields.put("hashcode", -1);
-    s.defaultWriteObject();
+    s.writeObject(language);
+    s.writeObject(country);
+    s.writeObject(variant);
+    // Hashcode field is always written as -1.
+    s.writeInt(-1);
   }
 
   /**
@@ -855,10 +766,10 @@ public final class Locale implements Serializable, Cloneable
   private void readObject(ObjectInputStream s)
     throws IOException, ClassNotFoundException
   {
-    s.defaultReadObject();
-    language = language.intern();
-    country = country.intern();
-    variant = variant.intern();
+    language = ((String) s.readObject()).intern();
+    country = ((String) s.readObject()).intern();
+    variant = ((String) s.readObject()).intern();
+    // Recompute hashcode.
     hashcode = language.hashCode() ^ country.hashCode() ^ variant.hashCode();
   }
 } // class Locale

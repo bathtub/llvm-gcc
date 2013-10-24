@@ -3,10 +3,10 @@ project Zlib is
    for Languages use ("Ada");
    for Source_Dirs use (".");
    for Object_Dir use ".";
-   for Main use ("test.adb", "mtest.adb", "read.adb", "buffer_demo");
+   for Main use ("test.adb", "mtest.adb", "read.adb");
 
    package Compiler is
-      for Default_Switches ("ada") use ("-gnatwcfilopru", "-gnatVcdfimorst", "-gnatyabcefhiklmnoprst");
+      for Default_Switches ("ada") use ("-gnatwbcfilopru", "-gnatVcdfimorst", "-gnatyabcefhiklmnoprst");
    end Compiler;
 
    package Linker is
@@ -18,3 +18,4 @@ project Zlib is
    end Builder;
 
 end Zlib;
+

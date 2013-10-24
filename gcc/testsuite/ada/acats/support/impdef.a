@@ -339,7 +339,6 @@ package ImpDef is
 --=====-=====-=====-=====-=====-=====-=====-=====-=====-=====-=====-=====--
 
    One_Second : constant Duration := 0.001;
-   One_Long_Second : constant Duration := 0.1;
 
 end ImpDef;
 

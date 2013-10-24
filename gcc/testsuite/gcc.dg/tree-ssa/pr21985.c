@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O1 -fdump-tree-optimized" } */
+/* { dg-options "-O1 -fdump-tree-vars" } */
 
 struct
 {
@@ -30,5 +30,4 @@ main (void)
 
 /* Two of the calls to foo should be folded to just foo(constant).  */
 
-/* { dg-final { scan-tree-dump-times "foo \\(\[0-9\]*\\)" 2 "optimized" } } */
-/* { dg-final { cleanup-tree-dump "optimized" } } */
+/* { dg-final { scan-tree-dump-times "foo \\(\[0-9\]*\\)" 2 "vars" } } */

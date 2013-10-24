@@ -22,8 +22,7 @@ import gnu.gcj.xlib.XConfigureEvent;
 
 public class XFramePeer extends XCanvasPeer implements FramePeer
 {
-  private boolean processingConfigureNotify = false;
-  
+
   public XFramePeer(Frame frame)
   {
     super(frame);
@@ -63,24 +62,28 @@ public class XFramePeer extends XCanvasPeer implements FramePeer
 
   void configureNotify(XConfigureEvent configEvent)
   {
-    processingConfigureNotify = true; // to avoid setBounds flood
     component.setBounds(configEvent.getBounds());
-    processingConfigureNotify = false;
+    
+    /* FIXME: Validation should probably not be done here.  The best
+       strategy is probably to validate on the AWT thread in response
+       to an ComponentEvent.  This will make it possible to coalesce
+       resize validations. */
+    component.validate();
   }
 
   /* Overridden to ignore request to set bounds if the request occurs
-     while processing an XConfigureNotify event, in which case the X
-     window already has the desired bounds.
-     That's what java.awt.Window.setBoundsCallback is for, but it's
-     package-private, and using our own flag eliminates the need to
-     circumvent java security.
-  */
+     on the X event loop thread.  It is assumed that all requests that
+     occur on the X event loop thread are results of XConfigureNotify
+     events, in which case the X window already has the desired
+     bounds.  */
   public void setBounds(int x, int y, int width, int height)
   {
-    if (!processingConfigureNotify)
-      super.setBounds(x, y, width, height);
+    if (EventQueue.isDispatchThread())
+      return;
+    
+    super.setBounds(x, y, width, height);
   }
-  
+ 
   // Implementing ContainerPeer:
 
   static final Insets INSETS_0_PROTOTYPE = new Insets(0, 0, 0, 0);
@@ -111,12 +114,12 @@ public class XFramePeer extends XCanvasPeer implements FramePeer
 
   public void toBack()
   {
-    window.toBack ();	
+    throw new UnsupportedOperationException("not implemented yet");	
   }
   
   public void toFront()
   {
-    window.toFront ();
+    throw new UnsupportedOperationException("not implemented yet");	
   }
 
 
@@ -190,26 +193,4 @@ public class XFramePeer extends XCanvasPeer implements FramePeer
   public void beginLayout () { }
   public void endLayout () { }
   public boolean isPaintPending () { return false; }
-
-  /**
-   * @since 1.5
-   */
-  public void setBoundsPrivate (int x, int y, int width, int height)
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public void updateAlwaysOnTop()
-  {
-  }
-
-  /**
-   * @since 1.5
-   */
-  public boolean requestWindowFocus ()
-  {
-    return false;
-  }
 }

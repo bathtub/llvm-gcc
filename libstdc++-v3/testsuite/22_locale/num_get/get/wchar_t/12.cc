@@ -1,6 +1,6 @@
 // 2003-12-22  Paolo Carlini  <pcarlini@suse.de>
 
-// Copyright (C) 2003, 2004, 2005 Free Software Foundation
+// Copyright (C) 2003 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // 22.2.2.1.1  num_get members
@@ -60,9 +60,8 @@ void test01()
   long l3 = 1l;
   long l4 = 63l;
   double d = 0.0;
-  double d1 = .4;
-  double d2 = 0.0;
-  double d3 = .1;
+  double d1 = .4;  
+  double d2 = .1;
 
   iss1.str(L"+3");
   err = ios_base::goodbit;
@@ -129,7 +128,6 @@ void test01()
   end = ng2.get(iss2.rdbuf(), 0, iss2, err, l);
   VERIFY( err == ios_base::failbit );
   VERIFY( *end == L'X' );
-  VERIFY( l == l3 );
 
   iss2.str(L"000778");
   iss2.clear();
@@ -143,16 +141,17 @@ void test01()
   iss2.clear();
   err = ios_base::goodbit;
   end = ng2.get(iss2.rdbuf(), 0, iss2, err, d);
-  VERIFY( err == (ios_base::eofbit | ios_base::failbit) );
-  VERIFY( d == d2 );
+  VERIFY( err == ios_base::failbit );
+  VERIFY( *end == L'X' );
 
   iss2.str(L"-1");
   iss2.clear();
   err = ios_base::goodbit;
   end = ng2.get(iss2.rdbuf(), 0, iss2, err, d);
   VERIFY( err == ios_base::eofbit );
-  VERIFY( d == d3 );  
+  VERIFY( d == d2 );  
 }
+
 
 int main()
 {

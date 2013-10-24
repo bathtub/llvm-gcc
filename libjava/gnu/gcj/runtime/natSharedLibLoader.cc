@@ -1,6 +1,6 @@
 // natSharedLibLoader.cc - Implementation of SharedLibHelper native methods.
 
-/* Copyright (C) 2001, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 2001, 2003, 2004, 2005  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -9,7 +9,6 @@ Libgcj License.  Please consult the file "LIBGCJ_LICENSE" for
 details.  */
 
 #include <config.h>
-#include <platform.h>
 
 #include <gcj/cni.h>
 #include <jvm.h>
@@ -19,17 +18,6 @@ details.  */
 #include <java/io/IOException.h>
 #include <java/lang/UnsupportedOperationException.h>
 #include <java/lang/UnknownError.h>
-
-#include <java/lang/VMClassLoader.h>
-
-// If we're using the Boehm GC, then we need this include to override dlopen.
-#ifdef HAVE_BOEHM_GC
-// Set GC_DEBUG before including gc.h!
-#ifdef LIBGCJ_GC_DEBUG
-# define GC_DEBUG
-#endif
-#include <gc.h>
-#endif /* HAVE_BOEHM_GC */
 
 #ifdef HAVE_DLOPEN
 #include <dlfcn.h>
@@ -46,8 +34,7 @@ _Jv_sharedlib_register_hook (jclass cls)
 {
   cls->protectionDomain = curHelper->domain;
   cls->loader = curLoader;
-  if (! cls->engine)
-    cls->engine = &_Jv_soleCompiledEngine;
+  cls->engine = &_Jv_soleCompiledEngine;
   curHelper->registerClass(cls->getName(), cls);
 }
 
@@ -89,8 +76,7 @@ gnu::gcj::runtime::SharedLibHelper::init(void)
     flags = RTLD_GLOBAL | RTLD_LAZY;
   JvSynchronize dummy1(&java::lang::Class::class$);
   SharedLibDummy dummy2;
-  curLoader = ((void*)loader == java::lang::VMClassLoader::bootLoader
-	       ? NULL : loader);
+  curLoader = loader;
   curHelper = this;
   _Jv_RegisterClassHook = _Jv_sharedlib_register_hook;
   _Jv_RegisterCoreHook = core_hook;

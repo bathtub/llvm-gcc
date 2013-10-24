@@ -1,6 +1,6 @@
 /* Utilities to execute a program in a subprocess (possibly linked by pipes
    with other subprocesses), and wait for it.  Generic MSDOS specialization.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003, 2005
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2003
    Free Software Foundation, Inc.
 
 This file is part of the libiberty library.
@@ -16,8 +16,8 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "pex-common.h"
 
@@ -36,284 +36,112 @@ extern int errno;
 #include "safe-ctype.h"
 #include <process.h>
 
-/* The structure we keep in obj->sysdep.  */
+/* MSDOS doesn't multitask, but for the sake of a consistent interface
+   the code behaves like it does.  pexecute runs the program, tucks the
+   exit code away, and returns a "pid".  pwait must be called to fetch the
+   exit code.  */
 
-#define PEX_MSDOS_FILE_COUNT 3
+/* For communicating information from pexecute to pwait.  */
+static int last_pid = 0;
+static int last_status = 0;
+static int last_reaped = 0;
 
-#define PEX_MSDOS_FD_OFFSET 10
-
-struct pex_msdos
+int
+pexecute (program, argv, this_pname, temp_base, errmsg_fmt, errmsg_arg, flags)
+     const char *program;
+     char * const *argv;
+     const char *this_pname;
+     const char *temp_base;
+     char **errmsg_fmt, **errmsg_arg;
+     int flags;
 {
-  /* An array of file names.  We refer to these using file descriptors
-     of 10 + array index.  */
-  const char *files[PEX_MSDOS_FILE_COUNT];
-  /* Exit statuses of programs which have been run.  */
-  int *statuses;
-};
-
-static int pex_msdos_open (struct pex_obj *, const char *, int);
-static int pex_msdos_open (struct pex_obj *, const char *, int);
-static int pex_msdos_fdindex (struct pex_msdos *, int);
-static long pex_msdos_exec_child (struct pex_obj *, int, const char *,
-				  char * const *, char * const *,
-				  int, int, int, int,
-				  int, const char **, int *);
-static int pex_msdos_close (struct pex_obj *, int);
-static int pex_msdos_wait (struct pex_obj *, long, int *, struct pex_time *,
-			   int, const char **, int *);
-static void pex_msdos_cleanup (struct pex_obj *);
-
-/* The list of functions we pass to the common routines.  */
-
-const struct pex_funcs funcs =
-{
-  pex_msdos_open,
-  pex_msdos_open,
-  pex_msdos_exec_child,
-  pex_msdos_close,
-  pex_msdos_wait,
-  NULL, /* pipe */
-  NULL, /* fdopenr */
-  NULL, /* fdopenw */
-  pex_msdos_cleanup
-};
-
-/* Return a newly initialized pex_obj structure.  */
-
-struct pex_obj *
-pex_init (int flags, const char *pname, const char *tempbase)
-{
-  struct pex_obj *ret;
-  int i;
-
-  /* MSDOS does not support pipes.  */
-  flags &= ~ PEX_USE_PIPES;
-
-  ret = pex_init_common (flags, pname, tempbase, funcs);
-
-  ret->sysdep = XNEW (struct pex_msdos);
-  for (i = 0; i < PEX_MSDOS_FILE_COUNT; ++i)
-    ret->files[i] = NULL;
-  ret->statuses = NULL;
-
-  return ret;
-}
-
-/* Open a file.  FIXME: We ignore the binary argument, since we have
-   no way to handle it.  */
-
-static int
-pex_msdos_open (struct pex_obj *obj, const char *name,
-		int binary ATTRIBUTE_UNUSED)
-{
-  struct pex_msdos *ms;
-  int i;
-
-  ms = (struct pex_msdos *) obj->sysdep;
-
-  for (i = 0; i < PEX_MSDOS_FILE_COUNT; ++i)
-    {
-      if (ms->files[i] == NULL)
-	{
-	  ms->files[i] = xstrdup (name);
-	  return i + PEX_MSDOS_FD_OFFSET;
-	}
-    }
-
-  abort ();
-}
-
-/* Get the index into msdos->files associated with an open file
-   descriptor.  */
-
-static int
-pex_msdos_fdindex (struct pex_msdos *ms, int fd)
-{
-  fd -= PEX_MSDOS_FD_OFFSET;
-  if (fd < 0 || fd >= PEX_MSDOS_FILE_COUNT || ms->files[fd] == NULL)
-    abort ();
-  return fd;
-}
-
-
-/* Close a file.  */
-
-static int
-pex_msdos_close (struct pex_obj *obj, int fd)
-{
-  struct pex_msdos *ms;
-  int fdinex;
-
-  ms = (struct pex_msdos *) obj->sysdep;
-  fdindex = pe_msdos_fdindex (ms, fd);
-  free (ms->files[fdindex]);
-  ms->files[fdindex] = NULL;
-}
-
-/* Execute a child.  */
-
-static long
-pex_msdos_exec_child (struct pex_obj *obj, int flags, const char *executable,
-		      char * const * argv, char * const * env, int in, int out,
-		      int toclose ATTRIBUTE_UNUSED,
-		      int errdes ATTRIBUTE_UNUSED, const char **errmsg,
-		      int *err)
-{
-  struct pex_msdos *ms;
-  char *temp_base;
-  int temp_base_allocated;
-  char *rf;
-  int inindex;
-  char *infile;
-  int outindex;
-  char *outfile;
-  char *scmd;
+  int rc;
+  char *scmd, *rf;
   FILE *argfile;
-  int i;
-  int status;
+  int i, el = flags & PEXECUTE_SEARCH ? 4 : 0;
 
-  ms = (struct pex_msdos *) obj->sysdep;
+  last_pid++;
+  if (last_pid < 0)
+    last_pid = 1;
 
-  /* FIXME: I don't know how to redirect stderr, so we ignore ERRDES
-     and PEX_STDERR_TO_STDOUT.  */
+  if ((flags & PEXECUTE_ONE) != PEXECUTE_ONE)
+    abort ();
 
-  temp_base = obj->temp_base;
-  if (temp_base != NULL)
-    temp_base_allocated = 0;
-  else
-    {
-      temp_base = choose_temp_base ();
-      temp_base_allocated = 1;
-    }
-
-  rf = concat (temp_base, ".gp", NULL);
-
-  if (temp_base_allocated)
-    free (temp_base);
-
-  if (in == STDIN_FILE_NO)
-    {
-      inindex = -1;
-      infile = "";
-    }
-  else
-    {
-      inindex = pex_msdos_fdindex (ms, in);
-      infile = ms->files[inindex];
-    }
-
-  if (out == STDOUT_FILE_NO)
-    {
-      outindex = -1;
-      outfile = "";
-    }
-  else
-    {
-      outindex = pex_msdos_fdindex (ms, out);
-      outfile = ms->files[outindex];
-    }
-
-  scmd = XNEWVEC (char, strlen (program)
-		  + ((flags & PEXECUTE_SEARCH) != 0 ? 4 : 0)
-		  + strlen (rf)
-		  + strlen (infile)
-		  + strlen (outfile)
-		  + 10);
-  sprintf (scmd, "%s%s @%s%s%s%s%s",
-	   program,
-	   (flags & PEXECUTE_SEARCH) != 0 ? ".exe" : "",
-	   rf,
-	   inindex != -1 ? " <" : "",
-	   infile,
-	   outindex != -1 ? " >" : "",
-	   outfile);
-
+  if (temp_base == 0)
+    temp_base = choose_temp_base ();
+  scmd = (char *) xmalloc (strlen (program) + strlen (temp_base) + 6 + el);
+  rf = scmd + strlen(program) + 2 + el;
+  sprintf (scmd, "%s%s @%s.gp", program,
+	   (flags & PEXECUTE_SEARCH ? ".exe" : ""), temp_base);
   argfile = fopen (rf, "w");
-  if (argfile == NULL)
+  if (argfile == 0)
     {
-      *err = errno;
+      int errno_save = errno;
       free (scmd);
-      free (rf);
-      *errmsg = "cannot open temporary command file";
+      errno = errno_save;
+      *errmsg_fmt = "cannot open `%s.gp'";
+      *errmsg_arg = temp_base;
       return -1;
     }
 
-  for (i = 1; argv[i] != NULL; ++i)
+  for (i=1; argv[i]; i++)
     {
-      char *p;
-
-      for (p = argv[i]; *p != '\0'; ++p)
+      char *cp;
+      for (cp = argv[i]; *cp; cp++)
 	{
-	  if (*p == '"' || *p == '\'' || *p == '\\' || ISSPACE (*p))
-	    putc ('\\', argfile);
-	  putc (*p, argfile);
+	  if (*cp == '"' || *cp == '\'' || *cp == '\\' || ISSPACE (*cp))
+	    fputc ('\\', argfile);
+	  fputc (*cp, argfile);
 	}
-      putc ('\n', argfile);
+      fputc ('\n', argfile);
     }
-
   fclose (argfile);
 
-  status = system (scmd);
+  rc = system (scmd);
 
-  if (status == -1)
+  {
+    int errno_save = errno;
+    remove (rf);
+    free (scmd);
+    errno = errno_save;
+  }
+
+  if (rc == -1)
     {
-      *err = errno;
-      remove (rf);
-      free (scmd);
-      free (rf);
-      *errmsg = "system";
+      *errmsg_fmt = install_error_msg;
+      *errmsg_arg = (char *)program;
       return -1;
     }
 
-  remove (rf);
-  free (scmd);
-  free (rf);
-
-  /* Save the exit status for later.  When we are called, obj->count
-     is the number of children which have executed before this
-     one.  */
-  ms->statuses = XRESIZEVEC(int, ms->statuses, obj->count + 1);
-  ms->statuses[obj->count] = status;
-
-  return obj->count;
+  /* Tuck the status away for pwait, and return a "pid".  */
+  last_status = rc << 8;
+  return last_pid;
 }
 
-/* Wait for a child process to complete.  Actually the child process
-   has already completed, and we just need to return the exit
-   status.  */
+/* Use ECHILD if available, otherwise use EINVAL.  */
+#ifdef ECHILD
+#define PWAIT_ERROR ECHILD
+#else
+#define PWAIT_ERROR EINVAL
+#endif
 
-static int
-pex_msdos_wait (struct pex_obj *obj, long pid, int *status,
-		struct pex_time *time, int done ATTRIBUTE_UNUSED,
-		const char **errmsg ATTRIBUTE_UNUSED,
-		int *err ATTRIBUTE_UNUSED)
+int
+pwait (pid, status, flags)
+     int pid;
+     int *status;
+     int flags;
 {
-  struct pex_msdos *ms;
-
-  ms = (struct pex_msdos *) obj->sysdep;
-
-  if (time != NULL)
-    memset (time, 0, sizeof *time);
-
-  *status = ms->statuses[pid];
-
-  return 0;
-}
-
-/* Clean up the pex_msdos structure.  */
-
-static void
-pex_msdos_cleanup (struct pex_obj  *obj)
-{
-  struct pex_msdos *ms;
-  int i;
-
-  ms = (struct pex_msdos *) obj->sysdep;
-  for (i = 0; i < PEX_MSDOS_FILE_COUNT; ++i)
-    if (msdos->files[i] != NULL)
-      free (msdos->files[i]);
-  if (msdos->statuses != NULL)
-    free (msdos->statuses);
-  free (msdos);
-  obj->sysdep = NULL;
+  /* On MSDOS each pexecute must be followed by its associated pwait.  */
+  if (pid != last_pid
+      /* Called twice for the same child?  */
+      || pid == last_reaped)
+    {
+      errno = PWAIT_ERROR;
+      return -1;
+    }
+  /* ??? Here's an opportunity to canonicalize the values in STATUS.
+     Needed?  */
+  *status = last_status;
+  last_reaped = last_pid;
+  return last_pid;
 }

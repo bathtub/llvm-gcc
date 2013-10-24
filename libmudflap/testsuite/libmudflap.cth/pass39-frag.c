@@ -54,4 +54,4 @@ int main ()
 }
 /* { dg-output "100 100 100 100 100 100 100 100 100 100" } */
 /* { dg-repetitions 20 } */
-/* { dg-timeout 10 } */
+/* { dg-timeout 3 } */

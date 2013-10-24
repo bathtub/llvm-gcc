@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1991-2005, Free Software Foundation, Inc.         --
+--          Copyright (C) 1991-2003 Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -16,8 +16,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- GNAT was originally developed  by the GNAT team at  New York University. --
 -- Extensive contributions were provided by Ada Core Technologies Inc.      --
@@ -44,7 +44,7 @@ package body Errutil is
    -----------------------
 
    procedure Error_Msg_AP (Msg : String);
-   --  Output a message just after the previous token
+   --  Output a message just after the previous token.
 
    procedure Output_Source_Line
      (L           : Physical_Line_Number;
@@ -100,10 +100,6 @@ package body Errutil is
       --  since there may be white space inside the literal and we don't want
       --  to stop on that white space.
 
-      --  Note that it is not worth worrying about special UTF_32 line
-      --  terminator characters in this context, since this is only about
-      --  error recovery anyway.
-
       if Prev_Token = Tok_String_Literal then
          loop
             S1 := S1 + 1;
@@ -124,10 +120,6 @@ package body Errutil is
       --  Otherwise we search forward for the end of the current token, marked
       --  by a line terminator, white space, a comment symbol or if we bump
       --  into the following token (i.e. the current token)
-
-      --  Note that it is not worth worrying about special UTF_32 line
-      --  terminator characters in this context, since this is only about
-      --  error recovery anyway.
 
       else
          while Source (S1) not in Line_Terminator
@@ -184,12 +176,12 @@ package body Errutil is
          return;
       end if;
 
-      --  Return without doing anything if message is killed and this is not
-      --  the first error message. The philosophy is that if we get a weird
-      --  error message and we already have had a message, then we hope the
-      --  weird message is a junk cascaded message
+      --  Return without doing anything if message is killed and this
+      --  is not the first error message. The philosophy is that if we
+      --  get a weird error message and we already have had a message,
+      --  then we hope the weird message is a junk cascaded message
 
-      --  Immediate return if warning message and warnings are suppressed.
+      --  Immediate return if warning message and warnings are suppressed
       --  Note that style messages are not warnings for this purpose.
 
       if Is_Warning_Msg and then Warnings_Suppressed (Sptr) then
@@ -246,19 +238,20 @@ package body Errutil is
         and then Errors.Table (Prev_Msg).Sfile =
         Errors.Table (Cur_Msg).Sfile
       then
-         --  Don't delete unconditional messages and at this stage, don't
-         --  delete continuation lines (we attempted to delete those earlier
-         --  if the parent message was deleted.
+         --  Don't delete unconditional messages and at this stage,
+         --  don't delete continuation lines (we attempted to delete
+         --  those earlier if the parent message was deleted.
 
          if not Errors.Table (Cur_Msg).Uncond
            and then not Continuation
          then
 
-            --  Don't delete if prev msg is warning and new msg is an error.
-            --  This is because we don't want a real error masked by a warning.
-            --  In all other cases (that is parse errors for the same line that
-            --  are not unconditional) we do delete the message. This helps to
-            --  avoid junk extra messages from cascaded parsing errors
+            --  Don't delete if prev msg is warning and new msg is
+            --  an error. This is because we don't want a real error
+            --  masked by a warning. In all other cases (that is parse
+            --  errors for the same line that are not unconditional)
+            --  we do delete the message. This helps to avoid
+            --  junk extra messages from cascaded parsing errors
 
             if not (Errors.Table (Prev_Msg).Warn
                       or
@@ -268,8 +261,8 @@ package body Errutil is
                       or
                     Errors.Table (Cur_Msg).Style)
             then
-               --  All tests passed, delete the message by simply returning
-               --  without any further processing.
+               --  All tests passed, delete the message by simply
+               --  returning without any further processing.
 
                if not Continuation then
                   Last_Killed := True;
@@ -437,6 +430,7 @@ package body Errutil is
 
                Write_Eol;
             end if;
+
          end loop;
 
          --  Then output errors, if any, for subsidiary units
@@ -562,6 +556,7 @@ package body Errutil is
          Total_Errors_Detected := Total_Errors_Detected + Warnings_Detected;
          Warnings_Detected := 0;
       end if;
+
    end Finalize;
 
    ----------------
@@ -582,6 +577,7 @@ package body Errutil is
       --  an initial dummy entry covering all possible source locations.
 
       Warnings.Init;
+
    end Initialize;
 
    ------------------------
@@ -678,7 +674,6 @@ package body Errutil is
             Set_Msg_Insertion_Name;
 
          elsif C = '$' then
-
             --  '$' is ignored
 
             null;
@@ -687,7 +682,6 @@ package body Errutil is
             Set_Msg_Insertion_File_Name;
 
          elsif C = '}' then
-
             --  '}' is ignored
 
             null;
@@ -696,7 +690,6 @@ package body Errutil is
             Set_Msg_Insertion_Reserved_Name;
 
          elsif C = '&' then
-
             --  '&' is ignored
 
             null;
@@ -721,9 +714,6 @@ package body Errutil is
             Is_Unconditional_Msg := True;
 
          elsif C = '?' then
-            null;
-
-         elsif C = '<' then
             null;
 
          elsif C = '|' then

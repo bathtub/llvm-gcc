@@ -1,6 +1,5 @@
 /* String pool for GCC.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005
-   Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -16,8 +15,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 /* String text, identifier text and identifier node allocator.  Strings
    allocated by ggc_alloc_string are stored in an obstack which is
@@ -95,7 +94,7 @@ ggc_alloc_string (const char *contents, int length)
     return digit_string (contents[0] - '0');
 
   obstack_grow0 (&string_stack, contents, length);
-  return XOBFINISH (&string_stack, const char *);
+  return obstack_finish (&string_stack);
 }
 
 /* Return an IDENTIFIER_NODE whose name is TEXT (a null-terminated string).
@@ -198,8 +197,7 @@ gt_pch_p_S (void *obj ATTRIBUTE_UNUSED, void *x ATTRIBUTE_UNUSED,
 void
 gt_pch_n_S (const void *x)
 {
-  gt_pch_note_object ((void *)x, (void *)x, &gt_pch_p_S,
-		      gt_types_enum_last);
+  gt_pch_note_object ((void *)x, (void *)x, &gt_pch_p_S);
 }
 
 /* Handle saving and restoring the string pool for PCH.  */

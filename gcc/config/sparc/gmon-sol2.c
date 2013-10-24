@@ -267,7 +267,8 @@ _mcleanup(void)
  * -- [eichin:19920702.1107EST]
  */
 
-static void internal_mcount (char *, unsigned short *) __attribute__ ((used));
+static void internal_mcount (char *, unsigned short *)
+     __attribute__ ((__unused__));
 
 /* i7 == last ret, -> frompcindex */
 /* o7 == current ret, -> selfpc */

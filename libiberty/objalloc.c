@@ -14,8 +14,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "ansidecl.h"
@@ -30,15 +30,17 @@ Boston, MA 02110-1301, USA.  */
 #include <unixlib.h>
 #else
 
+#ifdef ANSI_PROTOTYPES
 /* Get a definition for size_t.  */
 #include <stddef.h>
+#endif
 
 #ifdef HAVE_STDLIB_H
 #include <stdlib.h>
 #else
 /* For systems with larger pointers than ints, this must be declared.  */
-extern PTR malloc (size_t);
-extern void free (PTR);
+extern PTR malloc PARAMS ((size_t));
+extern void free PARAMS ((PTR));
 #endif
 
 #endif
@@ -83,7 +85,7 @@ struct objalloc_chunk
 /* Create an objalloc structure.  */
 
 struct objalloc *
-objalloc_create (void)
+objalloc_create ()
 {
   struct objalloc *ret;
   struct objalloc_chunk *chunk;
@@ -112,7 +114,9 @@ objalloc_create (void)
 /* Allocate space from an objalloc structure.  */
 
 PTR
-_objalloc_alloc (struct objalloc *o, unsigned long len)
+_objalloc_alloc (o, len)
+     struct objalloc *o;
+     unsigned long len;
 {
   /* We avoid confusion from zero sized objects by always allocating
      at least 1 byte.  */
@@ -167,7 +171,8 @@ _objalloc_alloc (struct objalloc *o, unsigned long len)
 /* Free an entire objalloc structure.  */
 
 void
-objalloc_free (struct objalloc *o)
+objalloc_free (o)
+     struct objalloc *o;
 {
   struct objalloc_chunk *l;
 
@@ -188,7 +193,9 @@ objalloc_free (struct objalloc *o)
    recently allocated blocks.  */
 
 void
-objalloc_free_block (struct objalloc *o, PTR block)
+objalloc_free_block (o, block)
+     struct objalloc *o;
+     PTR block;
 {
   struct objalloc_chunk *p, *small;
   char *b = (char *) block;

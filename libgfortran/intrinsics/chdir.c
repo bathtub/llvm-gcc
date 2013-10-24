@@ -25,13 +25,15 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "libgfortran.h"
 
 #include <errno.h>
+
+#include "../io/io.h"
 
 #ifdef HAVE_STRING_H
 #include <string.h>
@@ -61,11 +63,11 @@ chdir_i4_sub (char *dir, GFC_INTEGER_4 *status, gfc_charlen_type dir_len)
   /* Make a null terminated copy of the strings.  */
   str = gfc_alloca (dir_len + 1);
   memcpy (str, dir, dir_len);
-  str[dir_len] = '\0';
+  str[dir_len] = '\0'; 
 
   val = chdir (str);
 
-  if (status != NULL)
+  if (status != NULL) 
     *status = (val == 0) ? 0 : errno;
 }
 iexport(chdir_i4_sub);
@@ -86,11 +88,11 @@ chdir_i8_sub (char *dir, GFC_INTEGER_8 *status, gfc_charlen_type dir_len)
   /* Make a null terminated copy of the strings.  */
   str = gfc_alloca (dir_len + 1);
   memcpy (str, dir, dir_len);
-  str[dir_len] = '\0';
+  str[dir_len] = '\0'; 
 
   val = chdir (str);
 
-  if (status != NULL)
+  if (status != NULL) 
     *status = (val == 0) ? 0 : errno;
 }
 iexport(chdir_i8_sub);

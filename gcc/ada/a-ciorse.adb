@@ -2,12 +2,11 @@
 --                                                                          --
 --                         GNAT LIBRARY COMPONENTS                          --
 --                                                                          --
---                      A D A . C O N T A I N E R S .                       --
---              I N D E F I N I T E _ O R D E R E D _ S E T S               --
+--                  ADA.CONTAINERS.INDEFINITE_ORDERED_SETS                  --
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2005, Free Software Foundation, Inc.         --
+--             Copyright (C) 2004 Free Software Foundation, Inc.            --
 --                                                                          --
 -- This specification is derived from the Ada Reference Manual for use with --
 -- GNAT. The copyright notice above, and the license provisions that follow --
@@ -21,8 +20,8 @@
 -- or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License --
 -- for  more details.  You should have  received  a copy of the GNU General --
 -- Public License  distributed with GNAT;  see file COPYING.  If not, write --
--- to  the  Free Software Foundation,  51  Franklin  Street,  Fifth  Floor, --
--- Boston, MA 02110-1301, USA.                                              --
+-- to  the Free Software Foundation,  59 Temple Place - Suite 330,  Boston, --
+-- MA 02111-1307, USA.                                                      --
 --                                                                          --
 -- As a special exception,  if other files  instantiate  generics from this --
 -- unit, or you link  this unit with other files  to produce an executable, --
@@ -45,7 +44,21 @@ pragma Elaborate_All (Ada.Containers.Red_Black_Trees.Generic_Set_Operations);
 
 with Ada.Unchecked_Deallocation;
 
+with System;  use type System.Address;
+
 package body Ada.Containers.Indefinite_Ordered_Sets is
+
+   type Element_Access is access Element_Type;
+
+   use Red_Black_Trees;
+
+   type Node_Type is limited record
+      Parent  : Node_Access;
+      Left    : Node_Access;
+      Right   : Node_Access;
+      Color   : Red_Black_Trees.Color_Type := Red;
+      Element : Element_Access;
+   end record;
 
    -----------------------
    -- Local Subprograms --
@@ -57,13 +70,11 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    function Copy_Node (Source : Node_Access) return Node_Access;
    pragma Inline (Copy_Node);
 
-   procedure Free (X : in out Node_Access);
+   function Copy_Tree (Source_Root : Node_Access) return Node_Access;
 
-   procedure Insert_Sans_Hint
-     (Tree     : in out Tree_Type;
-      New_Item : Element_Type;
-      Node     : out Node_Access;
-      Inserted : out Boolean);
+   procedure Delete_Tree (X : in out Node_Access);
+
+   procedure Free (X : in out Node_Access);
 
    procedure Insert_With_Hint
      (Dst_Tree : in out Tree_Type;
@@ -90,11 +101,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    function Parent (Node : Node_Access) return Node_Access;
    pragma Inline (Parent);
 
-   procedure Replace_Element
-     (Tree : in out Tree_Type;
-      Node : Node_Access;
-      Item : Element_Type);
-
    function Right (Node : Node_Access) return Node_Access;
    pragma Inline (Right);
 
@@ -118,13 +124,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
      new Ada.Unchecked_Deallocation (Element_Type, Element_Access);
 
    package Tree_Operations is
-     new Red_Black_Trees.Generic_Operations (Tree_Types);
-
-   procedure Delete_Tree is
-     new Tree_Operations.Generic_Delete_Tree (Free);
-
-   function Copy_Tree is
-     new Tree_Operations.Generic_Copy_Tree (Copy_Node, Delete_Tree);
+     new Red_Black_Trees.Generic_Operations
+       (Tree_Types => Tree_Types,
+        Null_Node  => Node_Access'(null));
 
    use Tree_Operations;
 
@@ -150,60 +152,16 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function "<" (Left, Right : Cursor) return Boolean is
    begin
-      if Left.Node = null then
-         raise Constraint_Error with "Left cursor equals No_Element";
-      end if;
-
-      if Right.Node = null then
-         raise Constraint_Error with "Right cursor equals No_Element";
-      end if;
-
-      if Left.Node.Element = null then
-         raise Program_Error with "Left cursor is bad";
-      end if;
-
-      if Right.Node.Element = null then
-         raise Program_Error with "Right cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Left.Container.Tree, Left.Node),
-                     "bad Left cursor in ""<""");
-
-      pragma Assert (Vet (Right.Container.Tree, Right.Node),
-                     "bad Right cursor in ""<""");
-
       return Left.Node.Element.all < Right.Node.Element.all;
    end "<";
 
    function "<" (Left : Cursor; Right : Element_Type) return Boolean is
    begin
-      if Left.Node = null then
-         raise Constraint_Error with "Left cursor equals No_Element";
-      end if;
-
-      if Left.Node.Element = null then
-         raise Program_Error with "Left cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Left.Container.Tree, Left.Node),
-                     "bad Left cursor in ""<""");
-
       return Left.Node.Element.all < Right;
    end "<";
 
    function "<" (Left : Element_Type; Right : Cursor) return Boolean is
    begin
-      if Right.Node = null then
-         raise Constraint_Error with "Right cursor equals No_Element";
-      end if;
-
-      if Right.Node.Element = null then
-         raise Program_Error with "Right cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Right.Container.Tree, Right.Node),
-                     "bad Right cursor in ""<""");
-
       return Left < Right.Node.Element.all;
    end "<";
 
@@ -231,8 +189,13 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    --  Start of processing for "="
 
    begin
+      if Left'Address = Right'Address then
+         return True;
+      end if;
+
       return Is_Equal (Left.Tree, Right.Tree);
    end "=";
+
 
    ---------
    -- ">" --
@@ -240,28 +203,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function ">" (Left, Right : Cursor) return Boolean is
    begin
-      if Left.Node = null then
-         raise Constraint_Error with "Left cursor equals No_Element";
-      end if;
-
-      if Right.Node = null then
-         raise Constraint_Error with "Right cursor equals No_Element";
-      end if;
-
-      if Left.Node.Element = null then
-         raise Program_Error with "Left cursor is bad";
-      end if;
-
-      if Right.Node.Element = null then
-         raise Program_Error with "Right cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Left.Container.Tree, Left.Node),
-                     "bad Left cursor in "">""");
-
-      pragma Assert (Vet (Right.Container.Tree, Right.Node),
-                     "bad Right cursor in "">""");
-
       --  L > R same as R < L
 
       return Right.Node.Element.all < Left.Node.Element.all;
@@ -269,33 +210,11 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function ">" (Left : Cursor; Right : Element_Type) return Boolean is
    begin
-      if Left.Node = null then
-         raise Constraint_Error with "Left cursor equals No_Element";
-      end if;
-
-      if Left.Node.Element = null then
-         raise Program_Error with "Left cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Left.Container.Tree, Left.Node),
-                     "bad Left cursor in "">""");
-
       return Right < Left.Node.Element.all;
    end ">";
 
    function ">" (Left : Element_Type; Right : Cursor) return Boolean is
    begin
-      if Right.Node = null then
-         raise Constraint_Error with "Right cursor equals No_Element";
-      end if;
-
-      if Right.Node.Element = null then
-         raise Program_Error with "Right cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Right.Container.Tree, Right.Node),
-                     "bad Right cursor in "">""");
-
       return Right.Node.Element.all < Left;
    end ">";
 
@@ -303,12 +222,25 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    -- Adjust --
    ------------
 
-   procedure Adjust is
-      new Tree_Operations.Generic_Adjust (Copy_Tree);
-
    procedure Adjust (Container : in out Set) is
+      Tree : Tree_Type renames Container.Tree;
+
    begin
-      Adjust (Container.Tree);
+      if Tree.Length = 0 then
+         pragma Assert (Tree.Root = null);
+         return;
+      end if;
+
+      begin
+         Tree.Root := Copy_Tree (Tree.Root);
+      exception
+         when others =>
+            Tree := (Length => 0, others => null);
+            raise;
+      end;
+
+      Tree.First := Min (Tree.Root);
+      Tree.Last := Max (Tree.Root);
    end Adjust;
 
    -------------
@@ -324,19 +256,19 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      return Cursor'(Container'Unrestricted_Access, Node);
+      return Cursor'(Container'Unchecked_Access, Node);
    end Ceiling;
 
    -----------
    -- Clear --
    -----------
 
-   procedure Clear is
-      new Tree_Operations.Generic_Clear (Delete_Tree);
-
    procedure Clear (Container : in out Set) is
+      Tree : Tree_Type renames Container.Tree;
+      Root : Node_Access := Tree.Root;
    begin
-      Clear (Container.Tree);
+      Tree := (Length => 0, others => null);
+      Delete_Tree (Root);
    end Clear;
 
    -----------
@@ -363,7 +295,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Copy_Node (Source : Node_Access) return Node_Access is
       Element : Element_Access := new Element_Type'(Source.Element.all);
-
    begin
       return new Node_Type'(Parent  => null,
                             Left    => null,
@@ -376,29 +307,66 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          raise;
    end Copy_Node;
 
+   ---------------
+   -- Copy_Tree --
+   ---------------
+
+   function Copy_Tree (Source_Root : Node_Access) return Node_Access is
+      Target_Root : Node_Access := Copy_Node (Source_Root);
+      P, X        : Node_Access;
+
+   begin
+      if Source_Root.Right /= null then
+         Target_Root.Right := Copy_Tree (Source_Root.Right);
+         Target_Root.Right.Parent := Target_Root;
+      end if;
+
+      P := Target_Root;
+      X := Source_Root.Left;
+
+      while X /= null loop
+         declare
+            Y : Node_Access := Copy_Node (X);
+
+         begin
+            P.Left := Y;
+            Y.Parent := P;
+
+            if X.Right /= null then
+               Y.Right := Copy_Tree (X.Right);
+               Y.Right.Parent := Y;
+            end if;
+
+            P := Y;
+            X := X.Left;
+         end;
+      end loop;
+
+      return Target_Root;
+
+   exception
+      when others =>
+         Delete_Tree (Target_Root);
+         raise;
+   end Copy_Tree;
+
    ------------
    -- Delete --
    ------------
 
-   procedure Delete (Container : in out Set; Position : in out Cursor) is
+   procedure Delete (Container : in out Set; Position  : in out Cursor) is
    begin
-      if Position.Node = null then
-         raise Constraint_Error with "Position cursor equals No_Element";
+      if Position = No_Element then
+         return;
       end if;
 
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
+      if Position.Container /= Set_Access'(Container'Unchecked_Access) then
+         raise Program_Error;
       end if;
 
-      if Position.Container /= Container'Unrestricted_Access then
-         raise Program_Error with "Position cursor designates wrong set";
-      end if;
-
-      pragma Assert (Vet (Container.Tree, Position.Node),
-                     "bad cursor in Delete");
-
-      Tree_Operations.Delete_Node_Sans_Free (Container.Tree, Position.Node);
+      Delete_Node_Sans_Free (Container.Tree, Position.Node);
       Free (Position.Node);
+
       Position.Container := null;
    end Delete;
 
@@ -408,10 +376,10 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    begin
       if X = null then
-         raise Constraint_Error with "attempt to delete element not in set";
+         raise Constraint_Error;
       end if;
 
-      Tree_Operations.Delete_Node_Sans_Free (Container.Tree, X);
+      Delete_Node_Sans_Free (Container.Tree, X);
       Free (X);
    end Delete;
 
@@ -420,14 +388,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    ------------------
 
    procedure Delete_First (Container : in out Set) is
-      Tree : Tree_Type renames Container.Tree;
-      X    : Node_Access := Tree.First;
-
+      C : Cursor := First (Container);
    begin
-      if X /= null then
-         Tree_Operations.Delete_Node_Sans_Free (Tree, X);
-         Free (X);
-      end if;
+      Delete (Container, C);
    end Delete_First;
 
    -----------------
@@ -435,15 +398,26 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    -----------------
 
    procedure Delete_Last (Container : in out Set) is
-      Tree : Tree_Type renames Container.Tree;
-      X    : Node_Access := Tree.Last;
-
+      C : Cursor := Last (Container);
    begin
-      if X /= null then
-         Tree_Operations.Delete_Node_Sans_Free (Tree, X);
-         Free (X);
-      end if;
+      Delete (Container, C);
    end Delete_Last;
+
+   -----------------
+   -- Delete_Tree --
+   -----------------
+
+   procedure Delete_Tree (X : in out Node_Access) is
+      Y : Node_Access;
+   begin
+      while X /= null loop
+         Y := X.Right;
+         Delete_Tree (Y);
+         Y := X.Left;
+         Free (X);
+         X := Y;
+      end loop;
+   end Delete_Tree;
 
    ----------------
    -- Difference --
@@ -451,14 +425,26 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    procedure Difference (Target : in out Set; Source : Set) is
    begin
+      if Target'Address = Source'Address then
+         Clear (Target);
+         return;
+      end if;
+
       Set_Ops.Difference (Target.Tree, Source.Tree);
    end Difference;
 
    function Difference (Left, Right : Set) return Set is
-      Tree : constant Tree_Type :=
-               Set_Ops.Difference (Left.Tree, Right.Tree);
    begin
-      return Set'(Controlled with Tree);
+      if Left'Address = Right'Address then
+         return Empty_Set;
+      end if;
+
+      declare
+         Tree : constant Tree_Type :=
+           Set_Ops.Difference (Left.Tree, Right.Tree);
+      begin
+         return (Controlled with Tree);
+      end;
    end Difference;
 
    -------------
@@ -467,67 +453,8 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Element (Position : Cursor) return Element_Type is
    begin
-      if Position.Node = null then
-         raise Constraint_Error with "Position cursor equals No_Element";
-      end if;
-
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Position.Container.Tree, Position.Node),
-                     "bad cursor in Element");
-
       return Position.Node.Element.all;
    end Element;
-
-   -------------------------
-   -- Equivalent_Elements --
-   -------------------------
-
-   function Equivalent_Elements (Left, Right : Element_Type) return Boolean is
-   begin
-      if Left < Right
-        or else Right < Left
-      then
-         return False;
-      else
-         return True;
-      end if;
-   end Equivalent_Elements;
-
-   ---------------------
-   -- Equivalent_Sets --
-   ---------------------
-
-   function Equivalent_Sets (Left, Right : Set) return Boolean is
-
-      function Is_Equivalent_Node_Node (L, R : Node_Access) return Boolean;
-      pragma Inline (Is_Equivalent_Node_Node);
-
-      function Is_Equivalent is
-         new Tree_Operations.Generic_Equal (Is_Equivalent_Node_Node);
-
-      -----------------------------
-      -- Is_Equivalent_Node_Node --
-      -----------------------------
-
-      function Is_Equivalent_Node_Node (L, R : Node_Access) return Boolean is
-      begin
-         if L.Element.all < R.Element.all then
-            return False;
-         elsif R.Element.all < L.Element.all then
-            return False;
-         else
-            return True;
-         end if;
-      end Is_Equivalent_Node_Node;
-
-   --  Start of processing for Equivalent_Sets
-
-   begin
-      return Is_Equivalent (Left.Tree, Right.Tree);
-   end Equivalent_Sets;
 
    -------------
    -- Exclude --
@@ -536,10 +463,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    procedure Exclude (Container : in out Set; Item : Element_Type) is
       X : Node_Access :=
             Element_Keys.Find (Container.Tree, Item);
-
    begin
       if X /= null then
-         Tree_Operations.Delete_Node_Sans_Free (Container.Tree, X);
+         Delete_Node_Sans_Free (Container.Tree, X);
          Free (X);
       end if;
    end Exclude;
@@ -557,7 +483,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      return Cursor'(Container'Unrestricted_Access, Node);
+      return Cursor'(Container'Unchecked_Access, Node);
    end Find;
 
    -----------
@@ -570,7 +496,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      return Cursor'(Container'Unrestricted_Access, Container.Tree.First);
+      return Cursor'(Container'Unchecked_Access, Container.Tree.First);
    end First;
 
    -------------------
@@ -579,10 +505,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function First_Element (Container : Set) return Element_Type is
    begin
-      if Container.Tree.First = null then
-         raise Constraint_Error with "set is empty";
-      end if;
-
       return Container.Tree.First.Element.all;
    end First_Element;
 
@@ -599,7 +521,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      return Cursor'(Container'Unrestricted_Access, Node);
+      return Cursor'(Container'Unchecked_Access, Node);
    end Floor;
 
    ----------
@@ -609,26 +531,11 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    procedure Free (X : in out Node_Access) is
       procedure Deallocate is
         new Ada.Unchecked_Deallocation (Node_Type, Node_Access);
-
    begin
-      if X = null then
-         return;
-      end if;
-
-      X.Parent := X;
-      X.Left := X;
-      X.Right := X;
-
-      begin
+      if X /= null then
          Free_Element (X.Element);
-      exception
-         when others =>
-            X.Element := null;
-            Deallocate (X);
-            raise;
-      end;
-
-      Deallocate (X);
+         Deallocate (X);
+      end if;
    end Free;
 
    ------------------
@@ -662,6 +569,34 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
            Is_Less_Key_Node    => Is_Less_Key_Node,
            Is_Greater_Key_Node => Is_Greater_Key_Node);
 
+      ---------
+      -- "<" --
+      ---------
+
+      function "<" (Left : Key_Type; Right : Cursor) return Boolean is
+      begin
+         return Left < Right.Node.Element.all;
+      end "<";
+
+      function "<" (Left : Cursor; Right : Key_Type) return Boolean is
+      begin
+         return Right > Left.Node.Element.all;
+      end "<";
+
+      ---------
+      -- ">" --
+      ---------
+
+      function ">" (Left : Key_Type; Right : Cursor) return Boolean is
+      begin
+         return Left > Right.Node.Element.all;
+      end ">";
+
+      function ">" (Left : Cursor; Right : Key_Type) return Boolean is
+      begin
+         return Right < Left.Node.Element.all;
+      end ">";
+
       -------------
       -- Ceiling --
       -------------
@@ -675,8 +610,89 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
             return No_Element;
          end if;
 
-         return Cursor'(Container'Unrestricted_Access, Node);
+         return Cursor'(Container'Unchecked_Access, Node);
       end Ceiling;
+
+      ----------------------------
+      -- Checked_Update_Element --
+      ----------------------------
+
+      procedure Checked_Update_Element
+        (Container : in out Set;
+         Position  : Cursor;
+         Process   : not null access
+                        procedure (Element : in out Element_Type))
+      is
+      begin
+         if Position.Container = null then
+            raise Constraint_Error;
+         end if;
+
+         if Position.Container /= Set_Access'(Container'Unchecked_Access) then
+            raise Program_Error;
+         end if;
+
+         declare
+            Old_Key : Key_Type renames Key (Position.Node.Element.all);
+
+         begin
+            Process (Position.Node.Element.all);
+
+            if Old_Key < Position.Node.Element.all
+              or else Old_Key > Position.Node.Element.all
+            then
+               null;
+            else
+               return;
+            end if;
+         end;
+
+         declare
+            Result  : Node_Access;
+            Success : Boolean;
+
+            function New_Node return Node_Access;
+            pragma Inline (New_Node);
+
+            procedure Insert_Post is
+              new Key_Keys.Generic_Insert_Post (New_Node);
+
+            procedure Insert is
+              new Key_Keys.Generic_Conditional_Insert (Insert_Post);
+
+            --------------
+            -- New_Node --
+            --------------
+
+            function New_Node return Node_Access is
+            begin
+               return Position.Node;
+            end New_Node;
+
+         --  Start of processing for Checked_Update_Element
+
+         begin
+            Delete_Node_Sans_Free (Container.Tree, Position.Node);
+
+            Insert
+              (Tree    => Container.Tree,
+               Key     => Key (Position.Node.Element.all),
+               Node    => Result,
+               Success => Success);
+
+            if not Success then
+               declare
+                  X : Node_Access := Position.Node;
+               begin
+                  Free (X);
+               end;
+
+               raise Program_Error;
+            end if;
+
+            pragma Assert (Result = Position.Node);
+         end;
+      end Checked_Update_Element;
 
       --------------
       -- Contains --
@@ -696,10 +712,10 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       begin
          if X = null then
-            raise Constraint_Error with "attempt to delete key not in set";
+            raise Constraint_Error;
          end if;
 
-         Tree_Operations.Delete_Node_Sans_Free (Container.Tree, X);
+         Delete_Node_Sans_Free (Container.Tree, X);
          Free (X);
       end Delete;
 
@@ -708,31 +724,10 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       -------------
 
       function Element (Container : Set; Key : Key_Type) return Element_Type is
-         Node : constant Node_Access :=
-                  Key_Keys.Find (Container.Tree, Key);
-
+         C : constant Cursor := Find (Container, Key);
       begin
-         if Node = null then
-            raise Constraint_Error with "key not in set";
-         end if;
-
-         return Node.Element.all;
+         return C.Node.Element.all;
       end Element;
-
-      ---------------------
-      -- Equivalent_Keys --
-      ---------------------
-
-      function Equivalent_Keys (Left, Right : Key_Type) return Boolean is
-      begin
-         if Left < Right
-           or else Right < Left
-         then
-            return False;
-         else
-            return True;
-         end if;
-      end Equivalent_Keys;
 
       -------------
       -- Exclude --
@@ -743,7 +738,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       begin
          if X /= null then
-            Tree_Operations.Delete_Node_Sans_Free (Container.Tree, X);
+            Delete_Node_Sans_Free (Container.Tree, X);
             Free (X);
          end if;
       end Exclude;
@@ -761,7 +756,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
             return No_Element;
          end if;
 
-         return Cursor'(Container'Unrestricted_Access, Node);
+         return Cursor'(Container'Unchecked_Access, Node);
       end Find;
 
       -----------
@@ -777,7 +772,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
             return No_Element;
          end if;
 
-         return Cursor'(Container'Unrestricted_Access, Node);
+         return Cursor'(Container'Unchecked_Access, Node);
       end Floor;
 
       -------------------------
@@ -788,7 +783,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
         (Left  : Key_Type;
          Right : Node_Access) return Boolean is
       begin
-         return Key (Right.Element.all) < Left;
+         return Left > Right.Element.all;
       end Is_Greater_Key_Node;
 
       ----------------------
@@ -799,7 +794,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
         (Left  : Key_Type;
          Right : Node_Access) return Boolean is
       begin
-         return Left < Key (Right.Element.all);
+         return Left < Right.Element.all;
       end Is_Less_Key_Node;
 
       ---------
@@ -808,107 +803,8 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       function Key (Position : Cursor) return Key_Type is
       begin
-         if Position.Node = null then
-            raise Constraint_Error with
-              "Position cursor equals No_Element";
-         end if;
-
-         if Position.Node.Element = null then
-            raise Program_Error with
-              "Position cursor is bad";
-         end if;
-
-         pragma Assert (Vet (Position.Container.Tree, Position.Node),
-                        "bad cursor in Key");
-
          return Key (Position.Node.Element.all);
       end Key;
-
-      -------------
-      -- Replace --
-      -------------
-
-      procedure Replace
-        (Container : in out Set;
-         Key       : Key_Type;
-         New_Item  : Element_Type)
-      is
-         Node : constant Node_Access := Key_Keys.Find (Container.Tree, Key);
-
-      begin
-         if Node = null then
-            raise Constraint_Error with
-              "attempt to replace key not in set";
-         end if;
-
-         Replace_Element (Container.Tree, Node, New_Item);
-      end Replace;
-
-      -----------------------------------
-      -- Update_Element_Preserving_Key --
-      -----------------------------------
-
-      procedure Update_Element_Preserving_Key
-        (Container : in out Set;
-         Position  : Cursor;
-         Process   : not null access
-                        procedure (Element : in out Element_Type))
-      is
-         Tree : Tree_Type renames Container.Tree;
-
-      begin
-         if Position.Node = null then
-            raise Constraint_Error with "Position cursor equals No_Element";
-         end if;
-
-         if Position.Node.Element = null then
-            raise Program_Error with "Position cursor is bad";
-         end if;
-
-         if Position.Container /= Container'Unrestricted_Access then
-            raise Program_Error with "Position cursor designates wrong set";
-         end if;
-
-         pragma Assert (Vet (Container.Tree, Position.Node),
-                        "bad cursor in Update_Element_Preserving_Key");
-
-         declare
-            E : Element_Type renames Position.Node.Element.all;
-            K : constant Key_Type := Key (E);
-
-            B : Natural renames Tree.Busy;
-            L : Natural renames Tree.Lock;
-
-         begin
-            B := B + 1;
-            L := L + 1;
-
-            begin
-               Process (E);
-            exception
-               when others =>
-                  L := L - 1;
-                  B := B - 1;
-                  raise;
-            end;
-
-            L := L - 1;
-            B := B - 1;
-
-            if Equivalent_Keys (K, Key (E)) then
-               return;
-            end if;
-         end;
-
-         declare
-            X : Node_Access := Position.Node;
-         begin
-            Tree_Operations.Delete_Node_Sans_Free (Tree, X);
-            Free (X);
-         end;
-
-         raise Program_Error with "key was modified";
-      end Update_Element_Preserving_Key;
 
    end Generic_Keys;
 
@@ -935,11 +831,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       Insert (Container, New_Item, Position, Inserted);
 
       if not Inserted then
-         if Container.Tree.Lock > 0 then
-            raise Program_Error with
-              "attempt to tamper with cursors (set is locked)";
-         end if;
-
          X := Position.Node.Element;
          Position.Node.Element := new Element_Type'(New_Item);
          Free_Element (X);
@@ -956,6 +847,35 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       Position  : out Cursor;
       Inserted  : out Boolean)
    is
+      function New_Node return Node_Access;
+      pragma Inline (New_Node);
+
+      procedure Insert_Post is
+        new Element_Keys.Generic_Insert_Post (New_Node);
+
+      procedure Insert_Sans_Hint is
+        new Element_Keys.Generic_Conditional_Insert (Insert_Post);
+
+      --------------
+      -- New_Node --
+      --------------
+
+      function New_Node return Node_Access is
+         Element : Element_Access := new Element_Type'(New_Item);
+      begin
+         return new Node_Type'(Parent  => null,
+                               Left    => null,
+                               Right   => null,
+                               Color   => Red,
+                               Element => Element);
+      exception
+         when others =>
+            Free_Element (Element);
+            raise;
+      end New_Node;
+
+   --  Start of processing for Insert
+
    begin
       Insert_Sans_Hint
         (Container.Tree,
@@ -963,7 +883,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          Position.Node,
          Inserted);
 
-      Position.Container := Container'Unrestricted_Access;
+      Position.Container := Container'Unchecked_Access;
    end Insert;
 
    procedure Insert (Container : in out Set; New_Item  : Element_Type) is
@@ -973,58 +893,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       Insert (Container, New_Item, Position, Inserted);
 
       if not Inserted then
-         raise Constraint_Error with
-           "attempt to insert element already in set";
+         raise Constraint_Error;
       end if;
    end Insert;
-
-   ----------------------
-   -- Insert_Sans_Hint --
-   ----------------------
-
-   procedure Insert_Sans_Hint
-     (Tree     : in out Tree_Type;
-      New_Item : Element_Type;
-      Node     : out Node_Access;
-      Inserted : out Boolean)
-   is
-      function New_Node return Node_Access;
-      pragma Inline (New_Node);
-
-      procedure Insert_Post is
-        new Element_Keys.Generic_Insert_Post (New_Node);
-
-      procedure Conditional_Insert_Sans_Hint is
-        new Element_Keys.Generic_Conditional_Insert (Insert_Post);
-
-      --------------
-      -- New_Node --
-      --------------
-
-      function New_Node return Node_Access is
-         Element : Element_Access := new Element_Type'(New_Item);
-
-      begin
-         return new Node_Type'(Parent  => null,
-                               Left    => null,
-                               Right   => null,
-                               Color   => Red_Black_Trees.Red,
-                               Element => Element);
-      exception
-         when others =>
-            Free_Element (Element);
-            raise;
-      end New_Node;
-
-   --  Start of processing for Insert_Sans_Hint
-
-   begin
-      Conditional_Insert_Sans_Hint
-        (Tree,
-         New_Item,
-         Node,
-         Inserted);
-   end Insert_Sans_Hint;
 
    ----------------------
    -- Insert_With_Hint --
@@ -1090,14 +961,25 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    procedure Intersection (Target : in out Set; Source : Set) is
    begin
+      if Target'Address = Source'Address then
+         return;
+      end if;
+
       Set_Ops.Intersection (Target.Tree, Source.Tree);
    end Intersection;
 
    function Intersection (Left, Right : Set) return Set is
-      Tree : constant Tree_Type :=
-               Set_Ops.Intersection (Left.Tree, Right.Tree);
    begin
-      return Set'(Controlled with Tree);
+      if Left'Address = Right'Address then
+         return Left;
+      end if;
+
+      declare
+         Tree : constant Tree_Type :=
+                  Set_Ops.Intersection (Left.Tree, Right.Tree);
+      begin
+         return (Controlled with Tree);
+      end;
    end Intersection;
 
    --------------
@@ -1106,7 +988,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Is_Empty (Container : Set) return Boolean is
    begin
-      return Container.Tree.Length = 0;
+      return Length (Container) = 0;
    end Is_Empty;
 
    -----------------------------
@@ -1121,6 +1003,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       return Right.Element.all < Left;
    end Is_Greater_Element_Node;
+
 
    --------------------------
    -- Is_Less_Element_Node --
@@ -1148,6 +1031,10 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Is_Subset (Subset : Set; Of_Set : Set) return Boolean is
    begin
+      if Subset'Address = Of_Set'Address then
+         return True;
+      end if;
+
       return Set_Ops.Is_Subset (Subset => Subset.Tree, Of_Set => Of_Set.Tree);
    end Is_Subset;
 
@@ -1171,26 +1058,13 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       procedure Process_Node (Node : Node_Access) is
       begin
-         Process (Cursor'(Container'Unrestricted_Access, Node));
+         Process (Cursor'(Container'Unchecked_Access, Node));
       end Process_Node;
 
-      T : Tree_Type renames Container.Tree'Unrestricted_Access.all;
-      B : Natural renames T.Busy;
-
-   --  Start of prccessing for Iterate
+   --  Start of processing for Iterate
 
    begin
-      B := B + 1;
-
-      begin
-         Local_Iterate (T);
-      exception
-         when others =>
-            B := B - 1;
-            raise;
-      end;
-
-      B := B - 1;
+      Local_Iterate (Container.Tree);
    end Iterate;
 
    ----------
@@ -1203,7 +1077,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      return Cursor'(Container'Unrestricted_Access, Container.Tree.Last);
+      return Cursor'(Container'Unchecked_Access, Container.Tree.Last);
    end Last;
 
    ------------------
@@ -1212,10 +1086,6 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Last_Element (Container : Set) return Element_Type is
    begin
-      if Container.Tree.Last = null then
-         raise Constraint_Error with "set is empty";
-      end if;
-
       return Container.Tree.Last.Element.all;
    end Last_Element;
 
@@ -1241,11 +1111,12 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    -- Move --
    ----------
 
-   procedure Move is
-      new Tree_Operations.Generic_Move (Clear);
-
    procedure Move (Target : in out Set; Source : in out Set) is
    begin
+      if Target'Address = Source'Address then
+         return;
+      end if;
+
       Move (Target => Target.Tree, Source => Source.Tree);
    end Move;
 
@@ -1264,17 +1135,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Position.Container.Tree, Position.Node),
-                     "bad cursor in Next");
-
       declare
          Node : constant Node_Access :=
-                  Tree_Operations.Next (Position.Node);
-
+           Tree_Operations.Next (Position.Node);
       begin
          if Node = null then
             return No_Element;
@@ -1290,6 +1153,10 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    function Overlap (Left, Right : Set) return Boolean is
    begin
+      if Left'Address = Right'Address then
+         return Left.Tree.Length /= 0;
+      end if;
+
       return Set_Ops.Overlap (Left.Tree, Right.Tree);
    end Overlap;
 
@@ -1317,17 +1184,9 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
          return No_Element;
       end if;
 
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Position.Container.Tree, Position.Node),
-                     "bad cursor in Previous");
-
       declare
          Node : constant Node_Access :=
-                  Tree_Operations.Previous (Position.Node);
-
+           Tree_Operations.Previous (Position.Node);
       begin
          if Node = null then
             return No_Element;
@@ -1346,39 +1205,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       Process   : not null access procedure (Element : Element_Type))
    is
    begin
-      if Position.Node = null then
-         raise Constraint_Error with "Position cursor equals No_Element";
-      end if;
-
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
-      end if;
-
-      pragma Assert (Vet (Position.Container.Tree, Position.Node),
-                     "bad cursor in Query_Element");
-
-      declare
-         T : Tree_Type renames Position.Container.Tree;
-
-         B : Natural renames T.Busy;
-         L : Natural renames T.Lock;
-
-      begin
-         B := B + 1;
-         L := L + 1;
-
-         begin
-            Process (Position.Node.Element.all);
-         exception
-            when others =>
-               L := L - 1;
-               B := B - 1;
-               raise;
-         end;
-
-         L := L - 1;
-         B := B - 1;
-      end;
+      Process (Position.Node.Element.all);
    end Query_Element;
 
    ----------
@@ -1386,23 +1213,21 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    ----------
 
    procedure Read
-     (Stream    : access Root_Stream_Type'Class;
+     (Stream    : access Ada.Streams.Root_Stream_Type'Class;
       Container : out Set)
    is
-      function Read_Node
-        (Stream : access Root_Stream_Type'Class) return Node_Access;
-      pragma Inline (Read_Node);
+      N : Count_Type'Base;
+
+      function New_Node return Node_Access;
 
       procedure Read is
-         new Tree_Operations.Generic_Read (Clear, Read_Node);
+        new Tree_Operations.Generic_Read (New_Node);
 
-      ---------------
-      -- Read_Node --
-      ---------------
+      --------------
+      -- New_Node --
+      --------------
 
-      function Read_Node
-        (Stream : access Root_Stream_Type'Class) return Node_Access
-      is
+      function New_Node return Node_Access is
          Node : Node_Access := new Node_Type;
 
       begin
@@ -1411,22 +1236,17 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       exception
          when others =>
-            Free (Node);  --  Note that Free deallocates elem too
+            Free (Node);
             raise;
-      end Read_Node;
+      end New_Node;
 
    --  Start of processing for Read
 
    begin
-      Read (Stream, Container.Tree);
-   end Read;
-
-   procedure Read
-     (Stream : access Root_Stream_Type'Class;
-      Item   : out Cursor)
-   is
-   begin
-      raise Program_Error with "attempt to stream set cursor";
+      Clear (Container);
+      Count_Type'Base'Read (Stream, N);
+      pragma Assert (N >= 0);
+      Read (Container.Tree, N);
    end Read;
 
    -------------
@@ -1441,12 +1261,7 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    begin
       if Node = null then
-         raise Constraint_Error with "attempt to replace element not in set";
-      end if;
-
-      if Container.Tree.Lock > 0 then
-         raise Program_Error with
-           "attempt to tamper with cursors (set is locked)";
+         raise Constraint_Error;
       end if;
 
       X := Node.Element;
@@ -1454,155 +1269,129 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
       Free_Element (X);
    end Replace;
 
+--  TODO ???
+--        procedure Replace
+--          (Container : in out Set;
+--           Key       : Key_Type;
+--           New_Item  : Element_Type)
+--        is
+--           Node : Node_Access := Key_Keys.Find (Container.Tree, Key);
+
+--        begin
+--           if Node = null then
+--              raise Constraint_Error;
+--           end if;
+
+--           Replace_Element (Container, Node, New_Item);
+--        end Replace;
+
    ---------------------
    -- Replace_Element --
    ---------------------
 
-   procedure Replace_Element
-     (Tree : in out Tree_Type;
-      Node : Node_Access;
-      Item : Element_Type)
-   is
-   begin
-      if Item < Node.Element.all
-        or else Node.Element.all < Item
-      then
-         null;
-      else
-         if Tree.Lock > 0 then
-            raise Program_Error with
-              "attempt to tamper with cursors (set is locked)";
-         end if;
+--  TODO: ???
+--     procedure Replace_Element
+--       (Container : in out Set;
+--        Position  : Node_Access;
+--        By        : Element_Type)
+--   is
 
-         declare
-            X : Element_Access := Node.Element;
-         begin
-            Node.Element := new Element_Type'(Item);
-            Free_Element (X);
-         end;
+--        Node : Node_Access := Position;
 
-         return;
-      end if;
+--     begin
+--        if By < Node.Element.all
+--          or else Node.Element.all < By
+--        then
+--           null;
 
-      Tree_Operations.Delete_Node_Sans_Free (Tree, Node);  -- Checks busy-bit
+--        else
+--           declare
+--              X : Element_Access := Node.Element;
 
-      Insert_New_Item : declare
-         function New_Node return Node_Access;
-         pragma Inline (New_Node);
+--           begin
+--              Node.Element := new Element_Type'(By);
 
-         procedure Insert_Post is
-            new Element_Keys.Generic_Insert_Post (New_Node);
+--              --  NOTE: If there's an exception here, then just
+--              --  let it propagate.  We haven't modified the
+--              --  state of the container, so there's nothing else
+--              --  we need to do.
 
-         procedure Insert is
-            new Element_Keys.Generic_Conditional_Insert (Insert_Post);
+--              Free_Element (X);
+--           end;
 
-         --------------
-         -- New_Node --
-         --------------
+--           return;
+--        end if;
 
-         function New_Node return Node_Access is
-         begin
-            Node.Element := new Element_Type'(Item);  -- OK if fails
-            Node.Color := Red;
-            Node.Parent := null;
-            Node.Right := null;
-            Node.Left := null;
+--        Delete_Node_Sans_Free (Container.Tree, Node);
 
-            return Node;
-         end New_Node;
+--        begin
+--           Free_Element (Node.Element);
+--        exception
+--           when others =>
+--              Node.Element := null;  --  don't attempt to dealloc X.E again
+--              Free (Node);
+--              raise;
+--        end;
 
-         Result   : Node_Access;
-         Inserted : Boolean;
+--        begin
+--           Node.Element := new Element_Type'(By);
+--        exception
+--           when others =>
+--              Free (Node);
+--              raise;
+--        end;
 
-         X : Element_Access := Node.Element;
+--        declare
+--           function New_Node return Node_Access;
+--           pragma Inline (New_Node);
 
-      --  Start of processing for Insert_New_Item
+--           function New_Node return Node_Access is
+--           begin
+--              return Node;
+--           end New_Node;
 
-      begin
-         Attempt_Insert : begin
-            Insert
-              (Tree    => Tree,
-               Key     => Item,
-               Node    => Result,
-               Success => Inserted);  --  TODO: change name of formal param
-         exception
-            when others =>
-               Inserted := False;
-         end Attempt_Insert;
+--           procedure Insert_Post is
+--             new Element_Keys.Generic_Insert_Post (New_Node);
 
-         if Inserted then
-            pragma Assert (Result = Node);
-            Free_Element (X);  -- OK if fails
-            return;
-         end if;
-      end Insert_New_Item;
+--           procedure Insert is
+--             new Element_Keys.Generic_Conditional_Insert (Insert_Post);
 
-      Reinsert_Old_Element : declare
-         function New_Node return Node_Access;
-         pragma Inline (New_Node);
+--           Result  : Node_Access;
+--           Success : Boolean;
 
-         procedure Insert_Post is
-            new Element_Keys.Generic_Insert_Post (New_Node);
+--        begin
+--           Insert
+--             (Tree    => Container.Tree,
+--              Key     => Node.Element.all,
+--              Node    => Result,
+--              Success => Success);
 
-         procedure Insert is
-            new Element_Keys.Generic_Conditional_Insert (Insert_Post);
+--           if not Success then
+--              Free (Node);
+--              raise Program_Error;
+--           end if;
 
-         --------------
-         -- New_Node --
-         --------------
+--           pragma Assert (Result = Node);
+--        end;
+--     end Replace_Element;
 
-         function New_Node return Node_Access is
-         begin
-            Node.Color := Red;
-            Node.Parent := null;
-            Node.Right := null;
-            Node.Left := null;
 
-            return Node;
-         end New_Node;
+--     procedure Replace_Element
+--      (Container : in out Set;
+--       Position  : Cursor;
+--       By        : Element_Type)
+--     is
+--     begin
+--        if Position.Container = null then
+--           raise Constraint_Error;
+--        end if;
 
-         Result   : Node_Access;
-         Inserted : Boolean;
+--        if Position.Container /= Set_Access'(Container'Unchecked_Access) then
+--           raise Program_Error;
+--        end if;
 
-      --  Start of processing for Reinsert_Old_Element
-
-      begin
-         Insert
-           (Tree    => Tree,
-            Key     => Node.Element.all,
-            Node    => Result,
-            Success => Inserted);  --  TODO: change name of formal param
-      exception
-         when others =>
-            null;
-      end Reinsert_Old_Element;
-
-      raise Program_Error with "attempt to replace existing element";
-   end Replace_Element;
-
-   procedure Replace_Element
-    (Container : in out Set;
-     Position  : Cursor;
-     New_Item  : Element_Type)
-   is
-   begin
-      if Position.Node = null then
-         raise Constraint_Error with "Position cursor equals No_Element";
-      end if;
-
-      if Position.Node.Element = null then
-         raise Program_Error with "Position cursor is bad";
-      end if;
-
-      if Position.Container /= Container'Unrestricted_Access then
-         raise Program_Error with "Position cursor designates wrong set";
-      end if;
-
-      pragma Assert (Vet (Container.Tree, Position.Node),
-                     "bad cursor in Replace_Element");
-
-      Replace_Element (Container.Tree, Position.Node, New_Item);
-   end Replace_Element;
+--        Replace_Element (Container, Position.Node, By);
+--     end Replace_Element;
 
    ---------------------
    -- Reverse_Iterate --
@@ -1624,26 +1413,13 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
       procedure Process_Node (Node : Node_Access) is
       begin
-         Process (Cursor'(Container'Unrestricted_Access, Node));
+         Process (Cursor'(Container'Unchecked_Access, Node));
       end Process_Node;
-
-      T : Tree_Type renames Container.Tree'Unrestricted_Access.all;
-      B : Natural renames T.Busy;
 
    --  Start of processing for Reverse_Iterate
 
    begin
-      B := B + 1;
-
-      begin
-         Local_Reverse_Iterate (T);
-      exception
-         when others =>
-            B := B - 1;
-            raise;
-      end;
-
-      B := B - 1;
+      Local_Reverse_Iterate (Container.Tree);
    end Reverse_Iterate;
 
    -----------
@@ -1697,29 +1473,27 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    procedure Symmetric_Difference (Target : in out Set; Source : Set) is
    begin
+      if Target'Address = Source'Address then
+         Clear (Target);
+         return;
+      end if;
+
       Set_Ops.Symmetric_Difference (Target.Tree, Source.Tree);
    end Symmetric_Difference;
 
    function Symmetric_Difference (Left, Right : Set) return Set is
-      Tree : constant Tree_Type :=
-               Set_Ops.Symmetric_Difference (Left.Tree, Right.Tree);
    begin
-      return Set'(Controlled with Tree);
+      if Left'Address = Right'Address then
+         return Empty_Set;
+      end if;
+
+      declare
+         Tree : constant Tree_Type :=
+                  Set_Ops.Symmetric_Difference (Left.Tree, Right.Tree);
+      begin
+         return (Controlled with Tree);
+      end;
    end Symmetric_Difference;
-
-   ------------
-   -- To_Set --
-   ------------
-
-   function To_Set (New_Item : Element_Type) return Set is
-      Tree     : Tree_Type;
-      Node     : Node_Access;
-      Inserted : Boolean;
-
-   begin
-      Insert_Sans_Hint (Tree, New_Item, Node, Inserted);
-      return Set'(Controlled with Tree);
-   end To_Set;
 
    -----------
    -- Union --
@@ -1727,14 +1501,25 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
 
    procedure Union (Target : in out Set; Source : Set) is
    begin
+      if Target'Address = Source'Address then
+         return;
+      end if;
+
       Set_Ops.Union (Target.Tree, Source.Tree);
    end Union;
 
    function Union (Left, Right : Set) return Set is
-      Tree : constant Tree_Type :=
-               Set_Ops.Union (Left.Tree, Right.Tree);
    begin
-      return Set'(Controlled with Tree);
+      if Left'Address = Right'Address then
+         return Left;
+      end if;
+
+      declare
+         Tree : constant Tree_Type :=
+                  Set_Ops.Union (Left.Tree, Right.Tree);
+      begin
+         return (Controlled with Tree);
+      end;
    end Union;
 
    -----------
@@ -1742,41 +1527,31 @@ package body Ada.Containers.Indefinite_Ordered_Sets is
    -----------
 
    procedure Write
-     (Stream    : access Root_Stream_Type'Class;
+     (Stream    : access Ada.Streams.Root_Stream_Type'Class;
       Container : Set)
    is
-      procedure Write_Node
-        (Stream : access Root_Stream_Type'Class;
-         Node   : Node_Access);
-      pragma Inline (Write_Node);
+      procedure Process (Node : Node_Access);
+      pragma Inline (Process);
 
-      procedure Write is
-         new Tree_Operations.Generic_Write (Write_Node);
+      procedure Iterate is
+        new Tree_Operations.Generic_Iteration (Process);
 
-      ----------------
-      -- Write_Node --
-      ----------------
+      -------------
+      -- Process --
+      -------------
 
-      procedure Write_Node
-        (Stream : access Root_Stream_Type'Class;
-         Node   : Node_Access)
-      is
+      procedure Process (Node : Node_Access) is
       begin
          Element_Type'Output (Stream, Node.Element.all);
-      end Write_Node;
+      end Process;
 
    --  Start of processing for Write
 
    begin
-      Write (Stream, Container.Tree);
-   end Write;
-
-   procedure Write
-     (Stream : access Root_Stream_Type'Class;
-      Item   : Cursor)
-   is
-   begin
-      raise Program_Error with "attempt to stream set cursor";
+      Count_Type'Base'Write (Stream, Container.Tree.Length);
+      Iterate (Container.Tree);
    end Write;
 
 end Ada.Containers.Indefinite_Ordered_Sets;
+
+

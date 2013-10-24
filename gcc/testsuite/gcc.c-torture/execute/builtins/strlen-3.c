@@ -7,9 +7,9 @@
 extern void abort (void);
 extern __SIZE_TYPE__ strlen (const char *);
 extern char *strcpy (char *, const char *);
-static const char bar[] = "Hello, World!";
-static const char baz[] = "hello, world?";
-static const char larger[20] = "short string";
+const char bar[] = "Hello, World!";
+const char baz[] = "hello, world?";
+const char larger[20] = "short string";
 extern volatile int inside_main;
 
 int l1 = 1;
@@ -18,10 +18,8 @@ int x = 6;
 void
 main_test(void)
 {
-#ifdef __OPTIMIZE__
   const char *foo;
   int i;
-#endif
 
   if (strlen (bar) != 13)
     abort ();

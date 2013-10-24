@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline 2883585 2005-04-20 */
 /* Test -Wint-to-pointer-cast.  */
 /* Origin: Joseph Myers <joseph@codesourcery.com> */
 /* { dg-do compile } */

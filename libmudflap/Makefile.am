@@ -9,9 +9,6 @@ ACLOCAL_AMFLAGS = -I .. -I ../config
 MAINT_CHARSET = latin1
 SUBDIRS = testsuite
 
-# May be used by various substitution variables.
-gcc_version := $(shell cat $(top_srcdir)/../gcc/BASE-VER)
-
 SECTION_FLAGS = @SECTION_FLAGS@
 AM_CFLAGS = -Wall $(SECTION_FLAGS)
 
@@ -22,9 +19,7 @@ libmudflapth =
 endif
 
 toolexeclib_LTLIBRARIES = libmudflap.la $(libmudflapth)
-target_noncanonical = @target_noncanonical@
-libsubincludedir = $(libdir)/gcc/$(target_noncanonical)/$(gcc_version)/include
-nobase_libsubinclude_HEADERS = mf-runtime.h
+include_HEADERS = mf-runtime.h
 
 
 libmudflap_la_SOURCES = \
@@ -93,7 +88,6 @@ AM_MAKEFLAGS = \
 	"infodir=$(infodir)" \
 	"libdir=$(libdir)" \
 	"prefix=$(prefix)" \
-	"includedir=$(includedir)" \
 	"AR=$(AR)" \
 	"AS=$(AS)" \
 	"CC=$(CC)" \
@@ -106,10 +100,6 @@ AM_MAKEFLAGS = \
 	"DESTDIR=$(DESTDIR)"
 
 MAKEOVERRIDES=
-
-.PHONY: install-html
-
-install-html:
 
 ## ################################################################
 

@@ -1,8 +1,8 @@
 /* Program to dump out a Java(TM) .class file.
    Functionally similar to Sun's javap.
 
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-   2006 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -18,8 +18,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  
 
 Java and all Java-based marks are trademarks or registered trademarks
 of Sun Microsystems, Inc. in the United States and other countries.
@@ -65,7 +65,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include <getopt.h>
 #include <math.h>
 
-/* Output file. */
+/* Outout file. */
 FILE *out;
 /* Name of output file, if NULL if stdout. */
 char *output_file = NULL;
@@ -320,12 +320,8 @@ utf8_equal_string (JCF *jcf, int index, const char * value)
       if (flag_print_class_info)					    \
 	{								    \
 	  fprintf (out, "\n  inner: ");					    \
-	  if (inner_class_info_index == 0)				    \
-	    fprintf (out, " (no inner info index)");			    \
-	  else								    \
-	    print_constant_terse_with_index (out, jcf,			    \
-					     inner_class_info_index,	    \
-					     CONSTANT_Class);		    \
+	  print_constant_terse_with_index (out, jcf,			    \
+				inner_class_info_index, CONSTANT_Class);    \
 	  if (inner_name_index == 0)					    \
 	    fprintf (out, " (anonymous)");				    \
 	  else if (verbose || flag_print_constant_pool)			    \
@@ -338,24 +334,13 @@ utf8_equal_string (JCF *jcf, int index, const char * value)
 	  fprintf (out, ", access flags: 0x%x", inner_class_access_flags);  \
 	  print_access_flags (out, inner_class_access_flags, 'c');	    \
 	  fprintf (out, ", outer class: ");				    \
-	  if (outer_class_info_index == 0)				    \
-	    fprintf (out, "(not a member)");				    \
-	  else								    \
-	    print_constant_terse_with_index (out, jcf,			    \
-					     outer_class_info_index,	    \
-					     CONSTANT_Class);		    \
+	  print_constant_terse_with_index (out, jcf,			    \
+				outer_class_info_index, CONSTANT_Class);    \
 	}								    \
     }									    \
-  if (flag_print_class_info)						    \
-    fputc ('\n', out);							    \
+      if (flag_print_class_info)					    \
+	fputc ('\n', out);						    \
 }
-
-#define HANDLE_SOURCEDEBUGEXTENSION_ATTRIBUTE(LENGTH) \
-{ int i, n = (LENGTH), c = 0;					  \
-  COMMON_HANDLE_ATTRIBUTE(jcf, attribute_name, attribute_length); \
-  fputc ('\n', out); \
-  for (i = 0;  i < n;  i++) { c = JCF_readu(jcf); fputc(c, out); } \
-  if (c != '\r' && c != '\n') fputc('\n', out); }
 
 #define PROCESS_OTHER_ATTRIBUTE(JCF, INDEX, LENGTH) \
 { COMMON_HANDLE_ATTRIBUTE(JCF, INDEX, LENGTH); \
@@ -395,10 +380,8 @@ print_access_flags (FILE *stream, uint16 flags, char context)
   if (flags & ACC_ABSTRACT) fprintf (stream, " abstract");
   if (flags & ACC_STATIC) fprintf (stream, " static");
   if (flags & ACC_FINAL) fprintf (stream, " final");
-  if (flags & ACC_TRANSIENT)
-    fprintf (stream, context == 'm' ? " varargs" : " transient");
-  if (flags & ACC_VOLATILE)
-    fprintf (stream, context == 'm' ? " bridge" : " volatile");
+  if (flags & ACC_TRANSIENT) fprintf (stream, " transient");
+  if (flags & ACC_VOLATILE) fprintf (stream, " volatile");
   if (flags & ACC_NATIVE) fprintf (stream, " native");
   if (flags & ACC_SYNCHRONIZED)
     {
@@ -407,11 +390,8 @@ print_access_flags (FILE *stream, uint16 flags, char context)
       else
 	fprintf (stream, " synchronized");
     }
-  if (flags & ACC_INTERFACE)
-    fprintf (stream, (flags & ACC_ANNOTATION) ? " @interface" : " interface");
-  if (flags & ACC_ENUM) fprintf (stream, " enum");
+  if (flags & ACC_INTERFACE) fprintf (stream, " interface");
   if (flags & ACC_STRICT) fprintf (stream, " strictfp");
-  if (flags & ACC_SYNTHETIC) fprintf (stream, " synthetic");
 }
 
 
@@ -579,7 +559,7 @@ print_constant (FILE *out, JCF *jcf, int index, int verbosity)
 	  }
 
 	if (verbosity > 1)
-	  fprintf (out, ", bits = 0x%08lx", (long) JPOOL_UINT (jcf, index));
+	  fprintf (out, ", bits = 0x%08lx", JPOOL_UINT (jcf, index));
 	
 	break;
       }
@@ -933,7 +913,7 @@ static void
 version (void)
 {
   printf ("jcf-dump (GCC) %s\n\n", version_string);
-  printf ("Copyright %s 2006 Free Software Foundation, Inc.\n", _("(C)"));
+  printf ("Copyright %s 2004 Free Software Foundation, Inc.\n", _("(C)"));
   printf (_("This is free software; see the source for copying conditions.  There is NO\n"
 	    "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"));
   exit (0);

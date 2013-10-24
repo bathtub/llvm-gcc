@@ -38,5 +38,4 @@ int test1111 (int param)
 }
 
 /* All ifs should be eliminated. */
-/* { dg-final { scan-tree-dump-times "if " 0 "optimized" } } */
-/* { dg-final { cleanup-tree-dump "optimized" } } */
+/* { dg-final { scan-tree-dump-times "if" 0 "optimized" { xfail *-*-* } } } */

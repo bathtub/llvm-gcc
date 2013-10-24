@@ -1,6 +1,6 @@
 /* ieee754-sf.S single-precision floating point support for ARM
 
-   Copyright (C) 2003, 2004, 2005  Free Software Foundation, Inc.
+   Copyright (C) 2003, 2004  Free Software Foundation, Inc.
    Contributed by Nicolas Pitre (nico@cam.org)
 
    This file is free software; you can redistribute it and/or modify it
@@ -24,8 +24,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /*
  * Notes:
@@ -41,7 +41,8 @@
 #ifdef L_negsf2
 	
 ARM_FUNC_START negsf2
-ARM_FUNC_ALIAS aeabi_fneg negsf2
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fneg,negsf2)
 
 	eor	r0, r0, #0x80000000	@ flip sign bit
 	RET
@@ -59,7 +60,8 @@ ARM_FUNC_START aeabi_frsub
 	b	1f
 
 ARM_FUNC_START subsf3
-ARM_FUNC_ALIAS aeabi_fsub subsf3
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fsub,subsf3)
 
 	eor	r1, r1, #0x80000000	@ flip sign bit of second arg
 #if defined(__INTERWORKING_STUBS__)
@@ -67,7 +69,8 @@ ARM_FUNC_ALIAS aeabi_fsub subsf3
 #endif
 
 ARM_FUNC_START addsf3
-ARM_FUNC_ALIAS aeabi_fadd addsf3
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fadd,addsf3)
 
 1:	@ Look for zeroes, equal values, INF, or NAN.
 	movs	r2, r0, lsl #1
@@ -269,13 +272,15 @@ LSYM(Lad_i):
 	FUNC_END subsf3
 
 ARM_FUNC_START floatunsisf
-ARM_FUNC_ALIAS aeabi_ui2f floatunsisf
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_ui2f,floatunsisf)
 		
 	mov	r3, #0
 	b	1f
 
 ARM_FUNC_START floatsisf
-ARM_FUNC_ALIAS aeabi_i2f floatsisf
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_i2f,floatsisf)
 	
 	ands	r3, r0, #0x80000000
 	rsbmi	r0, r0, #0
@@ -286,9 +291,11 @@ ARM_FUNC_ALIAS aeabi_i2f floatsisf
 	@ Add initial exponent to sign
 	orr	r3, r3, #((127 + 23) << 23)
 
-	.ifnc	ah, r0
+	/* APPLE LOCAL begin ARM MACH assembler */
+#ifndef __ARMEB__
 	mov	ah, r0
-	.endif
+#endif
+	/* APPLE LOCAL end ARM MACH assembler */
 	mov	al, #0
 	b	2f
 
@@ -298,7 +305,8 @@ ARM_FUNC_ALIAS aeabi_i2f floatsisf
 	FUNC_END floatunsisf
 
 ARM_FUNC_START floatundisf
-ARM_FUNC_ALIAS aeabi_ul2f floatundisf
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_ul2f,floatundisf)
 
 	orrs	r2, r0, r1
 #if !defined (__VFP_FP__) && !defined(__SOFTFP__)
@@ -310,7 +318,8 @@ ARM_FUNC_ALIAS aeabi_ul2f floatundisf
 	b	1f
 
 ARM_FUNC_START floatdisf
-ARM_FUNC_ALIAS aeabi_l2f floatdisf
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_l2f,floatdisf)
 
 	orrs	r2, r0, r1
 #if !defined (__VFP_FP__) && !defined(__SOFTFP__)
@@ -327,7 +336,7 @@ ARM_FUNC_ALIAS aeabi_l2f floatdisf
 	@ For hard FPA code we want to return via the tail below so that
 	@ we can return the result in f0 as well as in r0 for backwards
 	@ compatibility.
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	adr	lr, LSYM(f0_ret)
 #endif
 
@@ -403,7 +412,8 @@ LSYM(f0_ret):
 #ifdef L_muldivsf3
 
 ARM_FUNC_START mulsf3
-ARM_FUNC_ALIAS aeabi_fmul mulsf3
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fmul,mulsf3)
 
 	@ Mask out exponents, trap any zero/denormal/INF/NAN.
 	mov	ip, #0xff
@@ -592,7 +602,8 @@ LSYM(Lml_n):
 	FUNC_END mulsf3
 
 ARM_FUNC_START divsf3
-ARM_FUNC_ALIAS aeabi_fdiv divsf3
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fdiv,divsf3)
 
 	@ Mask out exponents, trap any zero/denormal/INF/NAN.
 	mov	ip, #0xff
@@ -705,7 +716,7 @@ LSYM(Ldv_s):
 	beq	LSYM(Lml_z)		@ <anything> / INF -> 0
 	mov	r0, r1
 	b	LSYM(Lml_n)		@ <anything> / NAN -> NAN
-2:	@ If both are nonzero, we need to normalize and resume above.
+2:	@ If both are non-zero, we need to normalize and resume above.
 	bics	ip, r0, #0x80000000
 	bicnes	ip, r1, #0x80000000
 	bne	LSYM(Ldv_d)
@@ -739,18 +750,22 @@ LSYM(Ldv_s):
 	@   ip, r0, r1, r2, r3
 
 ARM_FUNC_START gtsf2
-ARM_FUNC_ALIAS gesf2 gtsf2
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(gesf2,gtsf2)
 	mov	ip, #-1
 	b	1f
 
 ARM_FUNC_START ltsf2
-ARM_FUNC_ALIAS lesf2 ltsf2
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(lesf2,ltsf2)
 	mov	ip, #1
 	b	1f
 
 ARM_FUNC_START cmpsf2
-ARM_FUNC_ALIAS nesf2 cmpsf2
-ARM_FUNC_ALIAS eqsf2 cmpsf2
+/* APPLE LOCAL begin ARM MACH assembler macros */
+ARM_FUNC_ALIAS(nesf2,cmpsf2)
+ARM_FUNC_ALIAS(eqsf2,cmpsf2)
+/* APPLE LOCAL end ARM MACH assembler macros */
 	mov	ip, #1			@ how should we specify unordered here?
 
 1:	str	ip, [sp, #-4]
@@ -802,7 +817,8 @@ ARM_FUNC_START aeabi_cfrcmple
 	b	6f
 
 ARM_FUNC_START aeabi_cfcmpeq
-ARM_FUNC_ALIAS aeabi_cfcmple aeabi_cfcmpeq
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_cfcmple,aeabi_cfcmpeq)
 
 	@ The status-returning routines are required to preserve all
 	@ registers except ip, lr, and cpsr.
@@ -813,7 +829,8 @@ ARM_FUNC_ALIAS aeabi_cfcmple aeabi_cfcmpeq
 	@ Clear the C flag if the return value was -1, indicating
 	@ that the first operand was smaller than the second.
 	cmnmi	 r0, #0
-	RETLDM  "r0, r1, r2, r3"
+	/* APPLE LOCAL ARM MACH assembler macros */
+	RETLDM1(r0, r1, r2, r3)
 
 	FUNC_END aeabi_cfcmple
 	FUNC_END aeabi_cfcmpeq
@@ -821,7 +838,7 @@ ARM_FUNC_ALIAS aeabi_cfcmple aeabi_cfcmpeq
 
 ARM_FUNC_START	aeabi_fcmpeq
 
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	ARM_CALL aeabi_cfcmple
 	moveq	r0, #1	@ Equal to.
 	movne	r0, #0	@ Less than, greater than, or unordered.
@@ -831,7 +848,7 @@ ARM_FUNC_START	aeabi_fcmpeq
 
 ARM_FUNC_START	aeabi_fcmplt
 
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	ARM_CALL aeabi_cfcmple
 	movcc	r0, #1	@ Less than.
 	movcs	r0, #0	@ Equal to, greater than, or unordered.
@@ -841,7 +858,7 @@ ARM_FUNC_START	aeabi_fcmplt
 
 ARM_FUNC_START	aeabi_fcmple
 
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	ARM_CALL aeabi_cfcmple
 	movls	r0, #1  @ Less than or equal to.
 	movhi	r0, #0	@ Greater than or unordered.
@@ -851,7 +868,7 @@ ARM_FUNC_START	aeabi_fcmple
 
 ARM_FUNC_START	aeabi_fcmpge
 
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	ARM_CALL aeabi_cfrcmple
 	movls	r0, #1	@ Operand 2 is less than or equal to operand 1.
 	movhi	r0, #0	@ Operand 2 greater than operand 1, or unordered.
@@ -861,7 +878,7 @@ ARM_FUNC_START	aeabi_fcmpge
 
 ARM_FUNC_START	aeabi_fcmpgt
 
-	str	lr, [sp, #-8]!
+	str	lr, [sp, #-4]!
 	ARM_CALL aeabi_cfrcmple
 	movcc	r0, #1	@ Operand 2 is less than operand 1.
 	movcs	r0, #0  @ Operand 2 is greater than or equal to operand 1,
@@ -875,7 +892,8 @@ ARM_FUNC_START	aeabi_fcmpgt
 #ifdef L_unordsf2
 
 ARM_FUNC_START unordsf2
-ARM_FUNC_ALIAS aeabi_fcmpun unordsf2
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_fcmpun,unordsf2)
 
 	mov	r2, r0, lsl #1
 	mov	r3, r1, lsl #1
@@ -900,7 +918,8 @@ ARM_FUNC_ALIAS aeabi_fcmpun unordsf2
 #ifdef L_fixsfsi
 
 ARM_FUNC_START fixsfsi
-ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_f2iz,fixsfsi)
 
 	@ check exponent range.
 	mov	r2, r0, lsl #1
@@ -940,7 +959,8 @@ ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
 #ifdef L_fixunssfsi
 
 ARM_FUNC_START fixunssfsi
-ARM_FUNC_ALIAS aeabi_f2uiz fixunssfsi
+/* APPLE LOCAL ARM MACH assembler macros */
+ARM_FUNC_ALIAS(aeabi_f2uiz,fixunssfsi)
 
 	@ check exponent range.
 	movs	r2, r0, lsl #1
@@ -974,3 +994,230 @@ ARM_FUNC_ALIAS aeabi_f2uiz fixunssfsi
 	FUNC_END fixunssfsi
 
 #endif /* L_fixunssfsi */
+
+/* APPLE LOCAL begin ARM 4702983 provide VFP versions (callable from Thumb). */
+#ifndef NOT_DARWIN
+#if __ARM_ARCH__ > 5
+#ifdef L_mulsf3vfp
+
+ARM_FUNC_START mulsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fmuls	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END mulsf3vfp
+
+#endif
+
+#ifdef L_addsf3vfp
+
+ARM_FUNC_START addsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fadds	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END addsf3vfp
+
+#endif
+
+#ifdef L_subsf3vfp
+
+ARM_FUNC_START subsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fsubs	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END subsf3vfp
+
+#endif
+
+#ifdef L_divsf3vfp
+
+ARM_FUNC_START divsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fdivs	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END divsf3vfp
+
+#endif
+
+#ifdef L_eqsf2vfp
+
+ARM_FUNC_START eqsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movne	r0, #0
+	moveq	r0, #1
+	RET
+
+	FUNC_END eqsf2vfp
+
+#endif
+
+#ifdef L_nesf2vfp
+
+ARM_FUNC_START nesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	moveq	r0, #0
+	movne	r0, #1
+	RET
+
+	FUNC_END nesf2vfp
+
+#endif
+
+#ifdef L_ltsf2vfp
+
+ARM_FUNC_START ltsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movpl	r0, #0
+	movmi	r0, #1
+	RET
+
+	FUNC_END ltsf2vfp
+
+#endif
+
+#ifdef L_gtsf2vfp
+
+ARM_FUNC_START gtsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movle	r0, #0
+	movgt	r0, #1
+	RET
+
+	FUNC_END gtsf2vfp
+
+#endif
+
+#ifdef L_lesf2vfp
+
+ARM_FUNC_START lesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movhi	r0, #0
+	movls	r0, #1
+	RET
+
+	FUNC_END lesf2vfp
+
+#endif
+
+#ifdef L_gesf2vfp
+
+ARM_FUNC_START gesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movlt	r0, #0
+	movge	r0, #1
+	RET
+
+	FUNC_END gesf2vfp
+
+#endif
+
+#ifdef L_unordsf2vfp
+
+ARM_FUNC_START unordsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	movvc	r0, #0
+	movvs	r0, #1
+	RET
+
+	FUNC_END unordsf2vfp
+
+#endif
+
+#ifdef L_fixsfsivfp
+
+ARM_FUNC_START fixsfsivfp
+
+	fmsr	s15, r0
+	ftosizs	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END fixsfsivfp
+
+#endif
+
+#ifdef L_fixunssfsivfp
+
+ARM_FUNC_START fixunssfsivfp
+
+	fmsr	s15, r0
+	ftouizs	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END fixunssfsivfp
+
+#endif
+
+#ifdef L_floatsisfvfp
+
+ARM_FUNC_START floatsisfvfp
+
+	fmsr	s15, r0
+	fsitos	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END floatsisfvfp
+
+#endif
+
+#ifdef L_floatsisfvfp
+
+ARM_FUNC_START floatunssisfvfp
+
+	fmsr	s15, r0
+	fuitos	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END floatunssisfvfp
+
+#endif
+
+#endif /* __ARM_ARCH__ > 5 */
+#endif /* NOT_DARWIN */
+/* APPLE LOCAL end ARM 4702983 provide VFP versions (callable from Thumb) */

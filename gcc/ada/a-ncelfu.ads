@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --            ADA.NUMERICS.GENERIC_COMPLEX.ELEMENTARY_FUNCTIONS             --
 --                                                                          --

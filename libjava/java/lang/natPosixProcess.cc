@@ -1,6 +1,6 @@
 // natPosixProcess.cc - Native side of POSIX process code.
 
-/* Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004, 2005, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2002, 2003, 2004  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -17,9 +17,6 @@ details.  */
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#ifdef HAVE_SYS_RESOURCE_H
-#include <sys/resource.h>
-#endif
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
@@ -173,8 +170,6 @@ jboolean java::lang::ConcreteProcess$ProcessManager::reap ()
       // Look up the process in our pid map.
       ConcreteProcess * process = removeProcessFromMap ((jlong) pid);
 
-      // Note that if process==NULL, then we have an unknown child.
-      // This is not common, but can happen, and isn't an error.
       if (process)
 	{
 	  JvSynchronize sync (process);
@@ -182,6 +177,11 @@ jboolean java::lang::ConcreteProcess$ProcessManager::reap ()
 	  process->state = ConcreteProcess::STATE_TERMINATED;
           process->processTerminationCleanup();
 	  process->notifyAll ();
+	}
+      else
+	{
+	  // Unknown child.  How did this happen?
+	  fprintf (stderr, "Reaped unknown child pid = %ld\n", (long) pid);
 	}
     }
 
@@ -344,36 +344,6 @@ java::lang::ConcreteProcess::nativeSpawn ()
 		  _exit (127);
 		}
 	    }
-          // Make sure all file descriptors are closed.  In
-          // multi-threaded programs, there is a race between when a
-          // descriptor is obtained, when we can set FD_CLOEXEC, and
-          // fork().  If the fork occurs before FD_CLOEXEC is set, the
-          // descriptor would leak to the execed process if we did not
-          // manually close it.  So that is what we do.  Since we
-          // close all the descriptors, it is redundant to set
-          // FD_CLOEXEC on them elsewhere.
-          int max_fd;
-#ifdef HAVE_GETRLIMIT
-          rlimit rl;
-          int rv = getrlimit(RLIMIT_NOFILE, &rl);
-          if (rv == 0)
-            max_fd = rl.rlim_max - 1;
-          else
-            max_fd = 1024 - 1;
-#else
-          max_fd = 1024 - 1;
-#endif
-          while(max_fd > 2)
-            {
-              if (max_fd != msgp[1])
-                close (max_fd);
-              max_fd--;
-            }
-	  // Make sure that SIGCHLD is unblocked for the new process.
-	  sigset_t mask;
-	  sigemptyset (&mask);
-	  sigaddset (&mask, SIGCHLD);
-	  sigprocmask (SIG_UNBLOCK, &mask, NULL);
 
 	  execvp (args[0], args);
 
@@ -452,4 +422,11 @@ java::lang::ConcreteProcess::nativeSpawn ()
 
   myclose (msgp[0]);
   cleanup (args, env, path);
+
+  if (exception == NULL)
+    {
+      fcntl (outp[1], F_SETFD, FD_CLOEXEC);
+      fcntl (inp[0], F_SETFD, FD_CLOEXEC);
+      fcntl (errp[0], F_SETFD, FD_CLOEXEC);
+    }
 }

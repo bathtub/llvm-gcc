@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 #   Copyright 1994, 1995, 1996, 1997, 1998, 1999, 2001, 2002, 2003, 2004
-#   2005, 2006 Free Software Foundation, Inc.
+#   Free Software Foundation, Inc.
 #   Originally contributed by Dave Love (d.love@dl.ac.uk).
 #
 #This file is part of GCC.
@@ -17,18 +17,17 @@
 #
 #You should have received a copy of the GNU General Public License
 #along with GCC; see the file COPYING.  If not, write to
-#the Free Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-#02110-1301, USA.
+#the Free Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+#02111-1307, USA.
 
 AC_PREREQ(2.59)
 AC_INIT(package-unused, version-unused,, libobjc)
 AC_CONFIG_SRCDIR([objc/objc.h])
-GCC_TOPLEV_SUBDIRS
 
 # We need the following definitions because AC_PROG_LIBTOOL relies on them
 PACKAGE=libobjc
 # Version is pulled out to make it a bit easier to change using sed.
-VERSION=2:0:0
+VERSION=1:0:0
 AC_SUBST(VERSION)
 
 # This works around the fact that libtool configuration may change LD
@@ -40,6 +39,16 @@ ORIGINAL_LD_FOR_MULTILIBS=$LD
 # -------
 # Options
 # -------
+
+# Default to --enable-multilib
+AC_ARG_ENABLE(multilib,
+  [  --enable-multilib       build hella library versions (default)],
+  [case "${enableval}" in
+    yes) multilib=yes ;;
+    no)  multilib=no ;;
+    *)   AC_MSG_ERROR(bad value ${enableval} for multilib option) ;;
+   esac],
+  [multilib=yes])
 
 # We use these options to decide which functions to include.
 AC_ARG_WITH(target-subdir,
@@ -63,25 +72,37 @@ AC_ARG_ENABLE(objc-gc,
 [  --enable-objc-gc       enable the use of Boehm's garbage collector with
                           the GNU Objective-C runtime.],
 [case $enable_objc_gc in
-  no)
-    OBJC_BOEHM_GC=''
-    OBJC_BOEHM_GC_INCLUDES=''
-    ;;
-  *)
-    OBJC_BOEHM_GC=libobjc_gc.la
-    OBJC_BOEHM_GC_INCLUDES='-I$(top_srcdir)/../boehm-gc/include -I../boehm-gc/include'
-    ;;
+  no) OBJC_BOEHM_GC='' ;;
+  *) OBJC_BOEHM_GC=libobjc_gc.la ;;
 esac],
-[OBJC_BOEHM_GC=''; OBJC_BOEHM_GC_INCLUDES=''])
+[OBJC_BOEHM_GC=''])
 AC_SUBST(OBJC_BOEHM_GC)
-AC_SUBST(OBJC_BOEHM_GC_INCLUDES)
 
 # -----------
 # Directories
 # -----------
 
-# Find the rest of the source tree framework.
-AM_ENABLE_MULTILIB(, ..)
+# When building with srcdir == objdir, links to the source files will
+# be created in directories within the target_subdir.  We have to
+# adjust toplevel_srcdir accordingly, so that configure finds
+# install-sh and other auxiliary files that live in the top-level
+# source directory.
+if test "${srcdir}" = "."; then
+  if test -z "${with_target_subdir}"; then
+    toprel=".."
+  else
+    if test "${with_target_subdir}" != "."; then
+      toprel="${with_multisrctop}../.."
+    else
+      toprel="${with_multisrctop}.."
+    fi
+  fi
+else
+  toprel=".."
+fi
+AC_CONFIG_AUX_DIR(${srcdir}/$toprel)
+toplevel_srcdir=\${srcdir}/$toprel
+AC_SUBST(toplevel_srcdir)
 
 AC_CANONICAL_SYSTEM
 ACX_NONCANONICAL_TARGET
@@ -96,6 +117,8 @@ case $srcdir in
 esac
 AC_SUBST(glibcpp_srcdir)
 
+TL_AC_GCC_VERSION([$srcdir/..])
+
 # Calculate toolexeclibdir
 # Also toolexecdir, though it's only used in toolexeclibdir
 case ${version_specific_libs} in
@@ -104,7 +127,7 @@ case ${version_specific_libs} in
     # and header files if --enable-version-specific-runtime-libs option
     # is selected.
     toolexecdir='$(libdir)/gcc/$(target_noncanonical)'
-    toolexeclibdir='$(toolexecdir)/$(gcc_version)$(MULTISUBDIR)'
+    toolexeclibdir='$(toolexecdir)/'${gcc_version}'$(MULTISUBDIR)'
     ;;
   no)
     if test -n "$with_cross_host" &&
@@ -156,15 +179,6 @@ m4_define([_AC_ARG_VAR_PRECIOUS],[])
 AC_PROG_CC
 m4_rename([real_PRECIOUS],[_AC_ARG_VAR_PRECIOUS])
 
-# extra LD Flags which are required for targets
-case "${host}" in
-  *-darwin*)
-    # Darwin needs -single_module when linking libobjc
-    extra_ldflags_libobjc=-Wl,-single_module
-    ;;
-esac
-AC_SUBST(extra_ldflags_libobjc)
-
 AC_SUBST(CFLAGS)
 
 AC_CHECK_TOOL(AS, as)
@@ -203,15 +217,18 @@ AC_CHECK_HEADERS(sched.h)
 # Miscellanea
 # -----------
 
-AC_MSG_CHECKING([for thread model used by GCC])
-target_thread_file=`$CC -v 2>&1 | sed -n 's/^Thread model: //p'`
-AC_MSG_RESULT([$target_thread_file]) 
-
-if test $target_thread_file != single; then
-  AC_DEFINE(HAVE_GTHR_DEFAULT, 1,
-        [Define if the compiler has a thread header that is non single.])
-fi 
-
+# Determine CFLAGS for gthread.
+# FIXME: the current implementation is dependent on the 'r' variable
+# passed down from the top level
+AC_CACHE_CHECK([for gthread cflags],objc_cv_gthread_flags,
+[if test -f "$r"/gcc/Makefile
+then
+  objc_cv_gthread_flags=`grep \^GTHREAD_FLAGS "$r"/gcc/Makefile | awk -F= '{ print $2 }'`
+else
+  AC_MSG_ERROR([not found])
+fi])
+GTHREAD_FLAGS=$objc_cv_gthread_flags
+AC_SUBST(GTHREAD_FLAGS)
 
 AC_MSG_CHECKING([for exception model to use])
 AC_LANG_PUSH(C)
@@ -279,7 +296,7 @@ AC_CONFIG_COMMANDS([default],
     # FIXME: We shouldn't need to set ac_file
     ac_file=Makefile
     LD="${ORIGINAL_LD_FOR_MULTILIBS}"
-    . ${multi_basedir}/config-ml.in
+    . ${toplevel_srcdir}/config-ml.in
   fi
 fi]],
 [[srcdir=${srcdir}
@@ -288,7 +305,7 @@ target=${target}
 with_target_subdir=${with_target_subdir}
 with_multisubdir=${with_multisubdir}
 ac_configure_args="--enable-multilib ${ac_configure_args}"
-multi_basedir=${multi_basedir}
+toplevel_srcdir=${toplevel_srcdir}
 CONFIG_SHELL=${CONFIG_SHELL-/bin/sh}
 ORIGINAL_LD_FOR_MULTILIBS="${ORIGINAL_LD_FOR_MULTILIBS}"
 ]])

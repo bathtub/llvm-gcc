@@ -1,4 +1,4 @@
-// HP-UX libunwind.so doesn't provide _UA_END_OF_STACK.
+// HP-UX libunwind.so doesn't provide _Unwind_ForcedUnwind.
 // { dg-do run { xfail "ia64-hp-hpux11.*" } }
 
 // Test that forced unwinding does not call std::unexpected going 
@@ -6,7 +6,6 @@
 
 #include <unwind.h>
 #include <stdlib.h>
-#include <string.h>
 
 static _Unwind_Reason_Code
 force_unwind_stop (int version, _Unwind_Action actions,
@@ -24,8 +23,7 @@ static void __attribute__((noreturn))
 force_unwind ()
 {
   _Unwind_Exception *exc = new _Unwind_Exception;
-  // exception_class might not be a scalar.
-  memset (&exc->exception_class, 0, sizeof (exc->exception_class));
+  exc->exception_class = 0;
   exc->exception_cleanup = 0;
 
 #ifndef __USING_SJLJ_EXCEPTIONS__

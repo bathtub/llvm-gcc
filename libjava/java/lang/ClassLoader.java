@@ -1,5 +1,5 @@
 /* ClassLoader.java -- responsible for loading classes into the VM
-   Copyright (C) 1998, 1999, 2001, 2002, 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -15,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,7 +38,6 @@ exception statement from your version. */
 
 package java.lang;
 
-import gnu.classpath.SystemProperties;
 import gnu.java.util.DoubleEnumeration;
 import gnu.java.util.EmptyEnumeration;
 
@@ -156,39 +155,6 @@ public abstract class ClassLoader
    */
   static final ClassLoader systemClassLoader =
     VMClassLoader.getSystemClassLoader();
-
-  static
-  {
-    // Find out if we have to install a default security manager. Note
-    // that this is done here because we potentially need the system
-    // class loader to load the security manager and note also that we
-    // don't need the security manager until the system class loader
-    // is created.  If the runtime chooses to use a class loader that
-    // doesn't have the system class loader as its parent, it is
-    // responsible for setting up a security manager before doing so.
-    String secman = SystemProperties.getProperty("java.security.manager");
-    if (secman != null && SecurityManager.current == null)
-    {
-      if (secman.equals("") || secman.equals("default"))
-      {
-	SecurityManager.current = new SecurityManager();
-      }
-      else
-      {
-	try
-	{
-	  Class cl = Class.forName(secman, false, systemClassLoader);
-	  SecurityManager.current = (SecurityManager) cl.newInstance();
-	}
-	catch (Exception x)
-	{
-	  throw (InternalError)
-	    new InternalError("Unable to create SecurityManager")
-	        .initCause(x);
-	}
-      }
-    }
-  }
 
   /**
    * The default protection domain, used when defining a class with a null
@@ -322,7 +288,7 @@ public abstract class ClassLoader
   {
     // Arrays are handled specially.
     Class c;
-    if (name.length() > 0 && name.charAt(0) == '[')
+    if (name.charAt(0) == '[')
       c = loadClassFromSig(name);
     else
       {
@@ -530,7 +496,7 @@ public abstract class ClassLoader
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
       {
-        Class c = VMSecurityManager.getClassContext(ClassLoader.class)[0];
+        Class c = VMSecurityManager.getClassContext()[1];
         ClassLoader cl = c.getClassLoader();
 	if (cl != null && ! cl.isAncestorOf(this))
           sm.checkPermission(new RuntimePermission("getClassLoader"));
@@ -773,7 +739,7 @@ public abstract class ClassLoader
     SecurityManager sm = System.getSecurityManager();
     if (sm != null)
       {
-	Class c = VMSecurityManager.getClassContext(ClassLoader.class)[0];
+	Class c = VMSecurityManager.getClassContext()[1];
 	ClassLoader cl = c.getClassLoader();
 	if (cl != null && cl != systemClassLoader)
 	  sm.checkPermission(new RuntimePermission("getClassLoader"));

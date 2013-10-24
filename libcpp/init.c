@@ -17,7 +17,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -72,26 +72,21 @@ struct lang_flags
   char c99;
   char cplusplus;
   char extended_numbers;
-  char extended_identifiers;
   char std;
   char cplusplus_comments;
   char digraphs;
 };
 
 static const struct lang_flags lang_defaults[] =
-{ /*              c99 c++ xnum xid std  //   digr  */
-  /* GNUC89 */  { 0,  0,  1,   0,  0,   1,   1     },
-  /* GNUC99 */  { 1,  0,  1,   0,  0,   1,   1     },
-  /* STDC89 */  { 0,  0,  0,   0,  1,   0,   0     },
-  /* STDC94 */  { 0,  0,  0,   0,  1,   0,   1     },
-  /* STDC99 */  { 1,  0,  1,   0,  1,   1,   1     },
-  /* GNUCXX */  { 0,  1,  1,   0,  0,   1,   1     },
-  /* CXX98  */  { 0,  1,  1,   0,  1,   1,   1     },
-  /* ASM    */  { 0,  0,  1,   0,  0,   1,   0     }
-  /* xid should be 1 for GNUC99, STDC99, GNUCXX and CXX98 when no
-     longer experimental (when all uses of identifiers in the compiler
-     have been audited for correct handling of extended
-     identifiers).  */
+{ /*              c99 c++ xnum std  //   digr  */
+  /* GNUC89 */  { 0,  0,  1,   0,   1,   1     },
+  /* GNUC99 */  { 1,  0,  1,   0,   1,   1     },
+  /* STDC89 */  { 0,  0,  0,   1,   0,   0     },
+  /* STDC94 */  { 0,  0,  0,   1,   0,   1     },
+  /* STDC99 */  { 1,  0,  1,   1,   1,   1     },
+  /* GNUCXX */  { 0,  1,  1,   0,   1,   1     },
+  /* CXX98  */  { 0,  1,  1,   1,   1,   1     },
+  /* ASM    */  { 0,  0,  1,   0,   1,   0     }
 };
 
 /* Sets internal flags correctly for a given language.  */
@@ -102,14 +97,13 @@ cpp_set_lang (cpp_reader *pfile, enum c_lang lang)
 
   CPP_OPTION (pfile, lang) = lang;
 
-  CPP_OPTION (pfile, c99)			 = l->c99;
-  CPP_OPTION (pfile, cplusplus)			 = l->cplusplus;
-  CPP_OPTION (pfile, extended_numbers)		 = l->extended_numbers;
-  CPP_OPTION (pfile, extended_identifiers)	 = l->extended_identifiers;
-  CPP_OPTION (pfile, std)			 = l->std;
-  CPP_OPTION (pfile, trigraphs)			 = l->std;
-  CPP_OPTION (pfile, cplusplus_comments)	 = l->cplusplus_comments;
-  CPP_OPTION (pfile, digraphs)			 = l->digraphs;
+  CPP_OPTION (pfile, c99)		 = l->c99;
+  CPP_OPTION (pfile, cplusplus)		 = l->cplusplus;
+  CPP_OPTION (pfile, extended_numbers)	 = l->extended_numbers;
+  CPP_OPTION (pfile, std)		 = l->std;
+  CPP_OPTION (pfile, trigraphs)		 = l->std;
+  CPP_OPTION (pfile, cplusplus_comments) = l->cplusplus_comments;
+  CPP_OPTION (pfile, digraphs)		 = l->digraphs;
 }
 
 /* Initialize library global state.  */
@@ -143,9 +137,22 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   /* Initialize this instance of the library if it hasn't been already.  */
   init_library ();
 
-  pfile = XCNEW (cpp_reader);
+  pfile = xcalloc (1, sizeof (cpp_reader));
 
   cpp_set_lang (pfile, lang);
+  /* APPLE LOCAL begin -Wextra-tokens 2001-08-01 --sts */
+  /* Suppress warnings about extra tokens after #endif etc.  */
+  CPP_OPTION (pfile, warn_extra_tokens) = 0;
+  /* APPLE LOCAL end -Wextra-tokens 2001-08-01 --sts */
+  /* APPLE LOCAL begin -Wnewline-eof 2001-08-23 --sts */
+  /* Suppress warnings about missing newlines at ends of files.  */
+  CPP_OPTION (pfile, warn_newline_at_eof) = 0;
+  /* APPLE LOCAL end -Wnewline-eof 2001-08-23 --sts */
+  /* APPLE LOCAL begin -Wfour-char-constants  */
+  CPP_OPTION (pfile, warn_four_char_constants) = 1;
+  /* APPLE LOCAL end -Wfour-char-constants  */
+  /* APPLE LOCAL pascal strings */
+  CPP_OPTION (pfile, pascal_strings) = 0;
   CPP_OPTION (pfile, warn_multichar) = 1;
   CPP_OPTION (pfile, discard_comments) = 1;
   CPP_OPTION (pfile, discard_comments_in_macro_exp) = 1;
@@ -153,12 +160,17 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   CPP_OPTION (pfile, tabstop) = 8;
   CPP_OPTION (pfile, operator_names) = 1;
   CPP_OPTION (pfile, warn_trigraphs) = 2;
-  CPP_OPTION (pfile, warn_endif_labels) = 1;
-  CPP_OPTION (pfile, warn_deprecated) = 1;
+  /* APPLE LOCAL begin -Wextra-tokens */
+  /* Suppress warnings about extra tokens after #endif etc.  */
+  CPP_OPTION (pfile, warn_endif_labels) = 0;
+  /* APPLE LOCAL end -Wextra-tokens */
+  /* APPLE LOCAL suppress useful warnings */
+  CPP_OPTION (pfile, warn_deprecated) = 0;
   CPP_OPTION (pfile, warn_long_long) = !CPP_OPTION (pfile, c99);
   CPP_OPTION (pfile, dollars_in_ident) = 1;
   CPP_OPTION (pfile, warn_dollars) = 1;
   CPP_OPTION (pfile, warn_variadic_macros) = 1;
+  /* APPLE LOCAL mainline UCNs 2005-04-17 3892809 */
   CPP_OPTION (pfile, warn_normalize) = normalized_C;
 
   /* Default CPP arithmetic to something sensible for the host for the
@@ -200,6 +212,13 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   _cpp_init_tokenrun (&pfile->base_run, 250);
   pfile->cur_run = &pfile->base_run;
   pfile->cur_token = pfile->base_run.base;
+  /* APPLE LOCAL begin 4137741 */
+
+  /* Initialize buffer for pending CPP_EINCL tokens.  */
+  _cpp_init_tokenrun (&pfile->base_eincl, 250);
+  pfile->cur_eincl = &pfile->base_eincl;
+  pfile->beg_eincl = pfile->end_eincl = pfile->base_eincl.base;
+  /* APPLE LOCAL end 4137741 */
 
   /* Initialize the base context.  */
   pfile->context = &pfile->base_context;
@@ -301,7 +320,6 @@ struct builtin
 #define B(n, t)    { DSC(n), t }
 static const struct builtin builtin_array[] =
 {
-  B("__TIMESTAMP__",	 BT_TIMESTAMP),
   B("__TIME__",		 BT_TIME),
   B("__DATE__",		 BT_DATE),
   B("__FILE__",		 BT_FILE),
@@ -358,19 +376,13 @@ cpp_init_builtins (cpp_reader *pfile, int hosted)
 
   if (CPP_OPTION (pfile, traditional))
     n -= 2;
-  else if (! CPP_OPTION (pfile, stdc_0_in_system_headers)
-	   || CPP_OPTION (pfile, std))
-    {
-      n--;
-      _cpp_define_builtin (pfile, "__STDC__ 1");
-    }
 
-  for (b = builtin_array; b < builtin_array + n; b++)
+  for(b = builtin_array; b < builtin_array + n; b++)
     {
       cpp_hashnode *hp = cpp_lookup (pfile, b->name, b->len);
       hp->type = NT_MACRO;
       hp->flags |= NODE_BUILTIN | NODE_WARN;
-      hp->value.builtin = (enum builtin_type) b->value;
+      hp->value.builtin = b->value;
     }
 
   if (CPP_OPTION (pfile, cplusplus))
@@ -473,8 +485,14 @@ cpp_read_main_file (cpp_reader *pfile, const char *fname)
       deps_add_default_target (pfile->deps, fname);
     }
 
+  /* APPLE LOCAL begin predictive compilation */
+  pfile->is_main_file = CPP_OPTION (pfile, predictive_compilation);
+  /* APPLE LOCAL end predictive compilation */
   pfile->main_file
-    = _cpp_find_file (pfile, fname, &pfile->no_search_path, false, 0);
+    = _cpp_find_file (pfile, fname, &pfile->no_search_path, false);
+  /* APPLE LOCAL begin predictive compilation */
+  pfile->is_main_file = false;
+  /* APPLE LOCAL end predictive compilation */
   if (_cpp_find_failed (pfile->main_file))
     return NULL;
 
@@ -504,10 +522,8 @@ read_original_filename (cpp_reader *pfile)
   token = _cpp_lex_direct (pfile);
   if (token->type == CPP_HASH)
     {
-      pfile->state.in_directive = 1;
       token1 = _cpp_lex_direct (pfile);
       _cpp_backup_tokens (pfile, 1);
-      pfile->state.in_directive = 0;
 
       /* If it's a #line directive, handle it.  */
       if (token1->type == CPP_NUMBER)
@@ -560,7 +576,7 @@ read_original_directory (cpp_reader *pfile)
 
   if (pfile->cb.dir_change)
     {
-      char *debugdir = (char *) alloca (token->val.str.len - 3);
+      char *debugdir = alloca (token->val.str.len - 3);
 
       memcpy (debugdir, (const char *) token->val.str.text + 1,
 	      token->val.str.len - 4);

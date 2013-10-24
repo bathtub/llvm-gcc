@@ -3,19 +3,20 @@
 #include <stdarg.h>
 #include "tree-vect.h"
 
+typedef char achar __attribute__ ((__aligned__(16)));
+
 #define N 16
-char x[N] __attribute__ ((__aligned__(16)));
+achar x[N];
  
-int main1 (char *y)
+int main1 (achar *y)
 {  
   struct {
-    char *p;
-    char *q;
+    achar *p;
+    achar *q;
   } s;
-  char cb[N] __attribute__ ((__aligned__(16))) = {0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45};
+  achar cb[N] = {0,3,6,9,12,15,18,21,24,27,30,33,36,39,42,45};
   int i;
 
-  /* Not vectorized - can't antialias the pointer s.p from the array cb.  */
   s.p = y;
   for (i = 0; i < N; i++)
     {
@@ -29,7 +30,6 @@ int main1 (char *y)
         abort ();
     }
 
-  /* Not vectorized - can't antialias the pointer s.p from the pointer s.q.  */
   s.q = cb;
   for (i = 0; i < N; i++)
     {
@@ -53,9 +53,7 @@ int main (void)
   return main1 (x);
 } 
 
-/* Currently the loops fail to vectorize due to aliasing problems.
-   If/when the aliasing problems are resolved, unalignment may
-   prevent vectorization on some targets.  */
+
+/* { dg-final { scan-tree-dump-times "vectorized 0 loops" 1 "vect" } } */
 /* { dg-final { scan-tree-dump-times "vectorized 2 loops" 1 "vect" { xfail *-*-* } } } */
-/* { dg-final { scan-tree-dump-times "can't determine dependence between" 2 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
+/* { dg-final { scan-tree-dump-times "Vectorizing an unaligned access" 0 "vect" } } */

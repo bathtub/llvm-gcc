@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline 4561329 */
 /* PR middle-end/26557.  */
 const int struct_test[1] = {1};
 void g();

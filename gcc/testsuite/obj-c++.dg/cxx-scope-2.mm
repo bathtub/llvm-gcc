@@ -1,9 +1,10 @@
+/* APPLE LOCAL file mainline */
 /* Make sure Objective-C++ can distinguish ObjC classes from C++ classes.  */
 /* Author: Ziemowit Laski  <zlaski@apple.com> */
-
 /* { dg-do compile } */
 
-#include <objc/Object.h>
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
 #include <iostream>
 #include <string>
 

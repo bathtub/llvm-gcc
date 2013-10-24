@@ -1,7 +1,6 @@
 // File based streams -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
-// 2006, 2007
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -17,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -29,13 +28,13 @@
 // invalidate any other reasons why the executable file might be covered by
 // the GNU General Public License.
 
-/** @file fstream
- *  This is a Standard C++ Library header.
- */
-
 //
 // ISO C++ 14882: 27.8  File-based streams
 //
+
+/** @file fstream
+ *  This is a Standard C++ Library header.
+ */
 
 #ifndef _GLIBCXX_FSTREAM
 #define _GLIBCXX_FSTREAM 1
@@ -49,8 +48,8 @@
 #include <bits/basic_file.h>
 #include <bits/gthr.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   // [27.8.1.1] template class basic_filebuf
   /**
    *  @brief  The actual work of input and output (for files).
@@ -258,30 +257,9 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  Otherwise it tries to open the file named @a s using the flags
        *  given in @a mode.
        *
-       *  Table 92, adapted here, gives the relation between openmode
-       *  combinations and the equivalent fopen() flags.
-       *  (NB: lines in|out|app and binary|in|out|app per DR 596)
-       *  +---------------------------------------------------------+
-       *  | ios_base Flag combination            stdio equivalent   |
-       *  |binary  in  out  trunc  app                              |
-       *  +---------------------------------------------------------+
-       *  |             +                        "w"                |
-       *  |             +           +            "a"                |
-       *  |             +     +                  "w"                |
-       *  |         +                            "r"                |
-       *  |         +   +                        "r+"               |
-       *  |         +   +     +                  "w+"               |
-       *  |         +   +           +            "a+"               |
-       *  +---------------------------------------------------------+
-       *  |   +         +                        "wb"               |
-       *  |   +         +           +            "ab"               |
-       *  |   +         +     +                  "wb"               |
-       *  |   +     +                            "rb"               |
-       *  |   +     +   +                        "r+b"              |
-       *  |   +     +   +     +                  "w+b"              |
-       *  |   +     +   +           +            "a+b"              |
-       *  +---------------------------------------------------------+
-       */
+       *  [Table 92 gives the relation between openmode combinations and the
+       *  equivalent fopen() flags, but the table has not been copied yet.]
+      */
       __filebuf_type*
       open(const char* __s, ios_base::openmode __mode);
 
@@ -798,8 +776,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
 	  this->setstate(ios_base::failbit);
       }
     };
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/fstream.tcc>

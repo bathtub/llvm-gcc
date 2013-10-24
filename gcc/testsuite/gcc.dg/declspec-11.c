@@ -3,8 +3,8 @@
    declaration, not just the specifiers.  Test with -pedantic-errors.  */
 /* Origin: Joseph Myers <jsm@polyomino.org.uk> */
 /* { dg-do compile } */
-/* { dg-options "-pedantic-errors" } */
-
+/* APPLE LOCAL testsuite nested functions */
+/* { dg-options "-pedantic-errors  -fnested-functions" } */
 auto void f0 (void) {} /* { dg-error "error: function definition declared 'auto'" } */
 register void f1 (void) {} /* { dg-error "error: function definition declared 'register'" } */
 typedef void f2 (void) {} /* { dg-error "error: function definition declared 'typedef'" } */

@@ -18,8 +18,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* The Solaris 2.0 x86 linker botches alignment of code sections.
    It tries to align to a 16 byte boundary by padding with 0x00000090
@@ -51,8 +51,10 @@ Boston, MA 02110-1301, USA.  */
 
 /* Solaris 2/Intel as chokes on #line directives.  */
 #undef CPP_SPEC
-#define CPP_SPEC "%{.S:-P} %(cpp_subtarget)"
+/* APPLE LOCAL begin mainline 2007-03-13 5040758 */
+#define CPP_SPEC "%{,assembler-with-cpp:-P} %(cpp_subtarget)"
 
+/* APPLE LOCAL end mainline 2007-03-13 5040758 */ \
 /* FIXME: Removed -K PIC from generic Solaris 2 ASM_SPEC: the native assembler
    gives many warnings: R_386_32 relocation is used for symbol ".text".  */
 #undef ASM_SPEC

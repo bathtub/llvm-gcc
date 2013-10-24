@@ -1,5 +1,5 @@
 /* Main parser.
-   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006 Free Software Foundation, 
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, 
    Inc.
    Contributed by Andy Vaught
 
@@ -17,8 +17,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 
 #include "config.h"
@@ -75,16 +75,13 @@ match_word (const char *str, match (*subr) (void), locus * old_locus)
 
 
 /* Figure out what the next statement is, (mostly) regardless of
-   proper ordering.  The do...while(0) is there to prevent if/else
-   ambiguity.  */
+   proper ordering.  */
 
 #define match(keyword, subr, st)				\
-    do {                                                        \
-      if (match_word(keyword, subr, &old_locus) == MATCH_YES)	\
-        return st;						\
-      else							\
-        undo_new_statement ();                                  \
-    } while (0);
+    if (match_word(keyword, subr, &old_locus) == MATCH_YES)	\
+      return st;						\
+    else							\
+      undo_new_statement ();
 
 static gfc_statement
 decode_statement (void)
@@ -132,7 +129,6 @@ decode_statement (void)
   match (NULL, gfc_match_st_function, ST_STATEMENT_FUNCTION);
 
   match (NULL, gfc_match_data_decl, ST_DATA_DECL);
-  match (NULL, gfc_match_enumerator_def, ST_ENUMERATOR);
 
   /* Try to match a subroutine statement, which has the same optional
      prefixes that functions can have.  */
@@ -206,7 +202,6 @@ decode_statement (void)
       match ("else", gfc_match_else, ST_ELSE);
       match ("else where", gfc_match_elsewhere, ST_ELSEWHERE);
       match ("else if", gfc_match_elseif, ST_ELSEIF);
-      match ("enum , bind ( c )", gfc_match_enum, ST_ENUM);
 
       if (gfc_match_end (&st) == MATCH_YES)
 	return st;
@@ -217,7 +212,6 @@ decode_statement (void)
       break;
 
     case 'f':
-      match ("flush", gfc_match_flush, ST_FLUSH);
       match ("format", gfc_match_format, ST_FORMAT);
       break;
 
@@ -300,107 +294,6 @@ decode_statement (void)
   return ST_NONE;
 }
 
-static gfc_statement
-decode_omp_directive (void)
-{
-  locus old_locus;
-  int c;
-
-#ifdef GFC_DEBUG
-  gfc_symbol_state ();
-#endif
-
-  gfc_clear_error ();	/* Clear any pending errors.  */
-  gfc_clear_warning ();	/* Clear any pending warnings.  */
-
-  if (gfc_pure (NULL))
-    {
-      gfc_error_now ("OpenMP directives at %C may not appear in PURE or ELEMENTAL procedures");
-      gfc_error_recovery ();
-      return ST_NONE;
-    }
-
-  old_locus = gfc_current_locus;
-
-  /* General OpenMP directive matching: Instead of testing every possible
-     statement, we eliminate most possibilities by peeking at the
-     first character.  */
-
-  c = gfc_peek_char ();
-
-  switch (c)
-    {
-    case 'a':
-      match ("atomic", gfc_match_omp_atomic, ST_OMP_ATOMIC);
-      break;
-    case 'b':
-      match ("barrier", gfc_match_omp_barrier, ST_OMP_BARRIER);
-      break;
-    case 'c':
-      match ("critical", gfc_match_omp_critical, ST_OMP_CRITICAL);
-      break;
-    case 'd':
-      match ("do", gfc_match_omp_do, ST_OMP_DO);
-      break;
-    case 'e':
-      match ("end critical", gfc_match_omp_critical, ST_OMP_END_CRITICAL);
-      match ("end do", gfc_match_omp_end_nowait, ST_OMP_END_DO);
-      match ("end master", gfc_match_omp_eos, ST_OMP_END_MASTER);
-      match ("end ordered", gfc_match_omp_eos, ST_OMP_END_ORDERED);
-      match ("end parallel do", gfc_match_omp_eos, ST_OMP_END_PARALLEL_DO);
-      match ("end parallel sections", gfc_match_omp_eos,
-	     ST_OMP_END_PARALLEL_SECTIONS);
-      match ("end parallel workshare", gfc_match_omp_eos,
-	     ST_OMP_END_PARALLEL_WORKSHARE);
-      match ("end parallel", gfc_match_omp_eos, ST_OMP_END_PARALLEL);
-      match ("end sections", gfc_match_omp_end_nowait, ST_OMP_END_SECTIONS);
-      match ("end single", gfc_match_omp_end_single, ST_OMP_END_SINGLE);
-      match ("end workshare", gfc_match_omp_end_nowait,
-	     ST_OMP_END_WORKSHARE);
-      break;
-    case 'f':
-      match ("flush", gfc_match_omp_flush, ST_OMP_FLUSH);
-      break;
-    case 'm':
-      match ("master", gfc_match_omp_master, ST_OMP_MASTER);
-      break;
-    case 'o':
-      match ("ordered", gfc_match_omp_ordered, ST_OMP_ORDERED);
-      break;
-    case 'p':
-      match ("parallel do", gfc_match_omp_parallel_do, ST_OMP_PARALLEL_DO);
-      match ("parallel sections", gfc_match_omp_parallel_sections,
-	     ST_OMP_PARALLEL_SECTIONS);
-      match ("parallel workshare", gfc_match_omp_parallel_workshare,
-	     ST_OMP_PARALLEL_WORKSHARE);
-      match ("parallel", gfc_match_omp_parallel, ST_OMP_PARALLEL);
-      break;
-    case 's':
-      match ("sections", gfc_match_omp_sections, ST_OMP_SECTIONS);
-      match ("section", gfc_match_omp_eos, ST_OMP_SECTION);
-      match ("single", gfc_match_omp_single, ST_OMP_SINGLE);
-      break;
-    case 't':
-      match ("threadprivate", gfc_match_omp_threadprivate,
-	     ST_OMP_THREADPRIVATE);
-    case 'w':
-      match ("workshare", gfc_match_omp_workshare, ST_OMP_WORKSHARE);
-      break;
-    }
-
-  /* All else has failed, so give up.  See if any of the matchers has
-     stored an error message of some sort.  */
-
-  if (gfc_error_check () == 0)
-    gfc_error_now ("Unclassifiable OpenMP directive at %C");
-
-  reject_statement ();
-
-  gfc_error_recovery ();
-
-  return ST_NONE;
-}
-
 #undef match
 
 
@@ -410,9 +303,8 @@ static gfc_statement
 next_free (void)
 {
   match m;
-  int c, d, cnt, at_bol;
+  int c, d;
 
-  at_bol = gfc_at_bol ();
   gfc_gobble_whitespace ();
 
   c = gfc_peek_char ();
@@ -420,41 +312,31 @@ next_free (void)
   if (ISDIGIT (c))
     {
       /* Found a statement label?  */
-      m = gfc_match_st_label (&gfc_statement_label);
+      m = gfc_match_st_label (&gfc_statement_label, 0);
 
       d = gfc_peek_char ();
       if (m != MATCH_YES || !gfc_is_whitespace (d))
 	{
-	  gfc_match_small_literal_int (&c, &cnt);
-
-          if (cnt > 5)
-	    gfc_error_now ("Too many digits in statement label at %C");
-
-	  if (c == 0)
-	    gfc_error_now ("Zero is not a valid statement label at %C");
-
 	  do
-	    c = gfc_next_char ();
-	  while (ISDIGIT(c));
-
-	  if (!gfc_is_whitespace (c))
-	    gfc_error_now ("Non-numeric character in statement label at %C");
-
-	  return ST_NONE;
+	    {
+	      /* Skip the bad statement label.  */
+	      gfc_warning_now ("Ignoring bad statement label at %C");
+	      c = gfc_next_char ();
+	    }
+	  while (ISDIGIT (c));
 	}
       else
 	{
 	  label_locus = gfc_current_locus;
 
-	  gfc_gobble_whitespace ();
-
-	  if (at_bol && gfc_peek_char () == ';')
+	  if (gfc_statement_label->value == 0)
 	    {
-	      gfc_error_now
-		("Semicolon at %C needs to be preceded by statement");
-	      gfc_next_char (); /* Eat up the semicolon.  */
-	      return ST_NONE;
+	      gfc_warning_now ("Ignoring statement label of zero at %C");
+	      gfc_free_st_label (gfc_statement_label);
+	      gfc_statement_label = NULL;
 	    }
+
+	  gfc_gobble_whitespace ();
 
 	  if (gfc_match_eos () == MATCH_YES)
 	    {
@@ -465,30 +347,6 @@ next_free (void)
 	      return ST_NONE;
 	    }
 	}
-    }
-  else if (c == '!')
-    {
-      /* Comments have already been skipped by the time we get here,
-	 except for OpenMP directives.  */
-      if (gfc_option.flag_openmp)
-	{
-	  int i;
-
-	  c = gfc_next_char ();
-	  for (i = 0; i < 5; i++, c = gfc_next_char ())
-	    gcc_assert (c == "!$omp"[i]);
-
-	  gcc_assert (c == ' ');
-	  gfc_gobble_whitespace ();
-	  return decode_omp_directive ();
-	}
-    }
-
-  if (at_bol && c == ';')
-    {
-      gfc_error_now ("Semicolon at %C needs to be preceded by statement");
-      gfc_next_char (); /* Eat up the semicolon.  */
-      return ST_NONE;
     }
 
   return decode_statement ();
@@ -540,26 +398,7 @@ next_fixed (void)
 	  digit_flag = 1;
 	  break;
 
-	  /* Comments have already been skipped by the time we get
-	     here, except for OpenMP directives.  */
-	case '*':
-	  if (gfc_option.flag_openmp)
-	    {
-	      for (i = 0; i < 5; i++, c = gfc_next_char_literal (0))
-		gcc_assert (TOLOWER (c) == "*$omp"[i]);
-
-	      if (c != ' ' && c != '0')
-		{
-		  gfc_buffer_error (0);
-		  gfc_error ("Bad continuation line at %C");
-		  return ST_NONE;
-		}
-
-	      return decode_omp_directive ();
-	    }
-	  /* FALLTHROUGH */
-
-	  /* Comments have already been skipped by the time we get
+          /* Comments have already been skipped by the time we get
 	     here so don't bother checking for them.  */
 
 	default:
@@ -588,7 +427,7 @@ next_fixed (void)
   if (c == '\n')
     goto blank_line;
 
-  if (c != ' ' && c != '0')
+  if (c != ' ' && c!= '0')
     {
       gfc_buffer_error (0);
       gfc_error ("Bad continuation line at %C");
@@ -610,12 +449,6 @@ next_fixed (void)
     goto blank_line;
   gfc_current_locus = loc;
 
-  if (c == ';')
-    {
-      gfc_error_now ("Semicolon at %C needs to be preceded by statement");
-      return ST_NONE;
-    }
-
   if (gfc_match_eos () == MATCH_YES)
     goto blank_line;
 
@@ -624,7 +457,7 @@ next_fixed (void)
 
 blank_line:
   if (digit_flag)
-    gfc_warning ("Ignoring statement label in empty statement at %C");
+    gfc_warning ("Statement label in blank line will be " "ignored at %C");
   gfc_advance_line ();
   return ST_NONE;
 }
@@ -648,7 +481,6 @@ next_statement (void)
       if (gfc_at_eol ())
 	{
 	  if (gfc_option.warn_line_truncation
-	      && gfc_current_locus.lb
 	      && gfc_current_locus.lb->truncated)
 	    gfc_warning_now ("Line truncated at %C");
 
@@ -694,24 +526,18 @@ next_statement (void)
   case ST_READ: case ST_RETURN: case ST_REWIND: case ST_SIMPLE_IF: \
   case ST_PAUSE: case ST_STOP: case ST_WRITE: case ST_ASSIGNMENT: \
   case ST_POINTER_ASSIGNMENT: case ST_EXIT: case ST_CYCLE: \
-  case ST_ARITHMETIC_IF: case ST_WHERE: case ST_FORALL: \
-  case ST_LABEL_ASSIGNMENT: case ST_FLUSH: case ST_OMP_FLUSH: \
-  case ST_OMP_BARRIER
+  case ST_ARITHMETIC_IF: case ST_WHERE: case ST_FORALL: case ST_LABEL_ASSIGNMENT
 
 /* Statements that mark other executable statements.  */
 
 #define case_exec_markers case ST_DO: case ST_FORALL_BLOCK: case ST_IF_BLOCK: \
-  case ST_WHERE_BLOCK: case ST_SELECT_CASE: case ST_OMP_PARALLEL: \
-  case ST_OMP_PARALLEL_SECTIONS: case ST_OMP_SECTIONS: case ST_OMP_ORDERED: \
-  case ST_OMP_CRITICAL: case ST_OMP_MASTER: case ST_OMP_SINGLE: \
-  case ST_OMP_DO: case ST_OMP_PARALLEL_DO: case ST_OMP_ATOMIC: \
-  case ST_OMP_WORKSHARE: case ST_OMP_PARALLEL_WORKSHARE
+  case ST_WHERE_BLOCK: case ST_SELECT_CASE
 
 /* Declaration statements */
 
 #define case_decl case ST_ATTR_DECL: case ST_COMMON: case ST_DATA_DECL: \
   case ST_EQUIVALENCE: case ST_NAMELIST: case ST_STATEMENT_FUNCTION: \
-  case ST_TYPE: case ST_INTERFACE: case ST_OMP_THREADPRIVATE
+  case ST_TYPE: case ST_INTERFACE
 
 /* Block end statements.  Errors associated with interchanging these
    are detected in gfc_match_end().  */
@@ -900,13 +726,13 @@ gfc_ascii_statement (gfc_statement st)
   switch (st)
     {
     case ST_ARITHMETIC_IF:
-      p = _("arithmetic IF");
+      p = "arithmetic IF";
       break;
     case ST_ALLOCATE:
       p = "ALLOCATE";
       break;
     case ST_ATTR_DECL:
-      p = _("attribute declaration");
+      p = "attribute declaration";
       break;
     case ST_BACKSPACE:
       p = "BACKSPACE";
@@ -936,7 +762,7 @@ gfc_ascii_statement (gfc_statement st)
       p = "CYCLE";
       break;
     case ST_DATA_DECL:
-      p = _("data declaration");
+      p = "data declaration";
       break;
     case ST_DATA:
       p = "DATA";
@@ -945,7 +771,7 @@ gfc_ascii_statement (gfc_statement st)
       p = "DEALLOCATE";
       break;
     case ST_DERIVED_DECL:
-      p = _("derived type declaration");
+      p = "Derived type declaration";
       break;
     case ST_DO:
       p = "DO";
@@ -1007,9 +833,6 @@ gfc_ascii_statement (gfc_statement st)
     case ST_EXIT:
       p = "EXIT";
       break;
-    case ST_FLUSH:
-      p = "FLUSH";
-      break;
     case ST_FORALL_BLOCK:	/* Fall through */
     case ST_FORALL:
       p = "FORALL";
@@ -1024,7 +847,7 @@ gfc_ascii_statement (gfc_statement st)
       p = "GOTO";
       break;
     case ST_IF_BLOCK:
-      p = _("block IF");
+      p = "block IF";
       break;
     case ST_IMPLICIT:
       p = "IMPLICIT";
@@ -1033,7 +856,7 @@ gfc_ascii_statement (gfc_statement st)
       p = "IMPLICIT NONE";
       break;
     case ST_IMPLIED_ENDDO:
-      p = _("implied END DO");
+      p = "implied END DO";
       break;
     case ST_INQUIRE:
       p = "INQUIRE";
@@ -1100,10 +923,10 @@ gfc_ascii_statement (gfc_statement st)
       p = "WRITE";
       break;
     case ST_ASSIGNMENT:
-      p = _("assignment");
+      p = "assignment";
       break;
     case ST_POINTER_ASSIGNMENT:
-      p = _("pointer assignment");
+      p = "pointer assignment";
       break;
     case ST_SELECT_CASE:
       p = "SELECT CASE";
@@ -1112,103 +935,13 @@ gfc_ascii_statement (gfc_statement st)
       p = "SEQUENCE";
       break;
     case ST_SIMPLE_IF:
-      p = _("simple IF");
+      p = "Simple IF";
       break;
     case ST_STATEMENT_FUNCTION:
       p = "STATEMENT FUNCTION";
       break;
     case ST_LABEL_ASSIGNMENT:
       p = "LABEL ASSIGNMENT";
-      break;
-    case ST_ENUM:
-      p = "ENUM DEFINITION";
-      break;
-    case ST_ENUMERATOR:
-      p = "ENUMERATOR DEFINITION";
-      break;
-    case ST_END_ENUM:
-      p = "END ENUM";
-      break;
-    case ST_OMP_ATOMIC:
-      p = "!$OMP ATOMIC";
-      break;
-    case ST_OMP_BARRIER:
-      p = "!$OMP BARRIER";
-      break;
-    case ST_OMP_CRITICAL:
-      p = "!$OMP CRITICAL";
-      break;
-    case ST_OMP_DO:
-      p = "!$OMP DO";
-      break;
-    case ST_OMP_END_CRITICAL:
-      p = "!$OMP END CRITICAL";
-      break;
-    case ST_OMP_END_DO:
-      p = "!$OMP END DO";
-      break;
-    case ST_OMP_END_MASTER:
-      p = "!$OMP END MASTER";
-      break;
-    case ST_OMP_END_ORDERED:
-      p = "!$OMP END ORDERED";
-      break;
-    case ST_OMP_END_PARALLEL:
-      p = "!$OMP END PARALLEL";
-      break;
-    case ST_OMP_END_PARALLEL_DO:
-      p = "!$OMP END PARALLEL DO";
-      break;
-    case ST_OMP_END_PARALLEL_SECTIONS:
-      p = "!$OMP END PARALLEL SECTIONS";
-      break;
-    case ST_OMP_END_PARALLEL_WORKSHARE:
-      p = "!$OMP END PARALLEL WORKSHARE";
-      break;
-    case ST_OMP_END_SECTIONS:
-      p = "!$OMP END SECTIONS";
-      break;
-    case ST_OMP_END_SINGLE:
-      p = "!$OMP END SINGLE";
-      break;
-    case ST_OMP_END_WORKSHARE:
-      p = "!$OMP END WORKSHARE";
-      break;
-    case ST_OMP_FLUSH:
-      p = "!$OMP FLUSH";
-      break;
-    case ST_OMP_MASTER:
-      p = "!$OMP MASTER";
-      break;
-    case ST_OMP_ORDERED:
-      p = "!$OMP ORDERED";
-      break;
-    case ST_OMP_PARALLEL:
-      p = "!$OMP PARALLEL";
-      break;
-    case ST_OMP_PARALLEL_DO:
-      p = "!$OMP PARALLEL DO";
-      break;
-    case ST_OMP_PARALLEL_SECTIONS:
-      p = "!$OMP PARALLEL SECTIONS";
-      break;
-    case ST_OMP_PARALLEL_WORKSHARE:
-      p = "!$OMP PARALLEL WORKSHARE";
-      break;
-    case ST_OMP_SECTIONS:
-      p = "!$OMP SECTIONS";
-      break;
-    case ST_OMP_SECTION:
-      p = "!$OMP SECTION";
-      break;
-    case ST_OMP_SINGLE:
-      p = "!$OMP SINGLE";
-      break;
-    case ST_OMP_THREADPRIVATE:
-      p = "!$OMP THREADPRIVATE";
-      break;
-    case ST_OMP_WORKSHARE:
-      p = "!$OMP WORKSHARE";
       break;
     default:
       gfc_internal_error ("gfc_ascii_statement(): Bad statement code");
@@ -1218,25 +951,60 @@ gfc_ascii_statement (gfc_statement st)
 }
 
 
-/* Create a symbol for the main program and assign it to ns->proc_name.  */
- 
-static void 
-main_program_symbol (gfc_namespace * ns)
-{
-  gfc_symbol *main_program;
-  symbol_attribute attr;
+/* Return the name of a compile state.  */
 
-  gfc_get_symbol ("MAIN__", ns, &main_program);
-  gfc_clear_attr (&attr);
-  attr.flavor = FL_PROCEDURE;
-  attr.proc = PROC_UNKNOWN;
-  attr.subroutine = 1;
-  attr.access = ACCESS_PUBLIC;
-  attr.is_main_program = 1;
-  main_program->attr = attr;
-  main_program->declared_at = gfc_current_locus;
-  ns->proc_name = main_program;
-  gfc_commit_symbols ();
+const char *
+gfc_state_name (gfc_compile_state state)
+{
+  const char *p;
+
+  switch (state)
+    {
+    case COMP_PROGRAM:
+      p = "a PROGRAM";
+      break;
+    case COMP_MODULE:
+      p = "a MODULE";
+      break;
+    case COMP_SUBROUTINE:
+      p = "a SUBROUTINE";
+      break;
+    case COMP_FUNCTION:
+      p = "a FUNCTION";
+      break;
+    case COMP_BLOCK_DATA:
+      p = "a BLOCK DATA";
+      break;
+    case COMP_INTERFACE:
+      p = "an INTERFACE";
+      break;
+    case COMP_DERIVED:
+      p = "a DERIVED TYPE block";
+      break;
+    case COMP_IF:
+      p = "an IF-THEN block";
+      break;
+    case COMP_DO:
+      p = "a DO block";
+      break;
+    case COMP_SELECT:
+      p = "a SELECT block";
+      break;
+    case COMP_FORALL:
+      p = "a FORALL block";
+      break;
+    case COMP_WHERE:
+      p = "a WHERE block";
+      break;
+    case COMP_CONTAINS:
+      p = "a contained subprogram";
+      break;
+
+    default:
+      gfc_internal_error ("gfc_state_name(): Bad state");
+    }
+
+  return p;
 }
 
 
@@ -1316,7 +1084,7 @@ accept_statement (gfc_statement st)
 static void
 reject_statement (void)
 {
-  gfc_new_block = NULL;
+
   gfc_undo_symbols ();
   gfc_clear_warning ();
   undo_new_statement ();
@@ -1499,9 +1267,8 @@ parse_derived (void)
 {
   int compiling_type, seen_private, seen_sequence, seen_component, error_flag;
   gfc_statement st;
-  gfc_state_data s;
-  gfc_symbol *sym;
   gfc_component *c;
+  gfc_state_data s;
 
   error_flag = 0;
 
@@ -1598,72 +1365,24 @@ parse_derived (void)
 	}
     }
 
-  /* Look for allocatable components.  */
-  sym = gfc_current_block ();
-  for (c = sym->components; c; c = c->next)
-    {
-      if (c->allocatable || (c->ts.type == BT_DERIVED
-		    	     && c->ts.derived->attr.alloc_comp))
-	{
-	  sym->attr.alloc_comp = 1;
-	  break;
-	}
-     }
+  /* Sanity checks on the structure.  If the structure has the
+     SEQUENCE attribute, then all component structures must also have
+     SEQUENCE.  */
+  if (error_flag == 0 && gfc_current_block ()->attr.sequence)
+    for (c = gfc_current_block ()->components; c; c = c->next)
+      {
+	if (c->ts.type == BT_DERIVED && c->ts.derived->attr.sequence == 0)
+	  {
+	    gfc_error
+	      ("Component %s of SEQUENCE type declared at %C does not "
+	       "have the SEQUENCE attribute", c->ts.derived->name);
+	  }
+      }
 
   pop_state ();
 }
 
 
-
-/* Parse an ENUM.  */
- 
-static void
-parse_enum (void)
-{
-  int error_flag;
-  gfc_statement st;
-  int compiling_enum;
-  gfc_state_data s;
-  int seen_enumerator = 0;
-
-  error_flag = 0;
-
-  push_state (&s, COMP_ENUM, gfc_new_block);
-
-  compiling_enum = 1;
-
-  while (compiling_enum)
-    {
-      st = next_statement ();
-      switch (st)
-        {
-        case ST_NONE:
-          unexpected_eof ();
-          break;
-
-        case ST_ENUMERATOR:
-	  seen_enumerator = 1;
-          accept_statement (st);
-          break;
-
-        case ST_END_ENUM:
-          compiling_enum = 0;
-	  if (!seen_enumerator)
-            {
-              gfc_error ("ENUM declaration at %C has no ENUMERATORS");
-	      error_flag = 1;
-            }
-          accept_statement (st);
-          break;
-
-        default:
-          gfc_free_enum_history ();
-          unexpected_statement (st);
-          break;
-        }
-    }
-  pop_state ();
-}
 
 /* Parse an interface.  We must be able to deal with the possibility
    of recursive interfaces.  The parse_spec() subroutine is mutually
@@ -1679,7 +1398,6 @@ parse_interface (void)
   gfc_interface_info save;
   gfc_state_data s1, s2;
   gfc_statement st;
-  locus proc_locus;
 
   accept_statement (ST_INTERFACE);
 
@@ -1767,7 +1485,6 @@ loop:
   accept_statement (st);
   prog_unit = gfc_new_block;
   prog_unit->formal_ns = gfc_current_ns;
-  proc_locus = gfc_current_locus;
 
 decl:
   /* Read data declaration statements.  */
@@ -1783,15 +1500,8 @@ decl:
 
   current_interface = save;
   gfc_add_interface (prog_unit);
+
   pop_state ();
-
-  if (current_interface.ns
-	&& current_interface.ns->proc_name
-	&& strcmp (current_interface.ns->proc_name->name,
-		   prog_unit->name) == 0)
-    gfc_error ("INTERFACE procedure '%s' at %L has the same name as the "
-	       "enclosing procedure", prog_unit->name, &proc_locus);
-
   goto loop;
 
 done:
@@ -1879,12 +1589,6 @@ loop:
       st = next_statement ();
       goto loop;
 
-    case ST_ENUM:
-      accept_statement (st);
-      parse_enum();
-      st = next_statement ();
-      goto loop;
-
     default:
       break;
     }
@@ -1927,7 +1631,7 @@ parse_where_block (void)
 
 	case ST_WHERE_BLOCK:
 	  parse_where_block ();
-          break;
+	  /* Fall through */
 
 	case ST_ASSIGNMENT:
 	case ST_WHERE:
@@ -2313,15 +2017,6 @@ loop:
       break;
 
     case ST_IMPLIED_ENDDO:
-     /* If the do-stmt of this DO construct has a do-construct-name,
-	the corresponding end-do must be an end-do-stmt (with a matching
-	name, but in that case we must have seen ST_ENDDO first).
-	We only complain about this in pedantic mode.  */
-     if (gfc_current_block () != NULL)
-	gfc_error_now
-	  ("named block DO at %L requires matching ENDDO name",
-	   &gfc_current_block()->declared_at);
-
       break;
 
     default:
@@ -2331,270 +2026,6 @@ loop:
 
   pop_state ();
   accept_statement (st);
-}
-
-
-/* Parse the statements of OpenMP do/parallel do.  */
-
-static gfc_statement
-parse_omp_do (gfc_statement omp_st)
-{
-  gfc_statement st;
-  gfc_code *cp, *np;
-  gfc_state_data s;
-
-  accept_statement (omp_st);
-
-  cp = gfc_state_stack->tail;
-  push_state (&s, COMP_OMP_STRUCTURED_BLOCK, NULL);
-  np = new_level (cp);
-  np->op = cp->op;
-  np->block = NULL;
-
-  for (;;)
-    {
-      st = next_statement ();
-      if (st == ST_NONE)
-	unexpected_eof ();
-      else if (st == ST_DO)
-	break;
-      else
-	unexpected_statement (st);
-    }
-
-  parse_do_block ();
-  if (gfc_statement_label != NULL
-      && gfc_state_stack->previous != NULL
-      && gfc_state_stack->previous->state == COMP_DO
-      && gfc_state_stack->previous->ext.end_do_label == gfc_statement_label)
-    {
-      /* In
-         DO 100 I=1,10
-           !$OMP DO
-             DO J=1,10
-             ...
-             100 CONTINUE
-         there should be no !$OMP END DO.  */
-      pop_state ();
-      return ST_IMPLIED_ENDDO;
-    }
-
-  check_do_closure ();
-  pop_state ();
-
-  st = next_statement ();
-  if (st == (omp_st == ST_OMP_DO ? ST_OMP_END_DO : ST_OMP_END_PARALLEL_DO))
-    {
-      if (new_st.op == EXEC_OMP_END_NOWAIT)
-	cp->ext.omp_clauses->nowait |= new_st.ext.omp_bool;
-      else
-	gcc_assert (new_st.op == EXEC_NOP);
-      gfc_clear_new_st ();
-      gfc_commit_symbols ();
-      gfc_warning_check ();
-      st = next_statement ();
-    }
-  return st;
-}
-
-
-/* Parse the statements of OpenMP atomic directive.  */
-
-static void
-parse_omp_atomic (void)
-{
-  gfc_statement st;
-  gfc_code *cp, *np;
-  gfc_state_data s;
-
-  accept_statement (ST_OMP_ATOMIC);
-
-  cp = gfc_state_stack->tail;
-  push_state (&s, COMP_OMP_STRUCTURED_BLOCK, NULL);
-  np = new_level (cp);
-  np->op = cp->op;
-  np->block = NULL;
-
-  for (;;)
-    {
-      st = next_statement ();
-      if (st == ST_NONE)
-	unexpected_eof ();
-      else if (st == ST_ASSIGNMENT)
-	break;
-      else
-	unexpected_statement (st);
-    }
-
-  accept_statement (st);
-
-  pop_state ();
-}
-
-
-/* Parse the statements of an OpenMP structured block.  */
-
-static void
-parse_omp_structured_block (gfc_statement omp_st, bool workshare_stmts_only)
-{
-  gfc_statement st, omp_end_st;
-  gfc_code *cp, *np;
-  gfc_state_data s;
-
-  accept_statement (omp_st);
-
-  cp = gfc_state_stack->tail;
-  push_state (&s, COMP_OMP_STRUCTURED_BLOCK, NULL);
-  np = new_level (cp);
-  np->op = cp->op;
-  np->block = NULL;
-
-  switch (omp_st)
-    {
-    case ST_OMP_PARALLEL:
-      omp_end_st = ST_OMP_END_PARALLEL;
-      break;
-    case ST_OMP_PARALLEL_SECTIONS:
-      omp_end_st = ST_OMP_END_PARALLEL_SECTIONS;
-      break;
-    case ST_OMP_SECTIONS:
-      omp_end_st = ST_OMP_END_SECTIONS;
-      break;
-    case ST_OMP_ORDERED:
-      omp_end_st = ST_OMP_END_ORDERED;
-      break;
-    case ST_OMP_CRITICAL:
-      omp_end_st = ST_OMP_END_CRITICAL;
-      break;
-    case ST_OMP_MASTER:
-      omp_end_st = ST_OMP_END_MASTER;
-      break;
-    case ST_OMP_SINGLE:
-      omp_end_st = ST_OMP_END_SINGLE;
-      break;
-    case ST_OMP_WORKSHARE:
-      omp_end_st = ST_OMP_END_WORKSHARE;
-      break;
-    case ST_OMP_PARALLEL_WORKSHARE:
-      omp_end_st = ST_OMP_END_PARALLEL_WORKSHARE;
-      break;
-    default:
-      gcc_unreachable ();
-    }
-
-  do
-    {
-      if (workshare_stmts_only)
-	{
-	  /* Inside of !$omp workshare, only
-	     scalar assignments
-	     array assignments
-	     where statements and constructs
-	     forall statements and constructs
-	     !$omp atomic
-	     !$omp critical
-	     !$omp parallel
-	     are allowed.  For !$omp critical these
-	     restrictions apply recursively.  */
-	  bool cycle = true;
-
-	  st = next_statement ();
-	  for (;;)
-	    {
-	      switch (st)
-		{
-		case ST_NONE:
-		  unexpected_eof ();
-
-		case ST_ASSIGNMENT:
-		case ST_WHERE:
-		case ST_FORALL:
-		  accept_statement (st);
-		  break;
-
-		case ST_WHERE_BLOCK:
-		  parse_where_block ();
-		  break;
-
-		case ST_FORALL_BLOCK:
-		  parse_forall_block ();
-		  break;
-
-		case ST_OMP_PARALLEL:
-		case ST_OMP_PARALLEL_SECTIONS:
-		  parse_omp_structured_block (st, false);
-		  break;
-
-		case ST_OMP_PARALLEL_WORKSHARE:
-		case ST_OMP_CRITICAL:
-		  parse_omp_structured_block (st, true);
-		  break;
-
-		case ST_OMP_PARALLEL_DO:
-		  st = parse_omp_do (st);
-		  continue;
-
-		case ST_OMP_ATOMIC:
-		  parse_omp_atomic ();
-		  break;
-
-		default:
-		  cycle = false;
-		  break;
-		}
-
-	      if (!cycle)
-		break;
-
-	      st = next_statement ();
-	    }
-	}
-      else
-	st = parse_executable (ST_NONE);
-      if (st == ST_NONE)
-	unexpected_eof ();
-      else if (st == ST_OMP_SECTION
-	       && (omp_st == ST_OMP_SECTIONS
-		   || omp_st == ST_OMP_PARALLEL_SECTIONS))
-	{
-	  np = new_level (np);
-	  np->op = cp->op;
-	  np->block = NULL;
-	}
-      else if (st != omp_end_st)
-	unexpected_statement (st);
-    }
-  while (st != omp_end_st);
-
-  switch (new_st.op)
-    {
-    case EXEC_OMP_END_NOWAIT:
-      cp->ext.omp_clauses->nowait |= new_st.ext.omp_bool;
-      break;
-    case EXEC_OMP_CRITICAL:
-      if (((cp->ext.omp_name == NULL) ^ (new_st.ext.omp_name == NULL))
-	  || (new_st.ext.omp_name != NULL
-	      && strcmp (cp->ext.omp_name, new_st.ext.omp_name) != 0))
-	gfc_error ("Name after !$omp critical and !$omp end critical does"
-		   " not match at %C");
-      gfc_free ((char *) new_st.ext.omp_name);
-      break;
-    case EXEC_OMP_END_SINGLE:
-      cp->ext.omp_clauses->lists[OMP_LIST_COPYPRIVATE]
-	= new_st.ext.omp_clauses->lists[OMP_LIST_COPYPRIVATE];
-      new_st.ext.omp_clauses->lists[OMP_LIST_COPYPRIVATE] = NULL;
-      gfc_free_omp_clauses (new_st.ext.omp_clauses);
-      break;
-    case EXEC_NOP:
-      break;
-    default:
-      gcc_unreachable ();
-    }
-
-  gfc_clear_new_st ();
-  gfc_commit_symbols ();
-  gfc_warning_check ();
-  pop_state ();
 }
 
 
@@ -2611,8 +2042,9 @@ parse_executable (gfc_statement st)
   if (st == ST_NONE)
     st = next_statement ();
 
-  for (;;)
+  for (;; st = next_statement ())
     {
+
       close_flag = check_do_closure ();
       if (close_flag)
 	switch (st)
@@ -2652,62 +2084,38 @@ parse_executable (gfc_statement st)
 	  accept_statement (st);
 	  if (close_flag == 1)
 	    return ST_IMPLIED_ENDDO;
-	  break;
+	  continue;
 
 	case ST_IF_BLOCK:
 	  parse_if_block ();
-	  break;
+	  continue;
 
 	case ST_SELECT_CASE:
 	  parse_select_block ();
-	  break;
+	  continue;
 
 	case ST_DO:
 	  parse_do_block ();
 	  if (check_do_closure () == 1)
 	    return ST_IMPLIED_ENDDO;
-	  break;
+	  continue;
 
 	case ST_WHERE_BLOCK:
 	  parse_where_block ();
-	  break;
+	  continue;
 
 	case ST_FORALL_BLOCK:
 	  parse_forall_block ();
-	  break;
-
-	case ST_OMP_PARALLEL:
-	case ST_OMP_PARALLEL_SECTIONS:
-	case ST_OMP_SECTIONS:
-	case ST_OMP_ORDERED:
-	case ST_OMP_CRITICAL:
-	case ST_OMP_MASTER:
-	case ST_OMP_SINGLE:
-	  parse_omp_structured_block (st, false);
-	  break;
-
-	case ST_OMP_WORKSHARE:
-	case ST_OMP_PARALLEL_WORKSHARE:
-	  parse_omp_structured_block (st, true);
-	  break;
-
-	case ST_OMP_DO:
-	case ST_OMP_PARALLEL_DO:
-	  st = parse_omp_do (st);
-	  if (st == ST_IMPLIED_ENDDO)
-	    return st;
 	  continue;
 
-	case ST_OMP_ATOMIC:
-	  parse_omp_atomic ();
-	  break;
-
 	default:
-	  return st;
+	  break;
 	}
 
-      st = next_statement ();
+      break;
     }
+
+  return st;
 }
 
 
@@ -2730,9 +2138,8 @@ gfc_fixup_sibling_symbols (gfc_symbol * sym, gfc_namespace * siblings)
   for (ns = siblings; ns; ns = ns->sibling)
     {
       gfc_find_sym_tree (sym->name, ns, 0, &st);
-
-      if (!st || (st->n.sym->attr.dummy && ns == st->n.sym->ns))
-	continue;
+      if (!st)
+        continue;
 
       old_sym = st->n.sym;
       if ((old_sym->attr.flavor == FL_PROCEDURE
@@ -2750,7 +2157,7 @@ gfc_fixup_sibling_symbols (gfc_symbol * sym, gfc_namespace * siblings)
             gfc_free_symbol (old_sym);
         }
 
-      /* Do the same for any contained procedures.  */
+      /* Do the same for any contined procedures.  */
       gfc_fixup_sibling_symbols (sym, ns->contained);
     }
 }
@@ -2948,7 +2355,7 @@ done:
 /* Come here to complain about a global symbol already in use as
    something else.  */
 
-void
+static void
 global_used (gfc_gsymbol *sym, locus *where)
 {
   const char *name;
@@ -2982,7 +2389,7 @@ global_used (gfc_gsymbol *sym, locus *where)
     }
 
   gfc_error("Global name '%s' at %L is already being used as a %s at %L",
-	      sym->name, where, name, &sym->where);
+           gfc_new_block->name, where, name, &sym->where);
 }
 
 
@@ -3013,13 +2420,12 @@ parse_block_data (void)
   else
     {
       s = gfc_get_gsymbol (gfc_new_block->name);
-      if (s->defined || (s->type != GSYM_UNKNOWN && s->type != GSYM_BLOCK_DATA))
+      if (s->type != GSYM_UNKNOWN)
        global_used(s, NULL);
       else
        {
          s->type = GSYM_BLOCK_DATA;
          s->where = gfc_current_locus;
-	 s->defined = 1;
        }
     }
 
@@ -3044,13 +2450,12 @@ parse_module (void)
   gfc_gsymbol *s;
 
   s = gfc_get_gsymbol (gfc_new_block->name);
-  if (s->defined || (s->type != GSYM_UNKNOWN && s->type != GSYM_MODULE))
+  if (s->type != GSYM_UNKNOWN)
     global_used(s, NULL);
   else
     {
       s->type = GSYM_MODULE;
       s->where = gfc_current_locus;
-      s->defined = 1;
     }
 
   st = parse_spec (ST_NONE);
@@ -3089,14 +2494,12 @@ add_global_procedure (int sub)
 
   s = gfc_get_gsymbol(gfc_new_block->name);
 
-  if (s->defined
-	|| (s->type != GSYM_UNKNOWN && s->type != (sub ? GSYM_SUBROUTINE : GSYM_FUNCTION)))
+  if (s->type != GSYM_UNKNOWN)
     global_used(s, NULL);
   else
     {
       s->type = sub ? GSYM_SUBROUTINE : GSYM_FUNCTION;
       s->where = gfc_current_locus;
-      s->defined = 1;
     }
 }
 
@@ -3112,13 +2515,12 @@ add_global_program (void)
     return;
   s = gfc_get_gsymbol (gfc_new_block->name);
 
-  if (s->defined || (s->type != GSYM_UNKNOWN && s->type != GSYM_PROGRAM))
+  if (s->type != GSYM_UNKNOWN)
     global_used(s, NULL);
   else
     {
       s->type = GSYM_PROGRAM;
       s->where = gfc_current_locus;
-      s->defined = 1;
     }
 }
 
@@ -3150,10 +2552,6 @@ gfc_parse_file (void)
 
   seen_program = 0;
 
-  /* Exit early for empty files.  */
-  if (gfc_at_eof ())
-    goto done;
-
 loop:
   gfc_init_2 ();
   st = next_statement ();
@@ -3170,7 +2568,6 @@ loop:
       prog_locus = gfc_current_locus;
 
       push_state (&s, COMP_PROGRAM, gfc_new_block);
-      main_program_symbol(gfc_current_ns);
       accept_statement (st);
       add_global_program ();
       parse_progunit (ST_NONE);
@@ -3212,7 +2609,6 @@ loop:
       prog_locus = gfc_current_locus;
 
       push_state (&s, COMP_PROGRAM, gfc_new_block);
-      main_program_symbol(gfc_current_ns);
       parse_progunit (st);
       break;
     }

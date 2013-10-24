@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* { dg-do compile } */
 /* { dg-require-visibility "" } */
 /* { dg-options "-fvisibility-inlines-hidden" } */

@@ -5,8 +5,7 @@
 	.file	"linux64_closure.S"
 
 #ifdef __powerpc64__
-	FFI_HIDDEN (ffi_closure_LINUX64)
-	FFI_HIDDEN (.ffi_closure_LINUX64)
+	.hidden ffi_closure_LINUX64, .ffi_closure_LINUX64
 	.globl  ffi_closure_LINUX64, .ffi_closure_LINUX64
 	.section        ".opd","aw"
 	.align  3

@@ -14,8 +14,8 @@
 
    You should have received a copy of the GNU Library General Public
    License along with the GNU C Library; see the file COPYING.LIB.  If not,
-   write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /* This contains contribution from Cygnus Support.  */
 
@@ -115,6 +115,11 @@ __define_stab (N_SSYM, 0x60, "SSYM")
 /* Name of main source file.
    Value is starting text address of the compilation.  */
 __define_stab (N_SO, 0x64, "SO")
+
+/* APPLE LOCAL begin symbol separation, dwarf 4386531 */
+/* Used with Essential Symbols.  */
+__define_stab (N_OSO, 0x66, "OSO")
+/* APPLE LOCAL end symbol separation, dwarf 4386531 */
 
 /* Automatic variable in the stack.  Value is offset from frame pointer.
    Also used for type descriptions.  */

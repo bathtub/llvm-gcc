@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -34,14 +34,15 @@ Boston, MA 02110-1301, USA.  */
 #include <string.h>
 #include "libgfortran.h"
 
-#if defined (HAVE_GFC_INTEGER_4)
+void cshift1_4 (const gfc_array_char * ret,
+			   const gfc_array_char * array,
+			   const gfc_array_i4 * h, const GFC_INTEGER_4 * pwhich);
+export_proto(cshift1_4);
 
-static void
-cshift1 (gfc_array_char * const restrict ret, 
-	const gfc_array_char * const restrict array,
-	const gfc_array_i4 * const restrict h, 
-	const GFC_INTEGER_4 * const restrict pwhich, 
-	index_type size)
+void
+cshift1_4 (const gfc_array_char * ret,
+		      const gfc_array_char * array,
+		      const gfc_array_i4 * h, const GFC_INTEGER_4 * pwhich)
 {
   /* r.* indicates the return array.  */
   index_type rstride[GFC_MAX_DIMENSIONS];
@@ -55,7 +56,7 @@ cshift1 (gfc_array_char * const restrict ret,
   index_type soffset;
   const char *sptr;
   const char *src;
-  /* h.* indicates the shift array.  */
+  /* h.* indicates the  array.  */
   index_type hstride[GFC_MAX_DIMENSIONS];
   index_type hstride0;
   const GFC_INTEGER_4 *hptr;
@@ -63,6 +64,7 @@ cshift1 (gfc_array_char * const restrict ret,
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type dim;
+  index_type size;
   index_type len;
   index_type n;
   int which;
@@ -76,27 +78,11 @@ cshift1 (gfc_array_char * const restrict ret,
   if (which < 0 || (which + 1) > GFC_DESCRIPTOR_RANK (array))
     runtime_error ("Argument 'DIM' is out of range in call to 'CSHIFT'");
 
-  if (ret->data == NULL)
-    {
-      int i;
-
-      ret->data = internal_malloc_size (size * size0 ((array_t *)array));
-      ret->offset = 0;
-      ret->dtype = array->dtype;
-      for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
-        {
-          ret->dim[i].lbound = 0;
-          ret->dim[i].ubound = array->dim[i].ubound - array->dim[i].lbound;
-
-          if (i == 0)
-            ret->dim[i].stride = 1;
-          else
-            ret->dim[i].stride = (ret->dim[i-1].ubound + 1) * ret->dim[i-1].stride;
-        }
-    }
+  size = GFC_DESCRIPTOR_SIZE (ret);
 
   extent[0] = 1;
   count[0] = 0;
+  size = GFC_DESCRIPTOR_SIZE (array);
   n = 0;
 
   /* Initialized for avoiding compiler warnings.  */
@@ -144,7 +130,7 @@ cshift1 (gfc_array_char * const restrict ret,
 
   while (rptr)
     {
-      /* Do the shift for this dimension.  */
+      /* Do the  for this dimension.  */
       sh = *hptr;
       sh = (div (sh, len)).rem;
       if (sh < 0)
@@ -175,7 +161,7 @@ cshift1 (gfc_array_char * const restrict ret,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           rptr -= rstride[n] * extent[n];
           sptr -= sstride[n] * extent[n];
 	  hptr -= hstride[n] * extent[n];
@@ -196,39 +182,3 @@ cshift1 (gfc_array_char * const restrict ret,
         }
     }
 }
-
-void cshift1_4 (gfc_array_char * const restrict, 
-	const gfc_array_char * const restrict,
-	const gfc_array_i4 * const restrict, 
-	const GFC_INTEGER_4 * const restrict);
-export_proto(cshift1_4);
-
-void
-cshift1_4 (gfc_array_char * const restrict ret,
-	const gfc_array_char * const restrict array,
-	const gfc_array_i4 * const restrict h, 
-	const GFC_INTEGER_4 * const restrict pwhich)
-{
-  cshift1 (ret, array, h, pwhich, GFC_DESCRIPTOR_SIZE (array));
-}
-
-void cshift1_4_char (gfc_array_char * const restrict ret, 
-	GFC_INTEGER_4,
-	const gfc_array_char * const restrict array,
-	const gfc_array_i4 * const restrict h, 
-	const GFC_INTEGER_4 * const restrict pwhich,
-	GFC_INTEGER_4);
-export_proto(cshift1_4_char);
-
-void
-cshift1_4_char (gfc_array_char * const restrict ret,
-	GFC_INTEGER_4 ret_length __attribute__((unused)),
-	const gfc_array_char * const restrict array,
-	const gfc_array_i4 * const restrict h, 
-	const GFC_INTEGER_4 * const restrict pwhich,
-	GFC_INTEGER_4 array_length)
-{
-  cshift1 (ret, array, h, pwhich, array_length);
-}
-
-#endif

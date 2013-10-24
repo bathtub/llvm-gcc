@@ -1,5 +1,4 @@
-/* { dg-do compile } */
-/* { dg-require-effective-target int32plus } */
+/* { dg-do compile { target i?86-*-* } } */
 
 struct x {
   int selector;

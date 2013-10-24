@@ -1,5 +1,4 @@
 /* Valid initializations.  */
-/* { dg-require-effective-target tls } */
 
 __thread int i = 42;
 

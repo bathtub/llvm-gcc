@@ -1,6 +1,6 @@
 /* PR/18160 */
 
-/* { dg-do compile { target i?86-*-* x86_64-*-* } } */
+/* { dg-do compile { target i?86-*-* } } */
 
 /* This should yield an error even without -pedantic.  */
 /* { dg-options "-ansi" } */

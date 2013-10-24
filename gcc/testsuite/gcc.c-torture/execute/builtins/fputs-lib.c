@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stddef.h>
-extern void abort (void);
 extern int inside_main;
 extern size_t strlen(const char *);
 int
@@ -16,9 +15,3 @@ fputs(const char *string, FILE *stream)
   return n > r ? EOF : 0;
 }
 
-/* Locking stdio doesn't matter for the purposes of this test.  */
-int
-fputs_unlocked(const char *string, FILE *stream)
-{
-  return fputs (string, stream);
-}

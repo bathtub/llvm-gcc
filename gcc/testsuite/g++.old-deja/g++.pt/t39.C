@@ -16,7 +16,7 @@ void frob<T>::print () {
 }
 
   static int x[10];
-  frob<const char> fc ("hello");
+  frob<char> fc ("hello");
   frob<int> fi (x);
 
 int main () {

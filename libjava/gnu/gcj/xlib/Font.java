@@ -34,21 +34,7 @@ public final class Font extends XID
     structure = struct;
   }
 
-  static RawData loadFont(Display display, String lfdNamePattern)
-  {
-    RawData returnValue = null;
-    try
-    {
-      returnValue = loadFontImpl (display,lfdNamePattern);
-    }
-    catch (XException e)
-    {
-      // Throw a descriptive exception, including the font pattern
-      throw new XException ("Font not found: " + lfdNamePattern);
-    }
-    return returnValue;
-  }
-  static native RawData loadFontImpl(Display display, String lfdNamePattern);
+  static native RawData loadFont(Display display, String lfdNamePattern);
 
   static native int getXIDFromStruct(RawData structure);
 

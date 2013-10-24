@@ -1,5 +1,5 @@
 /* Implementation of the MATMUL intrinsic
-   Copyright 2002, 2005, 2006 Free Software Foundation, Inc.
+   Copyright 2002 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -34,44 +34,27 @@ Boston, MA 02110-1301, USA.  */
 #include <assert.h>
 #include "libgfortran.h"
 
-#if defined (HAVE_GFC_REAL_4)
-
-/* The order of loops is different in the case of plain matrix
-   multiplication C=MATMUL(A,B), and in the frequent special case where
-   the argument A is the temporary result of a TRANSPOSE intrinsic:
-   C=MATMUL(TRANSPOSE(A),B).  Transposed temporaries are detected by
-   looking at their strides.
-
-   The equivalent Fortran pseudo-code is:
+/* This is a C version of the following fortran pseudo-code. The key
+   point is the loop order -- we access all arrays column-first, which
+   improves the performance enough to boost galgel spec score by 50%.
 
    DIMENSION A(M,COUNT), B(COUNT,N), C(M,N)
-   IF (.NOT.IS_TRANSPOSED(A)) THEN
-     C = 0
-     DO J=1,N
-       DO K=1,COUNT
-         DO I=1,M
-           C(I,J) = C(I,J)+A(I,K)*B(K,J)
-   ELSE
-     DO J=1,N
+   C = 0
+   DO J=1,N
+     DO K=1,COUNT
        DO I=1,M
-         S = 0
-         DO K=1,COUNT
-           S = S+A(I,K)+B(K,J)
-         C(I,J) = S
-   ENDIF
+         C(I,J) = C(I,J)+A(I,K)*B(K,J)
 */
 
-extern void matmul_r4 (gfc_array_r4 * const restrict retarray, 
-	gfc_array_r4 * const restrict a, gfc_array_r4 * const restrict b);
+extern void matmul_r4 (gfc_array_r4 * retarray, gfc_array_r4 * a, gfc_array_r4 * b);
 export_proto(matmul_r4);
 
 void
-matmul_r4 (gfc_array_r4 * const restrict retarray, 
-	gfc_array_r4 * const restrict a, gfc_array_r4 * const restrict b)
+matmul_r4 (gfc_array_r4 * retarray, gfc_array_r4 * a, gfc_array_r4 * b)
 {
-  const GFC_REAL_4 * restrict abase;
-  const GFC_REAL_4 * restrict bbase;
-  GFC_REAL_4 * restrict dest;
+  GFC_REAL_4 *abase;
+  GFC_REAL_4 *bbase;
+  GFC_REAL_4 *dest;
 
   index_type rxstride, rystride, axstride, aystride, bxstride, bystride;
   index_type x, y, n, count, xcount, ycount;
@@ -109,16 +92,27 @@ matmul_r4 (gfc_array_r4 * const restrict retarray,
           retarray->dim[0].lbound = 0;
           retarray->dim[0].ubound = a->dim[0].ubound - a->dim[0].lbound;
           retarray->dim[0].stride = 1;
-
+          
           retarray->dim[1].lbound = 0;
           retarray->dim[1].ubound = b->dim[1].ubound - b->dim[1].lbound;
           retarray->dim[1].stride = retarray->dim[0].ubound+1;
         }
-
+          
       retarray->data
-	= internal_malloc_size (sizeof (GFC_REAL_4) * size0 ((array_t *) retarray));
-      retarray->offset = 0;
+	= internal_malloc_size (sizeof (GFC_REAL_4) * size0 (retarray));
+      retarray->base = 0;
     }
+
+  abase = a->data;
+  bbase = b->data;
+  dest = retarray->data;
+
+  if (retarray->dim[0].stride == 0)
+    retarray->dim[0].stride = 1;
+  if (a->dim[0].stride == 0)
+    a->dim[0].stride = 1;
+  if (b->dim[0].stride == 0)
+    b->dim[0].stride = 1;
 
 
   if (GFC_DESCRIPTOR_RANK (retarray) == 1)
@@ -163,7 +157,7 @@ matmul_r4 (gfc_array_r4 * const restrict retarray,
       /* bystride should never be used for 1-dimensional b.
 	 in case it is we want it to cause a segfault, rather than
 	 an incorrect result. */
-      bystride = 0xDEADBEEF;
+      bystride = 0xDEADBEEF; 
       ycount = 1;
     }
   else
@@ -173,25 +167,22 @@ matmul_r4 (gfc_array_r4 * const restrict retarray,
       ycount = b->dim[1].ubound + 1 - b->dim[1].lbound;
     }
 
+  assert (a->base == 0);
+  assert (b->base == 0);
+  assert (retarray->base == 0);
+
   abase = a->data;
   bbase = b->data;
   dest = retarray->data;
 
   if (rxstride == 1 && axstride == 1 && bxstride == 1)
     {
-      const GFC_REAL_4 * restrict bbase_y;
-      GFC_REAL_4 * restrict dest_y;
-      const GFC_REAL_4 * restrict abase_n;
+      GFC_REAL_4 *bbase_y;
+      GFC_REAL_4 *dest_y;
+      GFC_REAL_4 *abase_n;
       GFC_REAL_4 bbase_yn;
 
-      if (rystride == xcount)
-	memset (dest, 0, (sizeof (GFC_REAL_4) * xcount * ycount));
-      else
-	{
-	  for (y = 0; y < ycount; y++)
-	    for (x = 0; x < xcount; x++)
-	      dest[x + y*rystride] = (GFC_REAL_4)0;
-	}
+      memset (dest, 0, (sizeof (GFC_REAL_4) * size0(retarray)));
 
       for (y = 0; y < ycount; y++)
 	{
@@ -208,45 +199,7 @@ matmul_r4 (gfc_array_r4 * const restrict retarray,
 	    }
 	}
     }
-  else if (rxstride == 1 && aystride == 1 && bxstride == 1)
-    {
-      if (GFC_DESCRIPTOR_RANK (a) != 1)
-	{
-	  const GFC_REAL_4 *restrict abase_x;
-	  const GFC_REAL_4 *restrict bbase_y;
-	  GFC_REAL_4 *restrict dest_y;
-	  GFC_REAL_4 s;
-
-	  for (y = 0; y < ycount; y++)
-	    {
-	      bbase_y = &bbase[y*bystride];
-	      dest_y = &dest[y*rystride];
-	      for (x = 0; x < xcount; x++)
-		{
-		  abase_x = &abase[x*axstride];
-		  s = (GFC_REAL_4) 0;
-		  for (n = 0; n < count; n++)
-		    s += abase_x[n] * bbase_y[n];
-		  dest_y[x] = s;
-		}
-	    }
-	}
-      else
-	{
-	  const GFC_REAL_4 *restrict bbase_y;
-	  GFC_REAL_4 s;
-
-	  for (y = 0; y < ycount; y++)
-	    {
-	      bbase_y = &bbase[y*bystride];
-	      s = (GFC_REAL_4) 0;
-	      for (n = 0; n < count; n++)
-		s += abase[n*axstride] * bbase_y[n];
-	      dest[y*rystride] = s;
-	    }
-	}
-    }
-  else if (axstride < aystride)
+  else
     {
       for (y = 0; y < ycount; y++)
 	for (x = 0; x < xcount; x++)
@@ -258,41 +211,4 @@ matmul_r4 (gfc_array_r4 * const restrict retarray,
 	    /* dest[x,y] += a[x,n] * b[n,y] */
 	    dest[x*rxstride + y*rystride] += abase[x*axstride + n*aystride] * bbase[n*bxstride + y*bystride];
     }
-  else if (GFC_DESCRIPTOR_RANK (a) == 1)
-    {
-      const GFC_REAL_4 *restrict bbase_y;
-      GFC_REAL_4 s;
-
-      for (y = 0; y < ycount; y++)
-	{
-	  bbase_y = &bbase[y*bystride];
-	  s = (GFC_REAL_4) 0;
-	  for (n = 0; n < count; n++)
-	    s += abase[n*axstride] * bbase_y[n*bxstride];
-	  dest[y*rxstride] = s;
-	}
-    }
-  else
-    {
-      const GFC_REAL_4 *restrict abase_x;
-      const GFC_REAL_4 *restrict bbase_y;
-      GFC_REAL_4 *restrict dest_y;
-      GFC_REAL_4 s;
-
-      for (y = 0; y < ycount; y++)
-	{
-	  bbase_y = &bbase[y*bystride];
-	  dest_y = &dest[y*rystride];
-	  for (x = 0; x < xcount; x++)
-	    {
-	      abase_x = &abase[x*axstride];
-	      s = (GFC_REAL_4) 0;
-	      for (n = 0; n < count; n++)
-		s += abase_x[n*aystride] * bbase_y[n*bxstride];
-	      dest_y[x*rxstride] = s;
-	    }
-	}
-    }
 }
-
-#endif

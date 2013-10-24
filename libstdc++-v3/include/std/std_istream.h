@@ -1,6 +1,6 @@
 // Input streams -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+// Copyright (C) 1997, 1998, 1999, 2001, 2002, 2003, 2004
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -44,8 +44,8 @@
 #include <ios>
 #include <limits> // For numeric_limits
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std
+{
   // [27.6.1.1] Template class basic_istream
   /**
    *  @brief  Controlling input.
@@ -127,23 +127,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  functions in constructs like "std::cin >> std::ws".  For more
        *  information, see the iomanip header.
       */
-      __istream_type&
-      operator>>(__istream_type& (*__pf)(__istream_type&))
-      { return __pf(*this); }
+      inline __istream_type&
+      operator>>(__istream_type& (*__pf)(__istream_type&));
 
-      __istream_type&
-      operator>>(__ios_type& (*__pf)(__ios_type&))
-      { 
-	__pf(*this);
-	return *this;
-      }
+      inline __istream_type&
+      operator>>(__ios_type& (*__pf)(__ios_type&));
 
-      __istream_type&
-      operator>>(ios_base& (*__pf)(ios_base&))
-      {
-	__pf(*this);
-	return *this;
-      }
+      inline __istream_type&
+      operator>>(ios_base& (*__pf)(ios_base&));
       //@}
       
       // [27.6.1.2.2] arithmetic extractors
@@ -175,56 +166,45 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @c num_get facet) to parse the input data.
       */
       __istream_type& 
-      operator>>(bool& __n)
-      { return _M_extract(__n); }
+      operator>>(bool& __n);
       
       __istream_type& 
       operator>>(short& __n);
       
       __istream_type& 
-      operator>>(unsigned short& __n)
-      { return _M_extract(__n); }
+      operator>>(unsigned short& __n);
 
       __istream_type& 
       operator>>(int& __n);
-    
-      __istream_type& 
-      operator>>(unsigned int& __n)
-      { return _M_extract(__n); }
-
-      __istream_type& 
-      operator>>(long& __n)
-      { return _M_extract(__n); }
       
       __istream_type& 
-      operator>>(unsigned long& __n)
-      { return _M_extract(__n); }
+      operator>>(unsigned int& __n);
+
+      __istream_type& 
+      operator>>(long& __n);
+      
+      __istream_type& 
+      operator>>(unsigned long& __n);
 
 #ifdef _GLIBCXX_USE_LONG_LONG
       __istream_type& 
-      operator>>(long long& __n)
-      { return _M_extract(__n); }
+      operator>>(long long& __n);
 
       __istream_type& 
-      operator>>(unsigned long long& __n)
-      { return _M_extract(__n); }
+      operator>>(unsigned long long& __n);
 #endif
 
       __istream_type& 
-      operator>>(float& __f)
-      { return _M_extract(__f); }
+      operator>>(float& __f);
 
       __istream_type& 
-      operator>>(double& __f)
-      { return _M_extract(__f); }
+      operator>>(double& __f);
 
       __istream_type& 
-      operator>>(long double& __f)
-      { return _M_extract(__f); }
+      operator>>(long double& __f);
 
       __istream_type& 
-      operator>>(void*& __p)
-      { return _M_extract(__p); }
+      operator>>(void*& __p);
 
       /**
        *  @brief  Extracting into another streambuf.
@@ -256,7 +236,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  @return  The number of characters extracted by the previous
        *           unformatted input function dispatched for this stream.
       */
-      streamsize 
+      inline streamsize 
       gcount() const 
       { return _M_gcount; }
       
@@ -340,7 +320,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *
        *  Returns @c get(s,n,widen('\n')).
       */
-      __istream_type& 
+      inline __istream_type& 
       get(char_type* __s, streamsize __n)
       { return this->get(__s, __n, this->widen('\n')); }
 
@@ -373,7 +353,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *
        *  Returns @c get(sb,widen('\n')).
       */
-      __istream_type&
+      inline __istream_type&
       get(__streambuf_type& __sb)
       { return this->get(__sb, this->widen('\n')); }
 
@@ -413,7 +393,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *
        *  Returns @c getline(s,n,widen('\n')).
       */
-      __istream_type& 
+      inline __istream_type& 
       getline(char_type* __s, streamsize __n)
       { return this->getline(__s, __n, this->widen('\n')); }
 
@@ -592,10 +572,6 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     protected:
       explicit 
       basic_istream(): _M_gcount(streamsize(0)) { }
-
-      template<typename _ValueT>
-        __istream_type&
-        _M_extract(_ValueT& __v);
     };
 
   // Explicit specialization declarations, defined in src/istream.cc.
@@ -684,8 +660,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
        *  For ease of use, sentries may be converted to booleans.  The
        *  return value is that of the sentry state (true == okay).
       */
-      operator bool() const
-      { return _M_ok; }
+      operator bool() const { return _M_ok; }
 
     private:
       bool _M_ok;
@@ -709,12 +684,12 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
     operator>>(basic_istream<_CharT, _Traits>& __in, _CharT& __c);
 
   template<class _Traits>
-    inline basic_istream<char, _Traits>&
+    basic_istream<char, _Traits>&
     operator>>(basic_istream<char, _Traits>& __in, unsigned char& __c)
     { return (__in >> reinterpret_cast<char&>(__c)); }
 
   template<class _Traits>
-    inline basic_istream<char, _Traits>&
+    basic_istream<char, _Traits>&
     operator>>(basic_istream<char, _Traits>& __in, signed char& __c)
     { return (__in >> reinterpret_cast<char&>(__c)); }
   //@}
@@ -748,19 +723,14 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT, typename _Traits>
     basic_istream<_CharT, _Traits>&
     operator>>(basic_istream<_CharT, _Traits>& __in, _CharT* __s);
-
-  // Explicit specialization declaration, defined in src/istream.cc.
-  template<>
-    basic_istream<char>&
-    operator>>(basic_istream<char>& __in, char* __s);
-
+  
   template<class _Traits>
-    inline basic_istream<char, _Traits>&
+    basic_istream<char, _Traits>&
     operator>>(basic_istream<char, _Traits>& __in, unsigned char* __s)
     { return (__in >> reinterpret_cast<char*>(__s)); }
 
   template<class _Traits>
-    inline basic_istream<char, _Traits>&
+    basic_istream<char, _Traits>&
     operator>>(basic_istream<char, _Traits>& __in, signed char* __s)
     { return (__in >> reinterpret_cast<char*>(__s)); }
   //@}
@@ -838,8 +808,7 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   template<typename _CharT, typename _Traits>
     basic_istream<_CharT, _Traits>& 
     ws(basic_istream<_CharT, _Traits>& __is);
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std
 
 #ifndef _GLIBCXX_EXPORT_TEMPLATE
 # include <bits/istream.tcc>

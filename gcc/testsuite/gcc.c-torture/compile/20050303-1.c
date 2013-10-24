@@ -1,6 +1,4 @@
-/* { dg-require-effective-target int32plus } */
-/* { dg-require-effective-target size32plus } */
-
+/* APPLE LOCAL file mainline */
 void crc()
 {
     int  toread;

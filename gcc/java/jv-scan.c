@@ -1,5 +1,5 @@
 /* Main for jv-scan
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
    Free Software Foundation, Inc.
    Contributed by Alexandre Petit-Bianco (apbianco@cygnus.com)
 
@@ -17,8 +17,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include "system.h"
@@ -42,8 +42,7 @@ Boston, MA 02110-1301, USA.  */
 
 extern void fatal_error (const char *gmsgid, ...)
      ATTRIBUTE_PRINTF_1 ATTRIBUTE_NORETURN;
-void warning (int opt, const char *gmsgid, ...) ATTRIBUTE_PRINTF_2;
-void warning0 (const char *gmsgid, ...) ATTRIBUTE_PRINTF_1;
+void warning (const char *gmsgid, ...) ATTRIBUTE_PRINTF_1;
 void report (void);
 
 static void usage (void) ATTRIBUTE_NORETURN;
@@ -126,7 +125,7 @@ static void
 version (void)
 {
   printf ("jv-scan (GCC) %s\n\n", version_string);
-  printf ("Copyright %s 2006 Free Software Foundation, Inc.\n", _("(C)"));
+  printf ("Copyright %s 2004 Free Software Foundation, Inc.\n", _("(C)"));
   printf (_("This is free software; see the source for copying conditions.  There is NO\n"
 	    "warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"));
   exit (0);
@@ -262,18 +261,7 @@ fatal_error (const char *gmsgid, ...)
 }
 
 void
-warning (int opt ATTRIBUTE_UNUSED, const char *gmsgid, ...)
-{
-  va_list ap;
-  va_start (ap, gmsgid);
-  fprintf (stderr, _("%s: warning: "), exec_name);
-  vfprintf (stderr, _(gmsgid), ap);
-  fputc ('\n', stderr);
-  va_end (ap);
-}
-
-void
-warning0 (const char *gmsgid, ...)
+warning (const char *gmsgid, ...)
 {
   va_list ap;
   va_start (ap, gmsgid);

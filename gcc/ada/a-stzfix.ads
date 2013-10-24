@@ -1,6 +1,6 @@
 ------------------------------------------------------------------------------
 --                                                                          --
---                         GNAT RUN-TIME COMPONENTS                         --
+--                         GNAT RUNTIME COMPONENTS                          --
 --                                                                          --
 --          A D A . S T R I N G S . W I D E _ W I D E _ F I X E D           --
 --                                                                          --
@@ -13,10 +13,11 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
+
 with Ada.Strings.Wide_Wide_Maps;
 
 package Ada.Strings.Wide_Wide_Fixed is
-   pragma Preelaborate;
+pragma Preelaborate (Wide_Wide_Fixed);
 
    ------------------------------------------------------------------------
    -- Copy Procedure for Wide_Wide_Strings of Possibly Different Lengths --

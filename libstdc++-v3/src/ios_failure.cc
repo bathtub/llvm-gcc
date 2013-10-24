@@ -1,6 +1,6 @@
 // Iostreams base classes -*- C++ -*-
 
-// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2005
+// Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -16,7 +16,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -34,8 +34,8 @@
 
 #include <ios>
 
-_GLIBCXX_BEGIN_NAMESPACE(std)
-
+namespace std 
+{
   ios_base::failure::failure(const string& __str) throw()
   : _M_msg(__str) { }
 
@@ -45,5 +45,4 @@ _GLIBCXX_BEGIN_NAMESPACE(std)
   const char*
   ios_base::failure::what() const throw()
   { return _M_msg.c_str(); }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace std

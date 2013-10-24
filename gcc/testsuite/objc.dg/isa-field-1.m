@@ -1,5 +1,7 @@
+/* APPLE LOCAL file mainline */
 /* Ensure there are no bizarre difficulties with accessing the 'isa' field of objects.  */
-/* { dg-do compile { target *-*-darwin* } } */
+
+/* { dg-do compile } */
 
 #include <objc/Object.h>
 

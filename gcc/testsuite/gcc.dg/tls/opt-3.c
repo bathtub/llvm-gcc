@@ -1,8 +1,6 @@
 /* { dg-do compile } */
 /* { dg-options "-O2 -fpic" } */
-/* { dg-options "-O2 -fpic -mregparm=3" { target i?86-*-* x86_64-*-* } } */
-/* { dg-require-effective-target tls } */
-/* { dg-require-effective-target fpic } */
+/* { dg-options "-O2 -fpic -mregparm=3" { target i?86-*-* } } */
 
 extern __thread int i, j, k;
 extern void bar(int *, int *, int *);

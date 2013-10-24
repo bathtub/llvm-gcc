@@ -2,6 +2,8 @@
 /* { dg-do compile } */
 /* { dg-options "-O2" } */
 /* Contributed by Ziemowit Laski  <zlaski@apple.com>  */
+/* APPLE LOCAL radar 4894756 */
+/* { dg-skip-if "" { *-*-darwin* } { "-m64" } { "" } } */
 
 @interface Test
 -(void) test2: (volatile int) a;
@@ -16,3 +18,5 @@
 @end
 
 /* { dg-final { scan-assembler "li r\[0-9\]+,1" { target powerpc*-*-darwin* } } } */
+/* APPLE LOCAL testing */
+/* { dg-final { scan-assembler "movl\t\\\$1, 16\\(%ebp\\)" { target i?86*-*-darwin* } } } */

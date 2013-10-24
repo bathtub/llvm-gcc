@@ -1,5 +1,5 @@
-/* Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+/* APPLE LOCAL file mainline 2005-06-30 Radar 4131077 */
+/* Copyright (C) 2002, 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -34,16 +34,21 @@
 #ifndef __MMX__
 # error "MMX instruction set not enabled"
 #else
-/* The Intel API is flexible enough that we must allow aliasing with other
-   vector types, and their scalar components.  */
-typedef int __m64 __attribute__ ((__vector_size__ (8), __may_alias__));
+/* The data type intended for user use.  */
+/* APPLE LOCAL 4505813 */
+typedef long long __m64 __attribute__ ((__vector_size__ (8)));
 
 /* Internal data types for implementing the intrinsics.  */
 typedef int __v2si __attribute__ ((__vector_size__ (8)));
 typedef short __v4hi __attribute__ ((__vector_size__ (8)));
 typedef char __v8qi __attribute__ ((__vector_size__ (8)));
 
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#define __always_inline__ __always_inline__, __nodebug__
+/* APPLE LOCAL end nodebug inline 4152603 */
+
 /* Empty the multimedia state.  */
+/* APPLE LOCAL begin radar 4152603 */
 static __inline void __attribute__((__always_inline__))
 _mm_empty (void)
 {
@@ -305,13 +310,12 @@ _m_paddd (__m64 __m1, __m64 __m2)
 }
 
 /* Add the 64-bit values in M1 to the 64-bit values in M2.  */
-#ifdef __SSE2__
 static __inline __m64 __attribute__((__always_inline__))
 _mm_add_si64 (__m64 __m1, __m64 __m2)
 {
-  return (__m64) __builtin_ia32_paddq ((long long)__m1, (long long)__m2);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_paddq (__m1, __m2);
 }
-#endif
 
 /* Add the 8-bit values in M1 to the 8-bit values in M2 using signed
    saturated arithmetic.  */
@@ -409,13 +413,12 @@ _m_psubd (__m64 __m1, __m64 __m2)
 }
 
 /* Add the 64-bit values in M1 to the 64-bit values in M2.  */
-#ifdef __SSE2__
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sub_si64 (__m64 __m1, __m64 __m2)
 {
-  return (__m64) __builtin_ia32_psubq ((long long)__m1, (long long)__m2);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psubq (__m1, __m2);
 }
-#endif
 
 /* Subtract the 8-bit values in M2 from the 8-bit values in M1 using signed
    saturating arithmetic.  */
@@ -520,7 +523,8 @@ _m_pmullw (__m64 __m1, __m64 __m2)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sll_pi16 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psllw ((__v4hi)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psllw ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -532,7 +536,8 @@ _m_psllw (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_slli_pi16 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psllw ((__v4hi)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psllwi ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -545,7 +550,8 @@ _m_psllwi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sll_pi32 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_pslld ((__v2si)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_pslld ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -557,7 +563,8 @@ _m_pslld (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_slli_pi32 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_pslld ((__v2si)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_pslldi ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -570,7 +577,8 @@ _m_pslldi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sll_si64 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psllq ((long long)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psllq (__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -582,7 +590,8 @@ _m_psllq (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_slli_si64 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psllq ((long long)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psllqi (__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -595,7 +604,8 @@ _m_psllqi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sra_pi16 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psraw ((__v4hi)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psraw ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -607,7 +617,8 @@ _m_psraw (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srai_pi16 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psraw ((__v4hi)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrawi ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -620,7 +631,8 @@ _m_psrawi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_sra_pi32 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psrad ((__v2si)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrad ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -632,7 +644,8 @@ _m_psrad (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srai_pi32 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psrad ((__v2si)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psradi ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -645,7 +658,8 @@ _m_psradi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srl_pi16 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psrlw ((__v4hi)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrlw ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -657,7 +671,8 @@ _m_psrlw (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srli_pi16 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psrlw ((__v4hi)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrlwi ((__v4hi)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -670,7 +685,8 @@ _m_psrlwi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srl_pi32 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psrld ((__v2si)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrld ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -682,7 +698,8 @@ _m_psrld (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srli_pi32 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psrld ((__v2si)__m, __count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrldi ((__v2si)__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -695,7 +712,8 @@ _m_psrldi (__m64 __m, int __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srl_si64 (__m64 __m, __m64 __count)
 {
-  return (__m64) __builtin_ia32_psrlq ((long long)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrlq (__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -707,7 +725,8 @@ _m_psrlq (__m64 __m, __m64 __count)
 static __inline __m64 __attribute__((__always_inline__))
 _mm_srli_si64 (__m64 __m, int __count)
 {
-  return (__m64) __builtin_ia32_psrlq ((long long)__m, (long long)__count);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  return (__m64) __builtin_ia32_psrlqi (__m, __count);
 }
 
 static __inline __m64 __attribute__((__always_inline__))
@@ -917,6 +936,11 @@ _mm_set1_pi8 (char __b)
 {
   return _mm_set_pi8 (__b, __b, __b, __b, __b, __b, __b, __b);
 }
+/* APPLE LOCAL end radar 4152603 */
+
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#undef __always_inline__
+/* APPLE LOCAL end nodebug inline 4152603 */
 
 #endif /* __MMX__ */
 #endif /* _MMINTRIN_H_INCLUDED */

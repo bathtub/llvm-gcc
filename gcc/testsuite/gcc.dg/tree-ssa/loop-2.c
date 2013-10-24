@@ -1,8 +1,7 @@
 /* A test for strength reduction and induction variable elimination.  */
 
 /* { dg-do compile } */
-/* { dg-options "-O1 -fdump-tree-optimized" } */
-/* { dg-require-effective-target size32plus } */
+/* { dg-options "-O1 -fdump-tree-vars" } */
 
 /* Size of this structure should be sufficiently weird so that no memory
    addressing mode applies.  */
@@ -22,23 +21,17 @@ void xxx(void)
     arr_base[iter].y = 17 * iter;
 }
 
-/* Access to arr_base[iter].y should be strength reduced, i.e., there should
-   be no multiplication.  */
+/* Access to arr_base[iter].y should be strength reduced.  */
 
-/* { dg-final { scan-tree-dump-times " \\* \[^\\n\\r\]*=" 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times "\[^\\n\\r\]*= \\* " 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times "MEM" 1 "optimized" } } */
+/* { dg-final { scan-tree-dump-times "arr_base\[^\\n\\r\]*=" 0 "vars" } } */
 
 /* 17 * iter should be strength reduced.  */
 
-/* { dg-final { scan-tree-dump-times " \\* 17" 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times " \\+ 17" 1 "optimized" } } */
+/* { dg-final { scan-tree-dump-times " \\* 17" 0 "vars" } } */
+/* { dg-final { scan-tree-dump-times " \\+ 17" 1 "vars" } } */
 
 /* The induction variable comparison with 99 should be eliminated
-   and replaced by comparison of one of the newly created ivs.  */
+   and replaced by comparison of the variable for 17 * iter with 1700.  */
 
-/* { dg-final { scan-tree-dump-times "iter" 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times "99" 0 "optimized" } } */
-/* { dg-final { scan-tree-dump-times "100" 0 "optimized" } } */
-
-/* { dg-final { cleanup-tree-dump "optimized" } } */
+/* { dg-final { scan-tree-dump-times "1700" 1 "vars" } } */
+/* { dg-final { scan-tree-dump-times "iter" 0 "vars" } } */

@@ -1,8 +1,10 @@
-/* { dg-require-effective-target vect_condition } */
+/* APPLE LOCAL file AV data dependence */
+/* { dg-do run } */
+/* { dg-options "-O3 -funroll-loops -ftree-vectorize -fdump-tree-vect-stats -maltivec" { target powerpc*-*-* } } */
+
 
 #include <stdarg.h>
 #include <signal.h>
-#include "tree-vect.h"
 
 #define N 16
 #define MAX 42
@@ -24,7 +26,6 @@ int main ()
 {
 
   int i, j;
-  check_vect ();
   foo ();
   /* check results:  */
   for (i = 0; i < N; i++)
@@ -34,5 +35,6 @@ int main ()
   return 0;
 }
 
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 2 "vect" } } */
-/* { dg-final { cleanup-tree-dump "vect" } } */
+
+
+/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 2 "vect" { xfail i?86-*-* x86_64-*-* } } } */

@@ -15,8 +15,8 @@ for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to the Free
-Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.  */
+Software Foundation, 59 Temple Place - Suite 330, Boston, MA
+02111-1307, USA.  */
 
 #ifndef GCC_GCC_H
 #define GCC_GCC_H
@@ -38,6 +38,8 @@ struct spec_function
    || (CHAR) == 'e' || (CHAR) == 'T' || (CHAR) == 'u' \
    || (CHAR) == 'I' || (CHAR) == 'm' || (CHAR) == 'x' \
    || (CHAR) == 'L' || (CHAR) == 'A' || (CHAR) == 'V' \
+   /* APPLE LOCAL frameworks */ \
+   || (CHAR) == 'F' \
    || (CHAR) == 'B' || (CHAR) == 'b')
 
 /* This defines which multi-letter switches take arguments.  */
@@ -50,6 +52,8 @@ struct spec_function
   || !strcmp (STR, "iwithprefix") || !strcmp (STR, "iwithprefixbefore") \
   || !strcmp (STR, "iquote") || !strcmp (STR, "isystem") \
   || !strcmp (STR, "isysroot") \
+  /* APPLE LOCAL ARM iwithsysroot 4917039 */ \
+  || !strcmp (STR, "iwithsysroot") \
   || !strcmp (STR, "-param") || !strcmp (STR, "specs") \
   || !strcmp (STR, "MF") || !strcmp (STR, "MT") || !strcmp (STR, "MQ"))
 
@@ -74,6 +78,9 @@ extern int n_infiles;
 
 /* Number of extra output files that lang_specific_pre_link may generate.  */
 extern int lang_specific_extra_outfiles;
+
+/* Table of language-specific spec functions.  */
+extern const struct spec_function lang_specific_spec_functions[];
 
 /* A vector of corresponding output files is made up later.  */
 

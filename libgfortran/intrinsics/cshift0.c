@@ -1,5 +1,5 @@
 /* Generic implementation of the CSHIFT intrinsic
-   Copyright 2003, 2005, 2006 Free Software Foundation, Inc.
+   Copyright 2003, 2005 Free Software Foundation, Inc.
    Contributed by Feng Wang <wf_cs@yahoo.com>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,8 +25,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <stdlib.h>
@@ -78,7 +78,7 @@ DEF_COPY_LOOP(cdouble, _Complex double)
 
 static void
 cshift0 (gfc_array_char * ret, const gfc_array_char * array,
-	 ssize_t shift, int which, index_type size)
+	 ssize_t shift, int which)
 {
   /* r.* indicates the return array.  */
   index_type rstride[GFC_MAX_DIMENSIONS];
@@ -95,6 +95,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
   index_type count[GFC_MAX_DIMENSIONS];
   index_type extent[GFC_MAX_DIMENSIONS];
   index_type dim;
+  index_type size;
   index_type len;
   index_type n;
   int whichloop;
@@ -106,6 +107,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
   extent[0] = 1;
   count[0] = 0;
+  size = GFC_DESCRIPTOR_SIZE (array);
   n = 0;
 
   /* The values assigned here must match the cases in the inner loop.  */
@@ -144,9 +146,9 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
   if (ret->data == NULL)
     {
       int i;
-      index_type arraysize = size0 ((array_t *)array);
 
-      ret->offset = 0;
+      ret->data = internal_malloc_size (size * size0 ((array_t *)array));
+      ret->base = 0;
       ret->dtype = array->dtype;
       for (i = 0; i < GFC_DESCRIPTOR_RANK (array); i++)
         {
@@ -156,17 +158,8 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
           if (i == 0)
             ret->dim[i].stride = 1;
           else
-            ret->dim[i].stride = (ret->dim[i-1].ubound + 1)
-				 * ret->dim[i-1].stride;
+            ret->dim[i].stride = (ret->dim[i-1].ubound + 1) * ret->dim[i-1].stride;
         }
-
-      if (arraysize > 0)
-	ret->data = internal_malloc_size (size * arraysize);
-      else
-	{
-	  ret->data = internal_malloc_size (1);
-	  return;
-	}
     }
 
   for (dim = 0; dim < GFC_DESCRIPTOR_RANK (array); dim++)
@@ -285,7 +278,7 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
              the next dimension.  */
           count[n] = 0;
           /* We could precalculate these products, but this is a less
-             frequently used path so probably not worth it.  */
+             frequently used path so proabably not worth it.  */
           rptr -= rstride[n] * extent[n];
           sptr -= sstride[n] * extent[n];
           n++;
@@ -305,37 +298,51 @@ cshift0 (gfc_array_char * ret, const gfc_array_char * array,
     }
 }
 
-#define DEFINE_CSHIFT(N)						      \
-  extern void cshift0_##N (gfc_array_char *, const gfc_array_char *,	      \
-			   const GFC_INTEGER_##N *, const GFC_INTEGER_##N *); \
-  export_proto(cshift0_##N);						      \
-									      \
-  void									      \
-  cshift0_##N (gfc_array_char *ret, const gfc_array_char *array,	      \
-	       const GFC_INTEGER_##N *pshift, const GFC_INTEGER_##N *pdim)    \
-  {									      \
-    cshift0 (ret, array, *pshift, pdim ? *pdim : 1,			      \
-	     GFC_DESCRIPTOR_SIZE (array));				      \
-  }									      \
-									      \
-  extern void cshift0_##N##_char (gfc_array_char *, GFC_INTEGER_4,	      \
-				  const gfc_array_char *,		      \
-				  const GFC_INTEGER_##N *,		      \
-				  const GFC_INTEGER_##N *, GFC_INTEGER_4);    \
-  export_proto(cshift0_##N##_char);					      \
-									      \
-  void									      \
-  cshift0_##N##_char (gfc_array_char *ret,				      \
-		      GFC_INTEGER_4 ret_length __attribute__((unused)),	      \
-		      const gfc_array_char *array,			      \
-		      const GFC_INTEGER_##N *pshift,			      \
-		      const GFC_INTEGER_##N *pdim,			      \
-		      GFC_INTEGER_4 array_length)			      \
-  {									      \
-    cshift0 (ret, array, *pshift, pdim ? *pdim : 1, array_length);	      \
-  }
 
-DEFINE_CSHIFT (1);
-DEFINE_CSHIFT (2);
-DEFINE_CSHIFT (4);
-DEFINE_CSHIFT (8);
+extern void cshift0_1 (gfc_array_char *, const gfc_array_char *,
+		       const GFC_INTEGER_1 *, const GFC_INTEGER_1 *);
+export_proto(cshift0_1);
+
+void
+cshift0_1 (gfc_array_char *ret, const gfc_array_char *array,
+	   const GFC_INTEGER_1 *pshift, const GFC_INTEGER_1 *pdim)
+{
+  cshift0 (ret, array, *pshift, pdim ? *pdim : 1);
+}
+
+
+extern void cshift0_2 (gfc_array_char *, const gfc_array_char *,
+		       const GFC_INTEGER_2 *, const GFC_INTEGER_2 *);
+export_proto(cshift0_2);
+
+void
+cshift0_2 (gfc_array_char *ret, const gfc_array_char *array,
+	   const GFC_INTEGER_2 *pshift, const GFC_INTEGER_2 *pdim)
+{
+  cshift0 (ret, array, *pshift, pdim ? *pdim : 1);
+}
+
+
+extern void cshift0_4 (gfc_array_char *, const gfc_array_char *,
+		       const GFC_INTEGER_4 *, const GFC_INTEGER_4 *);
+export_proto(cshift0_4);
+
+void
+cshift0_4 (gfc_array_char *ret, const gfc_array_char *array,
+	   const GFC_INTEGER_4 *pshift, const GFC_INTEGER_4 *pdim)
+{
+  cshift0 (ret, array, *pshift, pdim ? *pdim : 1);
+}
+
+
+extern void cshift0_8 (gfc_array_char *, const gfc_array_char *,
+		       const GFC_INTEGER_8 *, const GFC_INTEGER_8 *);
+export_proto(cshift0_8);
+
+void
+cshift0_8 (gfc_array_char *ret, const gfc_array_char *array,
+	   const GFC_INTEGER_8 *pshift, const GFC_INTEGER_8 *pdim)
+{
+  cshift0 (ret, array, *pshift, pdim ? *pdim : 1);
+}
+

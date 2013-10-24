@@ -343,52 +343,18 @@ FileChannelImpl::available (void)
 }
 
 jboolean
-FileChannelImpl::lock (jlong pos, jlong len, jboolean shared, jboolean wait)
+FileChannelImpl::lock
+(jlong /*pos*/, jlong /*len*/, jboolean /*shared*/, jboolean /*wait*/)
 {
-  DWORD flags = 0;
-  OVERLAPPED ovlpd;
-
-  ZeroMemory(&ovlpd,sizeof(OVERLAPPED));
-
-  if(!shared)
-    flags |= LOCKFILE_EXCLUSIVE_LOCK;
-  if(!wait)
-    flags |= LOCKFILE_FAIL_IMMEDIATELY;
-
-  ovlpd.Offset = (DWORD)pos;
-  ovlpd.OffsetHigh = pos>>32;
-
-  DWORD lenlow = (DWORD)len;
-  DWORD lenhigh = len>>32;
-
-  BOOL ret = LockFileEx((HANDLE)fd,flags,0,lenlow,lenhigh,&ovlpd);
-
-  if(ret==ERROR_IO_PENDING && !shared && wait)
-    ret = GetOverlappedResult((HANDLE)fd,&ovlpd,NULL,wait);
-
-  if(!ret)
-    _Jv_ThrowIOException(GetLastError());
-
-  return true;
+  throw new IOException (JvNewStringLatin1
+    ("FileChannel.lock() not implemented"));
 }
 
 void
-FileChannelImpl::unlock (jlong pos, jlong len)
+FileChannelImpl::unlock (jlong /*pos*/, jlong /*len*/)
 {
-  OVERLAPPED ovlpd;
-
-  ZeroMemory(&ovlpd,sizeof(OVERLAPPED));
-
-  ovlpd.Offset = (DWORD)pos;
-  ovlpd.OffsetHigh = pos>>32;
-
-  DWORD lenlow = (DWORD)len;
-  DWORD lenhigh = len>>32;
-
-  BOOL ret = UnlockFileEx((HANDLE)fd,0,lenlow,lenhigh,&ovlpd);
-
-  if(!ret)
-    _Jv_ThrowIOException(GetLastError());
+  throw new IOException (JvNewStringLatin1
+    ("FileChannel.unlock() not implemented"));
 }
 
 java::nio::MappedByteBuffer *

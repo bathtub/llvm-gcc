@@ -1,4 +1,4 @@
-// { dg-do assemble }
+// { dg-do assemble { xfail *-*-* } }
 
 // Copyright (C) 1999 Free Software Foundation
 

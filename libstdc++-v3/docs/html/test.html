@@ -31,7 +31,7 @@
 <h2>Contents</h2>
 <ul>
    <li><a href="#org">Testsuite organization and naming conventions</a></li>
-   <li><a href="#util">Utilities: abicheck and libtestc++</a></li>
+   <li><a href="#util">Utilities: abicheck and libv3test</a></li>
    <li><a href="#new">How to write a new test case</a></li>
    <li><a href="#check">Options for running the tests</a></li>
    <li><a href="#debug">Running debug-mode tests</a></li>
@@ -93,7 +93,6 @@ config		  Files for the dejagnu test harness.
 lib		  Files for the dejagnu test harness.
 libstdc++*     	  Files for the dejagnu test harness.
 data		  Sample text files for testing input and output.
-util		  Files for libtestc++, utilities and testing routines.
    </pre>
 
    <p>
@@ -208,14 +207,14 @@ cat 27_io/objects/char/3_xin.in | a.out
 </ul>
 
 <hr />
-<h2><a name="util">Utilities: abi_check and libtestc++</a></h2>
+<h2><a name="util">Utilities: abi_check and libv3test</a></h2>
   <p>
    The testsuite directory also contains some files that implement
    functionality that is intended to make writing test cases easier,
    or to avoid duplication, or to provide error checking in a way that
    is consistent across platforms and test harnesses. A stand-alone
    executable, called <em>abi_check</em>, and a static library called
-   <em>libtestc++</em> are constructed. Both of these items are not
+   <em>libv3test</em> are constructed. Both of these items are not
    installed, and only used during testing.
   </p>
 
@@ -330,9 +329,9 @@ cat 27_io/objects/char/3_xin.in | a.out
    <p>
    A bunch of utility functions and classes have already been
    abstracted out into the testsuite utility library, <code>
-   libtestc++</code>. To use this functionality, just include the
-   appropriate header file: the library or specific object files will
-   automatically be linked in as part of the testsuite run.
+   libv3test</code>. To use this functionality, just include the
+   appropriate header file: the library will automatically be linked
+   in as part of the testsuite run.
    </p>
 
    <p>
@@ -510,23 +509,6 @@ multilibed build directory with different ABI settings:
 make check-target-libstdc++-v3 RUNTESTFLAGS='--target_board \"unix{-mabi=32,,-mabi=64}\"'
 </pre>
  
-<p>
-You can run the tests with a compiler and library that have already
-been installed.  Make sure that the compiler (e.g., <code>g++</code>)
-is in your <code>PATH</code>.  If you are using shared libraries, then
-you must also ensure that the directory containing the shared version
-of libstdc++ is in your <code>LD_LIBRARY_PATH</code>, or equivalent.
-If your GCC source tree is at <code>/path/to/gcc</code>, then you can
-run the tests as follows:
-<pre>
-runtest --tool libstdc++ --srcdir=/path/to/gcc/libstdc++-v3/testsuite
-</pre>
-The testsuite will create a number of files in the directory in which you
-run this command,.  Some of those files might use the same name as
-files created by other testsuites (like the ones for GCC and G++), so
-you should not try to run all the testsuites in parallel from the same
-directory.
-</p>
 
    <p> In addition, there are some testing options that are mostly of
    interest to library maintainers and system integrators. As such,

@@ -1,5 +1,5 @@
-/* Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007
-   Free Software Foundation, Inc.
+/* APPLE LOCAL file mainline 2005-06-30 Radar 4131077 */
+/* Copyright (C) 2002, 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -15,8 +15,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 /* As a special exception, if you include this header file into source
    files compiled by GCC, this header file does not by itself cause
@@ -41,9 +41,8 @@
 /* Get _mm_malloc () and _mm_free ().  */
 #include <mm_malloc.h>
 
-/* The Intel API is flexible enough that we must allow aliasing with other
-   vector types, and their scalar components.  */
-typedef float __m128 __attribute__ ((__vector_size__ (16), __may_alias__));
+/* The data type intended for user use.  */
+typedef float __m128 __attribute__ ((__vector_size__ (16)));
 
 /* Internal data types for implementing the intrinsics.  */
 typedef float __v4sf __attribute__ ((__vector_size__ (16)));
@@ -88,7 +87,12 @@ enum _mm_hint
 #define _MM_FLUSH_ZERO_ON     0x8000
 #define _MM_FLUSH_ZERO_OFF    0x0000
 
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#define __always_inline__ __always_inline__, __nodebug__
+/* APPLE LOCAL end nodebug inline 4152603 */
+
 /* Create a vector of zeros.  */
+/* APPLE LOCAL begin radar 4152603 */
 static __inline __m128 __attribute__((__always_inline__))
 _mm_setzero_ps (void)
 {
@@ -495,7 +499,6 @@ _mm_cvt_ss2si (__m128 __A)
 #ifdef __x86_64__
 /* Convert the lower SPFP value to a 32-bit integer according to the
    current rounding mode.  */
-
 /* Intel intrinsic.  */
 static __inline long long __attribute__((__always_inline__))
 _mm_cvtss_si64 (__m128 __A)
@@ -1201,7 +1204,8 @@ _mm_prefetch (void *__P, enum _mm_hint __I)
 static __inline void __attribute__((__always_inline__))
 _mm_stream_pi (__m64 *__P, __m64 __A)
 {
-  __builtin_ia32_movntq ((unsigned long long *)__P, (unsigned long long)__A);
+  /* APPLE LOCAL 4656532 use V1DImode for _m64 */
+  __builtin_ia32_movntq (__P, __A);
 }
 
 /* Likewise.  The address must be 16-byte aligned.  */
@@ -1227,20 +1231,27 @@ _mm_pause (void)
 {
   __asm__ __volatile__ ("rep; nop" : : );
 }
+/* APPLE LOCAL end radar 4152603 */
 
+/* APPPLE LOCAL begin radar 4109832 */
 /* Transpose the 4x4 matrix composed of row[0-3].  */
-#define _MM_TRANSPOSE4_PS(row0, row1, row2, row3)			\
-do {									\
+#define _MM_TRANSPOSE4_PS(row0, row1, row2, row3)                       \
+do {                                                                    \
   __v4sf __r0 = (row0), __r1 = (row1), __r2 = (row2), __r3 = (row3);	\
-  __v4sf __t0 = __builtin_ia32_unpcklps (__r0, __r1);			\
-  __v4sf __t1 = __builtin_ia32_unpcklps (__r2, __r3);			\
-  __v4sf __t2 = __builtin_ia32_unpckhps (__r0, __r1);			\
-  __v4sf __t3 = __builtin_ia32_unpckhps (__r2, __r3);			\
-  (row0) = __builtin_ia32_movlhps (__t0, __t1);				\
-  (row1) = __builtin_ia32_movhlps (__t1, __t0);				\
-  (row2) = __builtin_ia32_movlhps (__t2, __t3);				\
-  (row3) = __builtin_ia32_movhlps (__t3, __t2);				\
+  __v4sf __t0 = __builtin_ia32_unpcklps (__r0, __r1);                   \
+  __v4sf __t1 = __builtin_ia32_unpcklps (__r2, __r3);                   \
+  __v4sf __t2 = __builtin_ia32_unpckhps (__r0, __r1);                   \
+  __v4sf __t3 = __builtin_ia32_unpckhps (__r2, __r3);                   \
+  (row0) = __builtin_ia32_movlhps (__t0, __t1);                         \
+  (row1) = __builtin_ia32_movhlps (__t1, __t0);                         \
+  (row2) = __builtin_ia32_movlhps (__t2, __t3);                         \
+  (row3) = __builtin_ia32_movhlps (__t3, __t2);                         \
 } while (0)
+/* APPPLE LOCAL end radar 4109832 */
+
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#undef __always_inline__
+/* APPLE LOCAL end nodebug inline 4152603 */
 
 /* For backward source compatibility.  */
 #include <emmintrin.h>

@@ -1,4 +1,4 @@
-
+/* APPLE LOCAL file mainline */
 /* Check Class <protocol> types */
 /* Author: David Ayers <d.ayers@inode.at> */
 /* { dg-do compile } */
@@ -175,8 +175,8 @@ testCategoryInherited(void)
 /* Forward declared root protocols */
 
 @protocol FwProto;
-
-@interface MyClass1 (Forward) <FwProto>
+/* APPLE LOCAL radar 4398221 */
+@interface MyClass1 (Forward) <FwProto>  /* { dg-warning "no definition of protocol \\'FwProto\\' " } */
 @end
 
 Class <FwProto> clsP7 = 0;

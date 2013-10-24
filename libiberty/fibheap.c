@@ -16,8 +16,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU CC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -37,31 +37,32 @@ Boston, MA 02110-1301, USA.  */
 
 #define FIBHEAPKEY_MIN	LONG_MIN
 
-static void fibheap_ins_root (fibheap_t, fibnode_t);
-static void fibheap_rem_root (fibheap_t, fibnode_t);
-static void fibheap_consolidate (fibheap_t);
-static void fibheap_link (fibheap_t, fibnode_t, fibnode_t);
-static void fibheap_cut (fibheap_t, fibnode_t, fibnode_t);
-static void fibheap_cascading_cut (fibheap_t, fibnode_t);
-static fibnode_t fibheap_extr_min_node (fibheap_t);
-static int fibheap_compare (fibheap_t, fibnode_t, fibnode_t);
-static int fibheap_comp_data (fibheap_t, fibheapkey_t, void *, fibnode_t);
-static fibnode_t fibnode_new (void);
-static void fibnode_insert_after (fibnode_t, fibnode_t);
+static void fibheap_ins_root PARAMS ((fibheap_t, fibnode_t));
+static void fibheap_rem_root PARAMS ((fibheap_t, fibnode_t));
+static void fibheap_consolidate PARAMS ((fibheap_t));
+static void fibheap_link PARAMS ((fibheap_t, fibnode_t, fibnode_t));
+static void fibheap_cut PARAMS ((fibheap_t, fibnode_t, fibnode_t));
+static void fibheap_cascading_cut PARAMS ((fibheap_t, fibnode_t));
+static fibnode_t fibheap_extr_min_node PARAMS ((fibheap_t));
+static int fibheap_compare PARAMS ((fibheap_t, fibnode_t, fibnode_t));
+static int fibheap_comp_data PARAMS ((fibheap_t, fibheapkey_t, void *,
+				      fibnode_t));
+static fibnode_t fibnode_new PARAMS ((void));
+static void fibnode_insert_after PARAMS ((fibnode_t, fibnode_t));
 #define fibnode_insert_before(a, b) fibnode_insert_after (a->left, b)
-static fibnode_t fibnode_remove (fibnode_t);
+static fibnode_t fibnode_remove PARAMS ((fibnode_t));
 
 
 /* Create a new fibonacci heap.  */
 fibheap_t
-fibheap_new (void)
+fibheap_new ()
 {
   return (fibheap_t) xcalloc (1, sizeof (struct fibheap));
 }
 
 /* Create a new fibonacci heap node.  */
 static fibnode_t
-fibnode_new (void)
+fibnode_new ()
 {
   fibnode_t node;
 
@@ -73,7 +74,10 @@ fibnode_new (void)
 }
 
 static inline int
-fibheap_compare (fibheap_t heap ATTRIBUTE_UNUSED, fibnode_t a, fibnode_t b)
+fibheap_compare (heap, a, b)
+     fibheap_t heap ATTRIBUTE_UNUSED;
+     fibnode_t a;
+     fibnode_t b;
 {
   if (a->key < b->key)
     return -1;
@@ -83,7 +87,11 @@ fibheap_compare (fibheap_t heap ATTRIBUTE_UNUSED, fibnode_t a, fibnode_t b)
 }
 
 static inline int
-fibheap_comp_data (fibheap_t heap, fibheapkey_t key, void *data, fibnode_t b)
+fibheap_comp_data (heap, key, data, b)
+     fibheap_t heap;
+     fibheapkey_t key;
+     void *data;
+     fibnode_t b;
 {
   struct fibnode a;
 
@@ -95,7 +103,10 @@ fibheap_comp_data (fibheap_t heap, fibheapkey_t key, void *data, fibnode_t b)
 
 /* Insert DATA, with priority KEY, into HEAP.  */
 fibnode_t
-fibheap_insert (fibheap_t heap, fibheapkey_t key, void *data)
+fibheap_insert (heap, key, data)
+     fibheap_t heap;
+     fibheapkey_t key;
+     void *data;
 {
   fibnode_t node;
 
@@ -121,7 +132,8 @@ fibheap_insert (fibheap_t heap, fibheapkey_t key, void *data)
 
 /* Return the data of the minimum node (if we know it).  */
 void *
-fibheap_min (fibheap_t heap)
+fibheap_min (heap)
+     fibheap_t heap;
 {
   /* If there is no min, we can't easily return it.  */
   if (heap->min == NULL)
@@ -131,7 +143,8 @@ fibheap_min (fibheap_t heap)
 
 /* Return the key of the minimum node (if we know it).  */
 fibheapkey_t
-fibheap_min_key (fibheap_t heap)
+fibheap_min_key (heap)
+     fibheap_t heap;
 {
   /* If there is no min, we can't easily return it.  */
   if (heap->min == NULL)
@@ -141,7 +154,9 @@ fibheap_min_key (fibheap_t heap)
 
 /* Union HEAPA and HEAPB into a new heap.  */
 fibheap_t
-fibheap_union (fibheap_t heapa, fibheap_t heapb)
+fibheap_union (heapa, heapb)
+     fibheap_t heapa;
+     fibheap_t heapb;
 {
   fibnode_t a_root, b_root, temp;
 
@@ -175,7 +190,8 @@ fibheap_union (fibheap_t heapa, fibheap_t heapb)
 
 /* Extract the data of the minimum node from HEAP.  */
 void *
-fibheap_extract_min (fibheap_t heap)
+fibheap_extract_min (heap)
+     fibheap_t heap;
 {
   fibnode_t z;
   void *ret = NULL;
@@ -195,8 +211,11 @@ fibheap_extract_min (fibheap_t heap)
 
 /* Replace both the KEY and the DATA associated with NODE.  */
 void *
-fibheap_replace_key_data (fibheap_t heap, fibnode_t node,
-                          fibheapkey_t key, void *data)
+fibheap_replace_key_data (heap, node, key, data)
+     fibheap_t heap;
+     fibnode_t node;
+     fibheapkey_t key;
+     void *data;
 {
   void *odata;
   fibheapkey_t okey;
@@ -234,14 +253,20 @@ fibheap_replace_key_data (fibheap_t heap, fibnode_t node,
 
 /* Replace the DATA associated with NODE.  */
 void *
-fibheap_replace_data (fibheap_t heap, fibnode_t node, void *data)
+fibheap_replace_data (heap, node, data)
+     fibheap_t heap;
+     fibnode_t node;
+     void *data;
 {
   return fibheap_replace_key_data (heap, node, node->key, data);
 }
 
 /* Replace the KEY associated with NODE.  */
 fibheapkey_t
-fibheap_replace_key (fibheap_t heap, fibnode_t node, fibheapkey_t key)
+fibheap_replace_key (heap, node, key)
+     fibheap_t heap;
+     fibnode_t node;
+     fibheapkey_t key;
 {
   int okey = node->key;
   fibheap_replace_key_data (heap, node, key, node->data);
@@ -250,7 +275,9 @@ fibheap_replace_key (fibheap_t heap, fibnode_t node, fibheapkey_t key)
 
 /* Delete NODE from HEAP.  */
 void *
-fibheap_delete_node (fibheap_t heap, fibnode_t node)
+fibheap_delete_node (heap, node)
+     fibheap_t heap;
+     fibnode_t node;
 {
   void *ret = node->data;
 
@@ -263,7 +290,8 @@ fibheap_delete_node (fibheap_t heap, fibnode_t node)
 
 /* Delete HEAP.  */
 void
-fibheap_delete (fibheap_t heap)
+fibheap_delete (heap)
+     fibheap_t heap;
 {
   while (heap->min != NULL)
     free (fibheap_extr_min_node (heap));
@@ -273,14 +301,16 @@ fibheap_delete (fibheap_t heap)
 
 /* Determine if HEAP is empty.  */
 int
-fibheap_empty (fibheap_t heap)
+fibheap_empty (heap)
+     fibheap_t heap;
 {
   return heap->nodes == 0;
 }
 
 /* Extract the minimum node of the heap.  */
 static fibnode_t
-fibheap_extr_min_node (fibheap_t heap)
+fibheap_extr_min_node (heap)
+     fibheap_t heap;
 {
   fibnode_t ret = heap->min;
   fibnode_t x, y, orig;
@@ -316,7 +346,9 @@ fibheap_extr_min_node (fibheap_t heap)
 
 /* Insert NODE into the root list of HEAP.  */
 static void
-fibheap_ins_root (fibheap_t heap, fibnode_t node)
+fibheap_ins_root (heap, node)
+     fibheap_t heap;
+     fibnode_t node;
 {
   /* If the heap is currently empty, the new node becomes the singleton
      circular root list.  */
@@ -335,7 +367,9 @@ fibheap_ins_root (fibheap_t heap, fibnode_t node)
 
 /* Remove NODE from the rootlist of HEAP.  */
 static void
-fibheap_rem_root (fibheap_t heap, fibnode_t node)
+fibheap_rem_root (heap, node)
+     fibheap_t heap;
+     fibnode_t node;
 {
   if (node->left == node)
     heap->root = NULL;
@@ -345,7 +379,8 @@ fibheap_rem_root (fibheap_t heap, fibnode_t node)
 
 /* Consolidate the heap.  */
 static void
-fibheap_consolidate (fibheap_t heap)
+fibheap_consolidate (heap)
+     fibheap_t heap;
 {
   fibnode_t a[1 + 8 * sizeof (long)];
   fibnode_t w;
@@ -392,8 +427,10 @@ fibheap_consolidate (fibheap_t heap)
 
 /* Make NODE a child of PARENT.  */
 static void
-fibheap_link (fibheap_t heap ATTRIBUTE_UNUSED,
-              fibnode_t node, fibnode_t parent)
+fibheap_link (heap, node, parent)
+     fibheap_t heap ATTRIBUTE_UNUSED;
+     fibnode_t node;
+     fibnode_t parent;
 {
   if (parent->child == NULL)
     parent->child = node;
@@ -406,7 +443,10 @@ fibheap_link (fibheap_t heap ATTRIBUTE_UNUSED,
 
 /* Remove NODE from PARENT's child list.  */
 static void
-fibheap_cut (fibheap_t heap, fibnode_t node, fibnode_t parent)
+fibheap_cut (heap, node, parent)
+     fibheap_t heap;
+     fibnode_t node;
+     fibnode_t parent;
 {
   fibnode_remove (node);
   parent->degree--;
@@ -416,7 +456,9 @@ fibheap_cut (fibheap_t heap, fibnode_t node, fibnode_t parent)
 }
 
 static void
-fibheap_cascading_cut (fibheap_t heap, fibnode_t y)
+fibheap_cascading_cut (heap, y)
+     fibheap_t heap;
+     fibnode_t y;
 {
   fibnode_t z;
 
@@ -436,7 +478,9 @@ fibheap_cascading_cut (fibheap_t heap, fibnode_t y)
 }
 
 static void
-fibnode_insert_after (fibnode_t a, fibnode_t b)
+fibnode_insert_after (a, b)
+     fibnode_t a;
+     fibnode_t b;
 {
   if (a == a->right)
     {
@@ -455,7 +499,8 @@ fibnode_insert_after (fibnode_t a, fibnode_t b)
 }
 
 static fibnode_t
-fibnode_remove (fibnode_t node)
+fibnode_remove (node)
+     fibnode_t node;
 {
   fibnode_t ret;
 

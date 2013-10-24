@@ -1,6 +1,6 @@
 // posix-threads.cc - interface between libjava and POSIX threads.
 
-/* Copyright (C) 1998, 1999, 2000, 2001, 2004, 2006  Free Software Foundation
+/* Copyright (C) 1998, 1999, 2000, 2001, 2004  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -12,8 +12,6 @@ details.  */
 // * Document signal handling limitations
 
 #include <config.h>
-
-#include "posix.h"
 
 // If we're using the Boehm GC, then we need to override some of the
 // thread primitives.  This is fairly gross.
@@ -94,44 +92,14 @@ _Jv_CondWait (_Jv_ConditionVariable_t *cv, _Jv_Mutex_t *mu,
     return _JV_NOT_OWNER;
 
   struct timespec ts;
+  jlong m, startTime;
 
   if (millis > 0 || nanos > 0)
     {
-      // Calculate the abstime corresponding to the timeout.
-      unsigned long long seconds;
-      unsigned long usec;
-
-      // For better accuracy, should use pthread_condattr_setclock
-      // and clock_gettime.
-#ifdef HAVE_GETTIMEOFDAY
-      timeval tv;
-      gettimeofday (&tv, NULL);
-      usec = tv.tv_usec;
-      seconds = tv.tv_sec;
-#else
-      unsigned long long startTime = java::lang::System::currentTimeMillis();
-      seconds = startTime / 1000;
-      /* Assume we're about half-way through this millisecond.  */
-      usec = (startTime % 1000) * 1000 + 500;
-#endif
-      /* These next two statements cannot overflow.  */
-      usec += nanos / 1000;
-      usec += (millis % 1000) * 1000;
-      /* These two statements could overflow only if tv.tv_sec was
-	 insanely large.  */
-      seconds += millis / 1000;
-      seconds += usec / 1000000;
-
-      ts.tv_sec = seconds;
-      if (ts.tv_sec < 0 || (unsigned long long)ts.tv_sec != seconds)
-        {
-          // We treat a timeout that won't fit into a struct timespec
-          // as a wait forever.
-          millis = nanos = 0;
-        }
-      else
-	/* This next statement also cannot overflow.  */
-	ts.tv_nsec = (usec % 1000000) * 1000 + (nanos % 1000);
+      startTime = java::lang::System::currentTimeMillis();
+      m = millis + startTime;
+      ts.tv_sec = m / 1000; 
+      ts.tv_nsec = ((m % 1000) * 1000000) + nanos; 
     }
 
   _Jv_Thread_t *current = _Jv_ThreadCurrentData ();
@@ -343,21 +311,6 @@ _Jv_InitThreads (void)
   // Block SIGCHLD here to ensure that any non-Java threads inherit the new 
   // signal mask.
   block_sigchld();
-
-  // Check/set the thread stack size.
-  size_t min_ss = 32 * 1024;
-  
-  if (sizeof (void *) == 8)
-    // Bigger default on 64-bit systems.
-    min_ss *= 2;
-
-#ifdef PTHREAD_STACK_MIN
-  if (min_ss < PTHREAD_STACK_MIN)
-    min_ss = PTHREAD_STACK_MIN;
-#endif
-  
-  if (gcj::stack_size > 0 && gcj::stack_size < min_ss)
-    gcj::stack_size = min_ss;
 }
 
 _Jv_Thread_t *
@@ -390,7 +343,7 @@ _Jv_ThreadSetPriority (_Jv_Thread_t *data, jint prio)
       struct sched_param param;
 
       param.sched_priority = prio;
-      pthread_setschedparam (data->thread, SCHED_OTHER, &param);
+      pthread_setschedparam (data->thread, SCHED_RR, &param);
     }
 #endif
 }
@@ -477,14 +430,6 @@ _Jv_ThreadStart (java::lang::Thread *thread, _Jv_Thread_t *data,
   pthread_attr_init (&attr);
   pthread_attr_setschedparam (&attr, &param);
   pthread_attr_setdetachstate (&attr, PTHREAD_CREATE_DETACHED);
-  
-  // Set stack size if -Xss option was given.
-  if (gcj::stack_size > 0)
-    {
-      int e = pthread_attr_setstacksize (&attr, gcj::stack_size);
-      if (e != 0)
-	JvFail (strerror (e));
-    }
 
   info = (struct starter *) _Jv_AllocBytes (sizeof (struct starter));
   info->method = meth;

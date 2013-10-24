@@ -1,5 +1,5 @@
 `/* Implementation of the TRANSPOSE intrinsic
-   Copyright 2003, 2005, 2006 Free Software Foundation, Inc.
+   Copyright 2003, 2005 Free Software Foundation, Inc.
    Contributed by Tobias Schlüter
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -25,23 +25,19 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public
 License along with libgfortran; see the file COPYING.  If not,
-write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #include "config.h"
 #include <assert.h>
 #include "libgfortran.h"'
 include(iparm.m4)dnl
 
-`#if defined (HAVE_'rtype_name`)'
-
-extern void transpose_`'rtype_code (rtype * const restrict ret, 
-	rtype * const restrict source);
+extern void transpose_`'rtype_code (rtype * ret, rtype * source);
 export_proto(transpose_`'rtype_code);
 
 void
-transpose_`'rtype_code (rtype * const restrict ret, 
-	rtype * const restrict source)
+transpose_`'rtype_code (rtype * ret, rtype * source)
 {
   /* r.* indicates the return array.  */
   index_type rxstride, rystride;
@@ -68,9 +64,14 @@ transpose_`'rtype_code (rtype * const restrict ret,
       ret->dim[1].ubound = source->dim[0].ubound - source->dim[0].lbound;
       ret->dim[1].stride = ret->dim[0].ubound+1;
 
-      ret->data = internal_malloc_size (sizeof (rtype_name) * size0 ((array_t *) ret));
-      ret->offset = 0;
+      ret->data = internal_malloc_size (sizeof (rtype_name) * size0 (ret));
+      ret->base = 0;
     }
+
+  if (ret->dim[0].stride == 0)
+    ret->dim[0].stride = 1;
+  if (source->dim[0].stride == 0)
+    source->dim[0].stride = 1;
 
   sxstride = source->dim[0].stride;
   systride = source->dim[1].stride;
@@ -96,5 +97,3 @@ transpose_`'rtype_code (rtype * const restrict ret,
         rptr += rxstride - (rystride * xcount);
     }
 }
-
-#endif

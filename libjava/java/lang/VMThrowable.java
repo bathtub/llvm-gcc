@@ -1,6 +1,5 @@
 /* java.lang.VMThrowable -- VM support methods for Throwable.
-   Copyright (C) 1998, 1999, 2002, 2004, 2005, 2006
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2002, 2004 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -16,8 +15,8 @@ General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GNU Classpath; see the file COPYING.  If not, write to the
-Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301 USA.
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA.
 
 Linking this library statically or dynamically with other modules is
 making a combined work based on this library.  Thus, the terms and
@@ -38,7 +37,8 @@ exception statement from your version. */
 
 package java.lang;
 
-import gnu.gcj.RawDataManaged;
+import gnu.gcj.runtime.NameFinder;
+import gnu.gcj.runtime.StackTrace;
 
 /**
  * VM dependent state and support methods Throwable.
@@ -51,8 +51,10 @@ import gnu.gcj.RawDataManaged;
  */
 final class VMThrowable
 {
+  private gnu.gcj.runtime.StackTrace trace;
+
   /**
-   * Private contructor, create VMThrowables with StackTrace();
+   * Private contructor, create VMThrowables with fillInStackTrace();
    */
   private VMThrowable() { }
 
@@ -65,7 +67,20 @@ final class VMThrowable
    * @return a new VMThrowable containing the current execution stack trace.
    * @see Throwable#fillInStackTrace()
    */
-  static native VMThrowable fillInStackTrace(Throwable t);
+  static VMThrowable fillInStackTrace(Throwable t)
+  {
+    VMThrowable state = null;
+    
+    /* FIXME: size of the stack trace is limited to 128 elements.
+       It's undoubtedly sensible to limit the stack trace, but 128 is
+       rather arbitrary.  It may be better to configure this.  */
+    if (trace_enabled)
+      {
+	state = new VMThrowable ();
+	state.trace = new gnu.gcj.runtime.StackTrace(128);
+      }
+    return state;
+  }
 
   /**
    * Returns an <code>StackTraceElement</code> array based on the execution
@@ -75,8 +90,21 @@ final class VMThrowable
    * @return a non-null but possible zero length array of StackTraceElement.
    * @see Throwable#getStackTrace()
    */
-  native StackTraceElement[] getStackTrace(Throwable t);
-  
-  // Native stack data.
-  private RawDataManaged data;
+  StackTraceElement[] getStackTrace(Throwable t)
+  {
+    StackTraceElement[] result;
+    if (trace != null)
+      {
+	NameFinder nameFinder = new NameFinder();
+	result = nameFinder.lookup(t, trace);
+	nameFinder.close();
+      }
+    else
+      result = new StackTraceElement[0];
+
+    return result;
+  }
+
+  // Setting this flag to false prevents fillInStackTrace() from running.
+  static boolean trace_enabled = true;
 }

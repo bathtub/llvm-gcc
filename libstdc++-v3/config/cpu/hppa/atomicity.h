@@ -1,6 +1,6 @@
 // Low-level functions for atomic operations: PA-RISC version  -*- C++ -*-
 
-// Copyright (C) 2002, 2004, 2005 Free Software Foundation, Inc.
+// Copyright (C) 2002, 2004 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -15,7 +15,7 @@
 
 // You should have received a copy of the GNU General Public License along
 // with this library; see the file COPYING.  If not, write to the Free
-// Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301,
+// Software Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307,
 // USA.
 
 // As a special exception, you may use this file as part of a free software
@@ -28,10 +28,10 @@
 // the GNU General Public License.
 
 #include <bits/c++config.h>
-#include <ext/atomicity.h>
+#include <bits/atomicity.h>
 
-_GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
-
+namespace __gnu_cxx
+{
   template<int _Inst>
     struct _Atomicity_lock
     {
@@ -66,7 +66,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
     
     result = *__mem;
     *__mem = result + __val;
-    __asm__ __volatile__ ("stw %1,0(%0)"
+    /* Reset lock with PA 2.0 "ordered" store.  */
+    __asm__ __volatile__ ("stw,ma %1,0(%0)"
 			  : : "r" (&lock), "r" (tmp) : "memory");
     return result;
   }
@@ -89,8 +90,8 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 			  : "memory");
     
     *__mem += __val;
-    __asm__ __volatile__ ("stw %1,0(%0)"
+    /* Reset lock with PA 2.0 "ordered" store.  */
+    __asm__ __volatile__ ("stw,ma %1,0(%0)"
 			  : : "r" (&lock), "r" (tmp) : "memory");
   }
-
-_GLIBCXX_END_NAMESPACE
+} // namespace __gnu_cxx

@@ -1,6 +1,6 @@
 /* Definitions of target machine for GCC, for SPARC running Solaris 2
-   Copyright 1992, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2004, 2005,
-   2006 Free Software Foundation, Inc.
+   Copyright 1992, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2004, 2005
+   Free Software Foundation, Inc.
    Contributed by Ron Guilmette (rfg@netcom.com).
    Additional changes by David V. Henkel-Wallace (gumby@cygnus.com).
 
@@ -18,8 +18,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING.  If not, write to
-the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+the Free Software Foundation, 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 /* Supposedly the same as vanilla sparc svr4, except for the stuff below: */
 
@@ -41,17 +41,11 @@ Boston, MA 02110-1301, USA.  */
 #define ASM_CPU_DEFAULT_SPEC "-xarch=v8plusb"
 #endif
 
-#if TARGET_CPU_DEFAULT == TARGET_CPU_niagara
-#undef ASM_CPU_DEFAULT_SPEC
-#define ASM_CPU_DEFAULT_SPEC "-xarch=v8plusb"
-#endif
-
 #undef ASM_CPU_SPEC
 #define ASM_CPU_SPEC "\
 %{mcpu=v9:-xarch=v8plus} \
 %{mcpu=ultrasparc:-xarch=v8plusa} \
 %{mcpu=ultrasparc3:-xarch=v8plusb} \
-%{mcpu=niagara:-xarch=v8plusb} \
 %{!mcpu*:%(asm_cpu_default)} \
 "
 
@@ -89,7 +83,7 @@ Boston, MA 02110-1301, USA.  */
     {								\
       HOST_WIDE_INT size;					\
 								\
-      if (DECL_THREAD_LOCAL_P (DECL))				\
+      if (DECL_THREAD_LOCAL (DECL))				\
 	ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "tls_object");	\
       else							\
 	ASM_OUTPUT_TYPE_DIRECTIVE (FILE, NAME, "object");	\
@@ -110,6 +104,13 @@ Boston, MA 02110-1301, USA.  */
 /* The Solaris assembler cannot grok .stabd directives.  */
 #undef NO_DBX_BNSYM_ENSYM
 #define NO_DBX_BNSYM_ENSYM 1
+
+/* The Solaris assembler cannot grok r_tls_dtpoff.  This is
+   a kludge as ASM_OUTPUT_DWARF_DTPREL is defined in sparc.h,
+   undefined here and defined again in sol2-gas.h.  */
+#ifdef HAVE_AS_TLS
+#undef ASM_OUTPUT_DWARF_DTPREL
+#endif
 
 
 #undef  ENDFILE_SPEC

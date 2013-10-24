@@ -41,4 +41,3 @@ get_alias_set (t)
    if() to disappear.  */
 /* { dg-final { scan-tree-dump-times "if " 1 "dom3"} } */
 
-/* { dg-final { cleanup-tree-dump "dom3" } } */

@@ -15,14 +15,18 @@ Library General Public License for more details.
 
 You should have received a copy of the GNU Library General Public
 License along with libiberty; see the file COPYING.LIB.  If
-not, write to the Free Software Foundation, Inc., 51 Franklin Street - Fifth Floor,
-Boston, MA 02110-1301, USA.  */
+not, write to the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.  */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 #include <ansidecl.h>
+#ifdef ANSI_PROTOTYPES
 #include <stdarg.h>
+#else
+#include <varargs.h>
+#endif
 #if !defined (va_copy) && defined (__va_copy)
 # define va_copy(d,s)  __va_copy((d),(s))
 #endif
@@ -58,10 +62,13 @@ not be allocated, minus one is returned and @code{NULL} is stored in
 
 */
 
-static int int_vasprintf (char **, const char *, va_list);
+static int int_vasprintf PARAMS ((char **, const char *, va_list));
 
 static int
-int_vasprintf (char **result, const char *format, va_list args)
+int_vasprintf (result, format, args)
+     char **result;
+     const char *format;
+     va_list args;
 {
   const char *p = format;
   /* Add one to make sure that it is never zero, which might cause malloc
@@ -149,11 +156,13 @@ int_vasprintf (char **result, const char *format, va_list args)
 }
 
 int
-vasprintf (char **result, const char *format,
+vasprintf (result, format, args)
+     char **result;
+     const char *format;
 #if defined (_BSD_VA_LIST_) && defined (__FreeBSD__)
-           _BSD_VA_LIST_ args)
+     _BSD_VA_LIST_ args;
 #else
-           va_list args)
+     va_list args;
 #endif
 {
   return int_vasprintf (result, format, args);
@@ -161,7 +170,7 @@ vasprintf (char **result, const char *format,
 
 #ifdef TEST
 static void ATTRIBUTE_PRINTF_1
-checkit (const char *format, ...)
+checkit VPARAMS ((const char *format, ...))
 {
   char *result;
   VA_OPEN (args, format);
@@ -178,10 +187,10 @@ checkit (const char *format, ...)
   free (result);
 }
 
-extern int main (void);
+extern int main PARAMS ((void));
 
 int
-main (void)
+main ()
 {
   checkit ("%d", 0x12345678);
   checkit ("%200d", 5);

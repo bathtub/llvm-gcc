@@ -1,4 +1,5 @@
-/* Copyright (C) 2003, 2004, 2005, 2006 Free Software Foundation, Inc.
+/* APPLE LOCAL file mainline 2005-06-30 Radar 4131077 */
+/* Copyright (C) 2003, 2004, 2005 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -25,7 +26,7 @@
    Public License.  */
 
 /* Implemented from the specification included in the Intel C++ Compiler
-   User Guide and Reference, version 9.0.  */
+   User Guide and Reference, version 8.0.  */
 
 #ifndef _PMMINTRIN_H_INCLUDED
 #define _PMMINTRIN_H_INCLUDED
@@ -44,6 +45,11 @@
 #define _MM_GET_DENORMALS_ZERO_MODE() \
   (_mm_getcsr() & _MM_DENORMALS_ZERO_MASK)
 
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#define __always_inline__ __always_inline__, __nodebug__
+/* APPLE LOCAL end nodebug inline 4152603 */
+
+/* APPLE LOCAL begin radar 4152603 */
 static __inline __m128 __attribute__((__always_inline__))
 _mm_addsub_ps (__m128 __X, __m128 __Y)
 {
@@ -110,6 +116,7 @@ _mm_lddqu_si128 (__m128i const *__P)
   return (__m128i) __builtin_ia32_lddqu ((char const *)__P);
 }
 
+#if 0
 static __inline void __attribute__((__always_inline__))
 _mm_monitor (void const * __P, unsigned int __E, unsigned int __H)
 {
@@ -121,6 +128,14 @@ _mm_mwait (unsigned int __E, unsigned int __H)
 {
   __builtin_ia32_mwait (__E, __H);
 }
+/* APPLE LOCAL end radar 4152603 */
+#else
+#define _mm_monitor(P, E, H)	__builtin_ia32_monitor ((P), (E), (H))
+#define _mm_mwait(E, H)		__builtin_ia32_mwait ((E), (H))
+#endif
+/* APPLE LOCAL begin nodebug inline 4152603 */
+#undef __always_inline__
+/* APPLE LOCAL end nodebug inline 4152603 */
 
 #endif /* __SSE3__ */
 

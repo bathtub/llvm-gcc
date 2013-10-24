@@ -19,7 +19,7 @@ namespace std
     Foo (sizeof (x));
     Foo (__alignof__ (I));
     Foo (__alignof__ (x));
-    Foo (x->~I ()); // { dg-error "" }
+    Foo (x->~I ());
     //    Foo (typeid (I));
     Foo (delete x); // { dg-error "" }
     Foo (delete[] x); // { dg-error "" }

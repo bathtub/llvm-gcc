@@ -14,156 +14,104 @@
 # 
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+# Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 # Some common subroutines for use by opt[ch]-gen.awk.
 
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
 # Return nonzero if FLAGS contains a flag matching REGEX.
 function flag_set_p(regex, flags)
 {
 	return (" " flags " ") ~ (" " regex " ")
 }
+# APPLE LOCAL end optimization pragmas 3124235/3420242
 
-# Return STRING if FLAGS contains a flag matching regexp REGEX,
-# otherwise return the empty string.
-function test_flag(regex, flags, string)
-{
-	if (flag_set_p(regex, flags))
-		return string
-	return ""
-}
-
-# If FLAGS contains a "NAME(...argument...)" flag, return the value
-# of the argument.  Return the empty string otherwise.
-function opt_args(name, flags)
-{
-	flags = " " flags
-	if (flags !~ " " name "\\(")
-		return ""
-	sub(".* " name "\\(", "", flags)
-	sub("\\).*", "", flags)
-
-	return flags
-}
-
-# Return the Nth comma-separated element of S.  Return the empty string
-# if S does not contain N elements.
-function nth_arg(n, s)
-{
-	while (n-- > 0) {
-		if (s !~ ",")
-			return ""
-		sub("[^,]*, *", "", s)
-	}
-	sub(",.*", "", s)
-	return s
-}
-
-# Return a bitmask of CL_* values for option flags FLAGS.
 function switch_flags (flags)
 {
+	flags = " " flags " "
 	result = "0"
 	for (j = 0; j < n_langs; j++) {
-		regex = langs[j]
+		regex = " " langs[j] " "
 		gsub ( "\\+", "\\+", regex )
-		result = result test_flag(regex, flags, " | " macros[j])
+		if (flags ~ regex)
+			result = result " | " macros[j]
 	}
-	result = result \
-	  test_flag("Common", flags, " | CL_COMMON") \
-	  test_flag("Target", flags, " | CL_TARGET") \
-	  test_flag("Joined", flags, " | CL_JOINED") \
-	  test_flag("JoinedOrMissing", flags, " | CL_JOINED | CL_MISSING_OK") \
-	  test_flag("Separate", flags, " | CL_SEPARATE") \
-	  test_flag("RejectNegative", flags, " | CL_REJECT_NEGATIVE") \
-	  test_flag("UInteger", flags, " | CL_UINTEGER") \
-	  test_flag("Undocumented", flags,  " | CL_UNDOCUMENTED") \
-	  test_flag("Report", flags, " | CL_REPORT")
+	if (flags ~ " Common ") result = result " | CL_COMMON"
+	# APPLE LOCAL mainline
+	if (flags ~ " Target ") result = result " | CL_TARGET"
+	if (flags ~ " Joined ") result = result " | CL_JOINED"
+	if (flags ~ " JoinedOrMissing ") \
+	    result = result " | CL_JOINED | CL_MISSING_OK"
+	if (flags ~ " Separate ") result = result " | CL_SEPARATE"
+	if (flags ~ " RejectNegative ") result = result " | CL_REJECT_NEGATIVE"
+	if (flags ~ " UInteger ") result = result " | CL_UINTEGER"
+	if (flags ~ " Undocumented ") result = result " | CL_UNDOCUMENTED"
+	if (flags ~ " Report ") result = result " | CL_REPORT"
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+	if (flags ~ " VarUint ") result = result " | CL_VARUINT"
+	if (flags ~ " PerFunc ") result = result " | CL_PERFUNC"
+# APPLE LOCAL end optimization pragmas 3124235/3420242
 	sub( "^0 \\| ", "", result )
 	return result
 }
 
-# If FLAGS includes a Var flag, return the name of the variable it specifies.
-# Return the empty string otherwise.
+function var_args(flags)
+{
+	if (flags !~ "Var\\(")
+	    return ""
+	sub(".*Var\\(", "", flags)
+	sub("\\).*", "", flags)
+
+	return flags
+}
 function var_name(flags)
 {
-	return nth_arg(0, opt_args("Var", flags))
+	s = var_args(flags)
+	if (s == "")
+		return "";
+	sub( ",.*", "", s)
+	return s
 }
-
-# Return true if the option described by FLAGS has a globally-visible state.
-function global_state_p(flags)
-{
-	return (var_name(flags) != "" \
-		|| opt_args("Mask", flags) != "" \
-		|| opt_args("InverseMask", flags) != "")
-}
-
-# Return true if the option described by FLAGS must have some state
-# associated with it.
-function needs_state_p(flags)
-{
-	return flag_set_p("Target", flags)
-}
-
-# If FLAGS describes an option that needs a static state variable,
-# return the name of that variable, otherwise return "".  NAME is
-# the name of the option.
-function static_var(name, flags)
-{
-	if (global_state_p(flags) || !needs_state_p(flags))
-		return ""
-	gsub ("[^A-Za-z0-9]", "_", name)
-	return "VAR_" name
-}
-
-# Return the type of variable that should be associated with the given flags.
-function var_type(flags)
-{
-	if (!flag_set_p("Joined.*", flags))
-		return "int "
-	else if (flag_set_p("UInteger", flags))
-		return "int "
-	else
-		return "const char *"
-}
-
-# Given that an option has flags FLAGS, return an initializer for the
-# "var_cond" and "var_value" fields of its cl_options[] entry.
 function var_set(flags)
 {
-	s = nth_arg(1, opt_args("Var", flags))
-	if (s != "")
-		return "CLVC_EQUAL, " s
-	s = opt_args("Mask", flags);
-	if (s != "") {
-		vn = var_name(flags);
-		if (vn)
-			return "CLVC_BIT_SET, OPTION_MASK_" s
-		else
-			return "CLVC_BIT_SET, MASK_" s
-	}
-	s = nth_arg(0, opt_args("InverseMask", flags));
-	if (s != "") {
-		vn = var_name(flags);
-		if (vn)
-			return "CLVC_BIT_CLEAR, OPTION_MASK_" s
-		else
-			return "CLVC_BIT_CLEAR, MASK_" s
-	}
-	if (var_type(flags) == "const char *")
-		return "CLVC_STRING, 0"
-	return "CLVC_BOOLEAN, 0"
+	s = var_args(flags)
+	if (s !~ ",")
+		return "0, 0"
+	sub( "[^,]*,", "", s)
+	return "1, " s
 }
-
-# Given that an option called NAME has flags FLAGS, return an initializer
-# for the "flag_var" field of its cl_options[] entry.
-function var_ref(name, flags)
+function var_ref(flags)
 {
-	name = var_name(flags) static_var(name, flags)
-	if (name != "")
+	name = var_name(flags)
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+	if (flags ~ "PerFunc") {
+	    if (flags ~ "VarUint") {
+		return "&cl_pf_opts.fld_" name
+	    } else {
+		return "0"
+	    }
+	}
+# APPLE LOCAL end optimization pragmas 3124235/3420242
+	if (name == "")
+		return "0"
+	else
 		return "&" name
-	if (opt_args("Mask", flags) != "")
-		return "&target_flags"
-	if (opt_args("InverseMask", flags) != "")
-		return "&target_flags"
+}
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+# Given that an option has flags FLAGS, return an initializer for the
+# "access_flag" field of its cl_options[] entry.  This applies only to
+# PerFunc VarUint things (bitfields) at the moment.
+function access_ref(flags)
+{
+	name = var_name(flags)
+	if (flags !~ "PerFunc") {
+	    return "0"
+	}
+	if (flags ~ "VarUint") {
+	    return "0"
+	}
+	if (name != "")
+		return "cl_opt_access_func_" name
 	return "0"
 }
+# APPLE LOCAL end optimization pragmas 3124235/3420242

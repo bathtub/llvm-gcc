@@ -1,3 +1,4 @@
+/* APPLE LOCAL file mainline */
 /* Copyright (C) 2004, 2005  Free Software Foundation.
 
    Ensure builtin __strncpy_chk performs correctly.  */
@@ -54,7 +55,7 @@ test1 (void)
   memset (dst, 0, sizeof (dst));
   if (strncpy (dst, src, 0) != dst || strcmp (dst, ""))
     abort();
-  
+
   memset (dst, 0, sizeof (dst));
   dst2 = dst; src2 = src;
   if (strncpy (++dst2, ++src2, 0) != dst+1 || strcmp (dst2, "")

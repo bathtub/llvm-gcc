@@ -59,10 +59,6 @@
 #   define GC_DGUX386_THREADS
 #   define GC_PTHREADS
 # endif
-# if defined(_AIX)
-#   define GC_AIX_THREADS
-#   define GC_PTHREADS
-# endif
 #endif /* GC_THREADS */
 
 #if defined(GC_THREADS) && !defined(GC_PTHREADS) && \
@@ -70,6 +66,10 @@
      || defined(__MINGW32__) || defined(__BORLANDC__) \
      || defined(_WIN32_WCE))
 # define GC_WIN32_THREADS
+#endif
+
+#if defined(GC_SOLARIS_PTHREADS) && !defined(GC_SOLARIS_THREADS)
+#   define GC_SOLARIS_THREADS
 #endif
 
 # define __GC

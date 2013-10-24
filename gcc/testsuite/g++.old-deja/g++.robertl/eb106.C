@@ -2,7 +2,7 @@
 // { dg-options "-O2 -fPIC " }
 struct T
 {
-	const char*	f1;
+	char*	f1;
 	int	f2;
 };
 

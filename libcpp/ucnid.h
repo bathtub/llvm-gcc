@@ -1,3 +1,4 @@
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 /* Unicode characters and various properties.
    Copyright (C) 2003, 2005 Free Software Foundation, Inc.
 
@@ -13,7 +14,7 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+   Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
 
    Copyright (C) 1991-2005 Unicode, Inc.  All rights reserved.
@@ -799,3 +800,4 @@
 {   0|  0|  0|CID|NFC|NKC|  0,   0, 0xffd9 },
 {   0|  0|CXX|CID|NFC|  0|  0,   0, 0xffdc },
 {   0|  0|  0|CID|NFC|NKC|  0,   0, 0xffff },
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */

@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with GCC; see the file COPYING.  If not, write to
-   the Free Software Foundation, 51 Franklin Street, Fifth Floor,
-   Boston, MA 02110-1301, USA.  */
+   the Free Software Foundation, 59 Temple Place - Suite 330,
+   Boston, MA 02111-1307, USA.  */
 
 #ifndef _BFIN_CONFIG
 #define _BFIN_CONFIG
@@ -39,58 +39,64 @@ extern int target_flags;
 #define TARGET_CPU_CPP_BUILTINS()               \
   do                                            \
     {                                           \
-      builtin_define_std ("bfin");              \
-      builtin_define_std ("BFIN");              \
-      builtin_define ("__ADSPBLACKFIN__");	\
-      if (TARGET_FDPIC)				\
-	builtin_define ("__BFIN_FDPIC__");	\
-      if (TARGET_ID_SHARED_LIBRARY)		\
-	builtin_define ("__ID_SHARED_LIB__");	\
+      builtin_define ("bfin");                  \
+      builtin_define ("BFIN");                  \
     }                                           \
   while (0)
 #endif
 
-#define DRIVER_SELF_SPECS SUBTARGET_DRIVER_SELF_SPECS	"\
- %{mfdpic:%{!fpic:%{!fpie:%{!fPIC:%{!fPIE:\
-   	    %{!fno-pic:%{!fno-pie:%{!fno-PIC:%{!fno-PIE:-fpie}}}}}}}}} \
-"
-#ifndef SUBTARGET_DRIVER_SELF_SPECS
-# define SUBTARGET_DRIVER_SELF_SPECS
-#endif
-
-#define LINK_GCC_C_SEQUENCE_SPEC \
-  "%{mfdpic:%{!static: %L} %{static: %G %L %G}} \
-  %{!mfdpic:%G %L %G}"
-
-/* A C string constant that tells the GCC driver program options to pass to
-   the assembler.  It can also specify how to translate options you give to GNU
-   CC into options for GCC to pass to the assembler.  See the file `sun3.h'
-   for an example of this.
-
-   Do not define this macro if it does not need to do anything.
-
-   Defined in svr4.h.  */
-#undef  ASM_SPEC
-#define ASM_SPEC "\
-%{G*} %{v} %{n} %{T} %{Ym,*} %{Yd,*} %{Wa,*:%*} \
-    %{mno-fdpic:-mnopic} %{mfdpic}"
-
-#define LINK_SPEC "\
-%{h*} %{v:-V} \
-%{b} \
-%{mfdpic:-melf32bfinfd -z text} \
-%{static:-dn -Bstatic} \
-%{shared:-G -Bdynamic} \
-%{symbolic:-Bsymbolic} \
-%{G*} \
-%{YP,*} \
-%{Qy:} %{!Qn:-Qy} \
--init __init -fini __fini "
-
 /* Generate DSP instructions, like DSP halfword loads */
 #define TARGET_DSP			(1)
 
-#define TARGET_DEFAULT (MASK_SPECLD_ANOMALY | MASK_CSYNC_ANOMALY)
+#define TARGET_DEFAULT MASK_CSYNC
+
+/* Don't create frame pointers for leaf functions */
+#define TARGET_OMIT_LEAF_FRAME_POINTER (target_flags & MASK_OMIT_LEAF_FRAME_POINTER)
+#define TARGET_LOW_64K                 (target_flags & MASK_LOW_64K)
+#define TARGET_CSYNC		       (target_flags & MASK_CSYNC)
+#define TARGET_ID_SHARED_LIBRARY       (target_flags & MASK_ID_SHARED_LIBRARY)
+
+#define MASK_OMIT_LEAF_FRAME_POINTER 0x00000001
+#define MASK_CSYNC                   0x00000002
+#define MASK_LOW_64K           	     0x00000004
+/* Compile using library ID based shared libraries.
+ * Set a specific ID using the -mshared-library-id=xxx option.
+ */
+#define MASK_ID_SHARED_LIBRARY	     0x00000008
+
+#define TARGET_SWITCHES  {\
+  { "omit-leaf-frame-pointer",	  MASK_OMIT_LEAF_FRAME_POINTER,		\
+    "Omit frame pointer for leaf functions" }, 				\
+  { "no-omit-leaf-frame-pointer",-MASK_OMIT_LEAF_FRAME_POINTER,		\
+    "Use frame pointer for leaf functions"},       			\
+  { "low64k",	                  MASK_LOW_64K,				\
+    "Program is located in low 64K of memory" },			\
+  { "no-low64k",	         -MASK_LOW_64K,				\
+    "Program is not located in low 64K of memory (default)"},		\
+  { "csync",		         MASK_CSYNC,				\
+    "Avoid speculative loads by inserting CSYNC or equivalent"},	\
+  { "no-csync",			-MASK_CSYNC,				\
+    "Do not generate extra code to avoid speculative loads"},		\
+  { "id-shared-library", MASK_ID_SHARED_LIBRARY,			\
+    "Enable ID based shared library" },					\
+  { "no-id-shared-library", -MASK_ID_SHARED_LIBRARY,			\
+    "Disable ID based shared library" },				\
+  { "", TARGET_DEFAULT,							\
+    "default: csync"}}
+
+/* This macro is similar to `TARGET_SWITCHES' but defines names of
+   command options that have values.  Its definition is an
+   initializer with a subgrouping for each command option.
+
+   Each subgrouping contains a string constant, that defines the
+   fixed part of the option name, and the address of a variable.  The
+   variable, type `char *', is set to the variable part of the given
+   option if the fixed part matches.  The actual option name is made
+   by appending `-m' to the specified name.  */
+#define TARGET_OPTIONS							\
+{ { "shared-library-id=",	&bfin_library_id_string,		\
+    "ID of shared library to build", 0}					\
+}
 
 /* Maximum number of library ids we permit */
 #define MAX_LIBRARY_ID 255
@@ -121,11 +127,11 @@ extern const char *bfin_library_id_string;
 
 #define STACK_PUSH_CODE PRE_DEC
 
-/* Define this to nonzero if the nominal address of the stack frame
+/* Define this if the nominal address of the stack frame
    is at the high-address end of the local variables;
    that is, each additional local variable allocated
    goes at a more negative offset in the frame.  */
-#define FRAME_GROWS_DOWNWARD 1
+#define FRAME_GROWS_DOWNWARD
 
 /* We define a dummy ARGP register; the parameters start at offset 0 from
    it. */
@@ -155,10 +161,6 @@ extern const char *bfin_library_id_string;
      this macro is not defined, it is up to the machine-dependent files
      to allocate such a register (if necessary). */
 #define PIC_OFFSET_TABLE_REGNUM (REG_P5)
-
-#define FDPIC_FPTR_REGNO REG_P1
-#define FDPIC_REGNO REG_P3
-#define OUR_FDPIC_REG	get_hard_reg_initial_val (SImode, FDPIC_REGNO)
 
 /* A static chain register for nested functions.  We need to use a
    call-clobbered register for this.  */
@@ -193,6 +195,10 @@ extern const char *bfin_library_id_string;
 */
 #define FRAME_POINTER_REQUIRED (bfin_frame_pointer_required ())
 
+#define PARM_BOUNDRY            32
+
+#define STACK_BOUNDRY           32
+
 /*#define DATA_ALIGNMENT(TYPE, BASIC-ALIGN) for arrays.. */
 
 /* Make strings word-aligned so strcpy from constants will be faster.  */
@@ -200,28 +206,13 @@ extern const char *bfin_library_id_string;
   (TREE_CODE (EXP) == STRING_CST        \
    && (ALIGN) < BITS_PER_WORD ? BITS_PER_WORD : (ALIGN))    
 
-#define TRAMPOLINE_SIZE (TARGET_FDPIC ? 30 : 18)
+#define TRAMPOLINE_SIZE 18
 #define TRAMPOLINE_TEMPLATE(FILE)                                       \
-  if (TARGET_FDPIC)							\
-    {									\
-      fprintf(FILE, "\t.dd\t0x00000000\n"); /* 0 */			\
-      fprintf(FILE, "\t.dd\t0x00000000\n"); /* 0 */			\
-      fprintf(FILE, "\t.dd\t0x0000e109\n"); /* p1.l = fn low */		\
-      fprintf(FILE, "\t.dd\t0x0000e149\n"); /* p1.h = fn high */	\
-      fprintf(FILE, "\t.dd\t0x0000e10a\n"); /* p2.l = sc low */		\
-      fprintf(FILE, "\t.dd\t0x0000e14a\n"); /* p2.h = sc high */	\
-      fprintf(FILE, "\t.dw\t0xac4b\n"); /* p3 = [p1 + 4] */		\
-      fprintf(FILE, "\t.dw\t0x9149\n"); /* p1 = [p1] */			\
-      fprintf(FILE, "\t.dw\t0x0051\n"); /* jump (p1)*/			\
-    }									\
-  else									\
-    {									\
-      fprintf(FILE, "\t.dd\t0x0000e109\n"); /* p1.l = fn low */		\
-      fprintf(FILE, "\t.dd\t0x0000e149\n"); /* p1.h = fn high */	\
-      fprintf(FILE, "\t.dd\t0x0000e10a\n"); /* p2.l = sc low */		\
-      fprintf(FILE, "\t.dd\t0x0000e14a\n"); /* p2.h = sc high */	\
-      fprintf(FILE, "\t.dw\t0x0051\n"); /* jump (p1)*/			\
-    }
+  fprintf(FILE, "\t.dd\t0x0000e109\n"); /* p1.l = fn low */		\
+  fprintf(FILE, "\t.dd\t0x0000e149\n"); /* p1.h = fn high */;		\
+  fprintf(FILE, "\t.dd\t0x0000e10a\n"); /* p2.l = sc low */;		\
+  fprintf(FILE, "\t.dd\t0x0000e14a\n"); /* p2.h = sc high */;		\
+  fprintf(FILE, "\t.dw\t0x0051\n"); /* jump (p1)*/
 
 #define INITIALIZE_TRAMPOLINE(TRAMP, FNADDR, CXT) \
   initialize_trampoline (TRAMP, FNADDR, CXT)
@@ -268,41 +259,34 @@ extern const char *bfin_library_id_string;
    5  return address registers RETS/I/X/N/E
    1  arithmetic status register (ASTAT).  */
 
-#define FIRST_PSEUDO_REGISTER 50
+#define FIRST_PSEUDO_REGISTER 44
 
-#define D_REGNO_P(X) ((X) <= REG_R7)
-#define P_REGNO_P(X) ((X) >= REG_P0 && (X) <= REG_P7)
-#define I_REGNO_P(X) ((X) >= REG_I0 && (X) <= REG_I3)
-#define DP_REGNO_P(X) (D_REGNO_P (X) || P_REGNO_P (X))
+#define PREG_P(X) (REG_P (X) && REGNO (X) >= REG_P0 && REGNO (X) <= REG_P7)
 #define ADDRESS_REGNO_P(X) ((X) >= REG_P0 && (X) <= REG_M3)
-#define DREG_P(X) (REG_P (X) && D_REGNO_P (REGNO (X)))
-#define PREG_P(X) (REG_P (X) && P_REGNO_P (REGNO (X)))
-#define IREG_P(X) (REG_P (X) && I_REGNO_P (REGNO (X)))
-#define DPREG_P(X) (REG_P (X) && DP_REGNO_P (REGNO (X)))
+#define D_REGNO_P(X) ((X) <= REG_R7)
 
 #define REGISTER_NAMES { \
   "R0", "R1", "R2", "R3", "R4", "R5", "R6", "R7", \
   "P0", "P1", "P2", "P3", "P4", "P5", "SP", "FP", \
-  "I0", "I1", "I2", "I3", "B0", "B1", "B2", "B3", \
-  "L0", "L1", "L2", "L3", "M0", "M1", "M2", "M3", \
+  "I0", "B0", "L0", "I1", "B1", "L1", "I2", "B2", \
+  "L2", "I3", "B3", "L3", "M0", "M1", "M2", "M3", \
   "A0", "A1", \
   "CC", \
   "RETS", "RETI", "RETX", "RETN", "RETE", "ASTAT", "SEQSTAT", "USP", \
-  "ARGP", \
-  "LT0", "LT1", "LC0", "LC1", "LB0", "LB1" \
+  "ARGP" \
 }
 
 #define SHORT_REGISTER_NAMES { \
 	"R0.L",	"R1.L",	"R2.L",	"R3.L", "R4.L", "R5.L", "R6.L", "R7.L", \
 	"P0.L",	"P1.L",	"P2.L",	"P3.L", "P4.L", "P5.L", "SP.L", "FP.L", \
-	"I0.L",	"I1.L", "I2.L",	"I3.L",	"B0.L",	"B1.L",	"B2.L",	"B3.L", \
-	"L0.L",	"L1.L",	"L2.L",	"L3.L",	"M0.L",	"M1.L",	"M2.L",	"M3.L", }
+	"I0.L",	"B0.L", "L0.L",	"I1.L",	"B1.L",	"L1.L",	"I2.L",	"B2.L", \
+	"L2.L",	"I3.L",	"B3.L",	"L3.L",	"M0.L",	"M1.L",	"M2.L",	"M3.L", }
 
 #define HIGH_REGISTER_NAMES { \
 	"R0.H",	"R1.H",	"R2.H",	"R3.H", "R4.H", "R5.H", "R6.H", "R7.H", \
 	"P0.H",	"P1.H",	"P2.H",	"P3.H", "P4.H", "P5.H", "SP.H", "FP.H", \
-	"I0.H",	"I1.H",	"I2.H",	"I3.H",	"B0.H",	"B1.H",	"B2.H",	"B3.H", \
-	"L0.H",	"L1.H",	"L2.H",	"L3.H",	"M0.H",	"M1.H",	"M2.H",	"M3.H", }
+	"I0.H",	"B0.H",	"L0.H",	"I1.H",	"B1.H",	"L1.H",	"I2.H",	"B2.H", \
+	"L2.H",	"I3.H",	"B3.H",	"L3.H",	"M0.H",	"M1.H",	"M2.H",	"M3.H", }
 
 #define DREGS_PAIR_NAMES { \
   "R1:0.p", 0, "R3:2.p", 0, "R5:4.p", 0, "R7:6.p", 0,  }
@@ -317,12 +301,10 @@ extern const char *bfin_library_id_string;
 #define FIXED_REGISTERS \
 /*r0 r1 r2 r3 r4 r5 r6 r7   p0 p1 p2 p3 p4 p5 p6 p7 */ \
 { 0, 0, 0, 0, 0, 0, 0, 0,   0, 0, 0, 0, 0, 0, 1, 0,    \
-/*i0 i1 i2 i3 b0 b1 b2 b3   l0 l1 l2 l3 m0 m1 m2 m3 */ \
-  0, 0, 0, 0, 0, 0, 0, 0,   1, 1, 1, 1, 0, 0, 0, 0,    \
-/*a0 a1 cc rets/i/x/n/e     astat seqstat usp argp lt0/1 lc0/1 */ \
-  0, 0, 0, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,    \
-/*lb0/1 */ \
-  1, 1  \
+/*i0 b0 l0 i1 b1 l1 i2 b2   l2 i3 b3 l3 m0 m1 m2 m3 */ \
+  0, 0, 1, 0, 0, 1, 0, 0,   1, 0, 0, 1, 0, 0, 0, 0,    \
+/*a0 a1 cc rets/i/x/n/e     astat seqstat usp argp */ \
+  0, 0, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1	 \
 }
 
 /* 1 for registers not available across function calls.
@@ -335,12 +317,10 @@ extern const char *bfin_library_id_string;
 #define CALL_USED_REGISTERS \
 /*r0 r1 r2 r3 r4 r5 r6 r7   p0 p1 p2 p3 p4 p5 p6 p7 */ \
 { 1, 1, 1, 1, 0, 0, 0, 0,   1, 1, 1, 0, 0, 0, 1, 0, \
-/*i0 i1 i2 i3 b0 b1 b2 b3   l0 l1 l2 l3 m0 m1 m2 m3 */ \
+/*i0 b0 l0 i1 b1 l1 i2 b2   l2 i3 b3 l3 m0 m1 m2 m3 */ \
   1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1,   \
-/*a0 a1 cc rets/i/x/n/e     astat seqstat usp argp lt0/1 lc0/1 */ \
-  1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1, 1, 1, 1, 1, \
-/*lb0/1 */ \
-  1, 1  \
+/*a0 a1 cc rets/i/x/n/e     astat seqstat usp argp */ \
+  1, 1, 1, 1, 1, 1, 1, 1,   1, 1, 1, 1	 \
 }
 
 /* Order in which to allocate registers.  Each register must be
@@ -353,21 +333,18 @@ extern const char *bfin_library_id_string;
 { REG_R0, REG_R1, REG_R2, REG_R3, REG_R7, REG_R6, REG_R5, REG_R4, \
   REG_P2, REG_P1, REG_P0, REG_P5, REG_P4, REG_P3, REG_P6, REG_P7, \
   REG_A0, REG_A1, \
-  REG_I0, REG_I1, REG_I2, REG_I3, REG_B0, REG_B1, REG_B2, REG_B3, \
-  REG_L0, REG_L1, REG_L2, REG_L3, REG_M0, REG_M1, REG_M2, REG_M3, \
+  REG_I0, REG_B0, REG_L0, REG_I1, REG_B1, REG_L1, REG_I2, REG_B2, \
+  REG_L2, REG_I3, REG_B3, REG_L3, REG_M0, REG_M1, REG_M2, REG_M3, \
   REG_RETS, REG_RETI, REG_RETX, REG_RETN, REG_RETE,		  \
   REG_ASTAT, REG_SEQSTAT, REG_USP, 				  \
-  REG_CC, REG_ARGP,						  \
-  REG_LT0, REG_LT1, REG_LC0, REG_LC1, REG_LB0, REG_LB1		  \
+  REG_CC, REG_ARGP						  \
 }
 
 /* Macro to conditionally modify fixed_regs/call_used_regs.  */
 #define CONDITIONAL_REGISTER_USAGE			\
   {							\
     conditional_register_usage();                       \
-    if (TARGET_FDPIC)					\
-      call_used_regs[FDPIC_REGNO] = 1;			\
-    if (!TARGET_FDPIC && flag_pic)			\
+    if (flag_pic)					\
       {							\
 	fixed_regs[PIC_OFFSET_TABLE_REGNUM] = 1;	\
 	call_used_regs[PIC_OFFSET_TABLE_REGNUM] = 1;	\
@@ -402,7 +379,7 @@ enum reg_class
   BREGS,
   LREGS,
   MREGS,
-  CIRCREGS, /* Circular buffering registers, Ix, Bx, Lx together form.  See Automatic Circular Buffering.  */
+  CIRCREGS, /* Circular buffering registers, Ix, Bx, Lx together form. See Automatic Circlur Buffering */
   DAGREGS,
   EVEN_AREGS,
   ODD_AREGS,
@@ -411,16 +388,10 @@ enum reg_class
   EVEN_DREGS,
   ODD_DREGS,
   DREGS,
-  FDPIC_REGS,
-  FDPIC_FPTR_REGS,
   PREGS_CLOBBERED,
   PREGS,
-  IPREGS,
   DPREGS,
   MOST_REGS,
-  LT_REGS,
-  LC_REGS,
-  LB_REGS,
   PROLOGUE_REGS,
   NON_A_CC_REGS,
   ALL_REGS, LIM_REG_CLASSES
@@ -447,16 +418,10 @@ enum reg_class
    "EVEN_DREGS",	\
    "ODD_DREGS",		\
    "DREGS",		\
-   "FDPIC_REGS",	\
-   "FDPIC_FPTR_REGS",	\
    "PREGS_CLOBBERED",	\
    "PREGS",		\
-   "IPREGS",		\
    "DPREGS",		\
    "MOST_REGS",		\
-   "LT_REGS",		\
-   "LC_REGS",		\
-   "LB_REGS",		\
    "PROLOGUE_REGS",	\
    "NON_A_CC_REGS",	\
    "ALL_REGS" }
@@ -478,9 +443,9 @@ enum reg_class
 #define REG_CLASS_CONTENTS \
     /* 31 - 0       63-32   */ \
 {   { 0x00000000,    0 },		/* NO_REGS */	\
-    { 0x000f0000,    0 },		/* IREGS */	\
-    { 0x00f00000,    0 },		/* BREGS */		\
-    { 0x0f000000,    0 },		/* LREGS */	\
+    { 0x02490000,    0 },		/* IREGS */	\
+    { 0x04920000,    0 },		/* BREGS */		\
+    { 0x09240000,    0 },		/* LREGS */	\
     { 0xf0000000,    0 },		/* MREGS */   \
     { 0x0fff0000,    0 },		/* CIRCREGS */   \
     { 0xffff0000,    0 },		/* DAGREGS */   \
@@ -491,55 +456,35 @@ enum reg_class
     { 0x00000055,    0 },		/* EVEN_DREGS */   \
     { 0x000000aa,    0 },		/* ODD_DREGS */   \
     { 0x000000ff,    0 },		/* DREGS */   \
-    { 0x00000800,    0x000 },		/* FDPIC_REGS */   \
-    { 0x00000200,    0x000 },		/* FDPIC_FPTR_REGS */   \
     { 0x00004700,    0x800 },		/* PREGS_CLOBBERED */   \
     { 0x0000ff00,    0x800 },		/* PREGS */   \
-    { 0x000fff00,    0x800 },		/* IPREGS */	\
     { 0x0000ffff,    0x800 },		/* DPREGS */   \
     { 0xffffffff,    0x800 },		/* MOST_REGS */\
-    { 0x00000000,    0x3000 },		/* LT_REGS */\
-    { 0x00000000,    0xc000 },		/* LC_REGS */\
-    { 0x00000000,    0x30000 },		/* LB_REGS */\
-    { 0x00000000,    0x3f7f8 },		/* PROLOGUE_REGS */\
-    { 0xffffffff,    0x3fff8 },		/* NON_A_CC_REGS */\
-    { 0xffffffff,    0x3ffff }}		/* ALL_REGS */
+    { 0x00000000,    0x7f8 },		/* PROLOGUE_REGS */\
+    { 0xffffffff,    0xff8 },		/* NON_A_CC_REGS */\
+    { 0xffffffff,    0xfff }}		/* ALL_REGS */
 
-#define IREG_POSSIBLE_P(OUTER)				     \
-  ((OUTER) == POST_INC || (OUTER) == PRE_INC		     \
-   || (OUTER) == POST_DEC || (OUTER) == PRE_DEC		     \
-   || (OUTER) == MEM || (OUTER) == ADDRESS)
-
-#define MODE_CODE_BASE_REG_CLASS(MODE, OUTER, INDEX)			\
-  ((MODE) == HImode && IREG_POSSIBLE_P (OUTER) ? IPREGS : PREGS)
-
+#define BASE_REG_CLASS          PREGS
 #define INDEX_REG_CLASS         PREGS
 
-#define REGNO_OK_FOR_BASE_STRICT_P(X, MODE, OUTER, INDEX)	\
-  (P_REGNO_P (X) || (X) == REG_ARGP				\
-   || (IREG_POSSIBLE_P (OUTER) && (MODE) == HImode		\
-       && I_REGNO_P (X)))
-
-#define REGNO_OK_FOR_BASE_NONSTRICT_P(X, MODE, OUTER, INDEX)	\
-  ((X) >= FIRST_PSEUDO_REGISTER					\
-   || REGNO_OK_FOR_BASE_STRICT_P (X, MODE, OUTER, INDEX))
+#define REGNO_OK_FOR_BASE_STRICT_P(X) (REGNO_REG_CLASS (X) == BASE_REG_CLASS)
+#define REGNO_OK_FOR_BASE_NONSTRICT_P(X)  \
+ (((X) >= FIRST_PSEUDO_REGISTER) || REGNO_REG_CLASS (X) == BASE_REG_CLASS)
 
 #ifdef REG_OK_STRICT
-#define REGNO_MODE_CODE_OK_FOR_BASE_P(X, MODE, OUTER, INDEX) \
-  REGNO_OK_FOR_BASE_STRICT_P (X, MODE, OUTER, INDEX)
+#define REGNO_OK_FOR_BASE_P(X) REGNO_OK_FOR_BASE_STRICT_P (X)
 #else
-#define REGNO_MODE_CODE_OK_FOR_BASE_P(X, MODE, OUTER, INDEX) \
-  REGNO_OK_FOR_BASE_NONSTRICT_P (X, MODE, OUTER, INDEX)
+#define REGNO_OK_FOR_BASE_P(X) REGNO_OK_FOR_BASE_NONSTRICT_P (X)
 #endif
 
+#define REG_OK_FOR_BASE_P(X)    (REG_P (X) && REGNO_OK_FOR_BASE_P (REGNO (X)))
+#define REG_OK_FOR_INDEX_P(X)   0
 #define REGNO_OK_FOR_INDEX_P(X)   0
 
 /* Get reg_class from a letter such as appears in the machine description.  */
 
 #define REG_CLASS_FROM_LETTER(LETTER)	\
   ((LETTER) == 'a' ? PREGS :            \
-   (LETTER) == 'Z' ? FDPIC_REGS :	\
-   (LETTER) == 'Y' ? FDPIC_FPTR_REGS :	\
    (LETTER) == 'd' ? DREGS : 		\
    (LETTER) == 'z' ? PREGS_CLOBBERED :	\
    (LETTER) == 'D' ? EVEN_DREGS : 	\
@@ -548,13 +493,10 @@ enum reg_class
    (LETTER) == 'A' ? EVEN_AREGS : 	\
    (LETTER) == 'B' ? ODD_AREGS : 	\
    (LETTER) == 'b' ? IREGS :            \
-   (LETTER) == 'v' ? BREGS :            \
+   (LETTER) == 'B' ? BREGS :            \
    (LETTER) == 'f' ? MREGS : 		\
    (LETTER) == 'c' ? CIRCREGS :         \
    (LETTER) == 'C' ? CCREGS : 		\
-   (LETTER) == 't' ? LT_REGS : 		\
-   (LETTER) == 'k' ? LC_REGS : 		\
-   (LETTER) == 'u' ? LB_REGS : 		\
    (LETTER) == 'x' ? MOST_REGS :	\
    (LETTER) == 'y' ? PROLOGUE_REGS :	\
    (LETTER) == 'w' ? NON_A_CC_REGS :	\
@@ -568,15 +510,12 @@ enum reg_class
 #define REGNO_REG_CLASS(REGNO) \
  ((REGNO) < REG_P0 ? DREGS				\
  : (REGNO) < REG_I0 ? PREGS				\
- : (REGNO) == REG_ARGP ? PREGS				\
+ : (REGNO) == REG_ARGP ? BASE_REG_CLASS			\
  : (REGNO) >= REG_I0 && (REGNO) <= REG_I3 ? IREGS	\
  : (REGNO) >= REG_L0 && (REGNO) <= REG_L3 ? LREGS	\
  : (REGNO) >= REG_B0 && (REGNO) <= REG_B3 ? BREGS	\
  : (REGNO) >= REG_M0 && (REGNO) <= REG_M3 ? MREGS	\
  : (REGNO) == REG_A0 || (REGNO) == REG_A1 ? AREGS	\
- : (REGNO) == REG_LT0 || (REGNO) == REG_LT1 ? LT_REGS	\
- : (REGNO) == REG_LC0 || (REGNO) == REG_LC1 ? LC_REGS	\
- : (REGNO) == REG_LB0 || (REGNO) == REG_LB1 ? LB_REGS	\
  : (REGNO) == REG_CC ? CCREGS				\
  : (REGNO) >= REG_RETS ? PROLOGUE_REGS			\
  : NO_REGS)
@@ -597,14 +536,12 @@ enum reg_class
 
 /* Return the maximum number of consecutive registers
    needed to represent mode MODE in a register of class CLASS.  */
-#define CLASS_MAX_NREGS(CLASS, MODE)					\
-  ((MODE) == V2PDImode && (CLASS) == AREGS ? 2				\
-   : ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD))
+#define CLASS_MAX_NREGS(CLASS, MODE)	\
+  ((GET_MODE_SIZE (MODE) + UNITS_PER_WORD - 1) / UNITS_PER_WORD)
 
 #define HARD_REGNO_NREGS(REGNO, MODE) \
-  ((MODE) == PDImode && ((REGNO) == REG_A0 || (REGNO) == REG_A1) ? 1	\
-   : (MODE) == V2PDImode && ((REGNO) == REG_A0 || (REGNO) == REG_A1) ? 2 \
-   : CLASS_MAX_NREGS (GENERAL_REGS, MODE))
+((MODE) == PDImode && ((REGNO) == REG_A0 || (REGNO) == REG_A1) \
+ ? 1 : CLASS_MAX_NREGS (GENERAL_REGS, MODE))
 
 /* A C expression that is nonzero if hard register TO can be
    considered for use as a rename register for FROM register */
@@ -626,6 +563,11 @@ enum reg_class
    perhaps another, smaller class.  */
 #define PREFERRED_RELOAD_CLASS(X, CLASS) (CLASS)
 
+#define  SECONDARY_OUTPUT_RELOAD_CLASS(class,mode,x) \
+    secondary_output_reload_class(class,mode,x)
+#define  SECONDARY_INPUT_RELOAD_CLASS(class,mode,x)  \
+    secondary_input_reload_class(class,mode,x)
+
 /* Function Calling Conventions. */
 
 /* The type of the current function; normal functions are of type
@@ -636,16 +578,10 @@ typedef enum {
 
 #define FUNCTION_ARG_REGISTERS { REG_R0, REG_R1, REG_R2, -1 }
 
-/* Flags for the call/call_value rtl operations set up by function_arg */
-#define CALL_NORMAL		0x00000000	/* no special processing */
-#define CALL_LONG		0x00000001	/* always call indirect */
-#define CALL_SHORT		0x00000002	/* always call by symbol */
-
 typedef struct {
   int words;			/* # words passed so far */
   int nregs;			/* # registers available for passing */
   int *arg_regs;		/* array of register -1 terminated */
-  int call_cookie;		/* Do special things for this call */
 } CUMULATIVE_ARGS;
 
 /* Define where to put the arguments to a function.
@@ -885,6 +821,9 @@ do {                                              \
 /* Width of a word, in units (bytes).  */
 #define UNITS_PER_WORD 4
 
+/* Size of a vector for autovectorization.  */
+#define UNITS_PER_SIMD_WORD 4
+
 /* Width in bits of a pointer.
    See also the macro `Pmode1' defined below.  */
 #define POINTER_SIZE 32
@@ -1063,9 +1002,6 @@ do {                                              \
      : (STR)[1] == 'n'					\
      ? ((STR)[2] == '7' ? CONST_7NBIT_IMM_P (VALUE)	\
 	: 0)						\
-     : (STR)[1] == 'N'					\
-     ? ((STR)[2] == '7' ? CONST_7BIT_IMM_P (-(VALUE))	\
-	: 0)						\
      : 0)
 
 #define CONST_OK_FOR_M(VALUE, STR)			\
@@ -1103,6 +1039,23 @@ do {                                              \
 
 #define EXTRA_CONSTRAINT(VALUE, D) \
     ((D) == 'Q' ? GET_CODE (VALUE) == SYMBOL_REF : 0)
+
+/* `FINALIZE_PIC'
+     By generating position-independent code, when two different
+     programs (A and B) share a common library (libC.a), the text of
+     the library can be shared whether or not the library is linked at
+     the same address for both programs.  In some of these
+     environments, position-independent code requires not only the use
+     of different addressing modes, but also special code to enable the
+     use of these addressing modes.
+
+     The `FINALIZE_PIC' macro serves as a hook to emit these special
+     codes once the function is being compiled into assembly code, but
+     not before.  (It is not done before, because in the case of
+     compiling an inline function, it would lead to multiple PIC
+     prologues being included in functions which used inline functions
+     and were compiled to assembly language.) */
+#define FINALIZE_PIC  do {} while (0)
 
 /* Switch into a generic section.  */
 #define TARGET_ASM_NAMED_SECTION  default_elf_asm_named_section
@@ -1157,6 +1110,19 @@ typedef enum directives {
     do {  fprintf (FILE, "_%s", NAME); \
         } while (0)
 
+#define ASM_FORMAT_PRIVATE_NAME(OUTPUT, NAME, LABELNO)			\
+  do {									\
+    int len = strlen (NAME);						\
+    char *temp = (char *) alloca (len + 4);				\
+    temp[0] = 'L';							\
+    temp[1] = '_';							\
+    strcpy (&temp[2], (NAME));						\
+    temp[len + 2] = '_';						\
+    temp[len + 3] = 0;							\
+    (OUTPUT) = (char *) alloca (strlen (NAME) + 13);			\
+    sprintf (OUTPUT, "_%s$%d", temp, LABELNO);				\
+  } while (0)
+
 #define ASM_OUTPUT_ADDR_VEC_ELT(FILE, VALUE)    	\
 do { char __buf[256];					\
      fprintf (FILE, "\t.dd\t");				\
@@ -1183,9 +1149,8 @@ do { char __buf[256];					\
     } while (0)
 
 #define ASM_OUTPUT_ALIGN(FILE,LOG) 				\
-    do {							\
-      if ((LOG) != 0)						\
-	fprintf (FILE, "\t.align %d\n", 1 << (LOG));		\
+    do {		 					\
+	fprintf (FILE, ".align %d\n", LOG);			\
     } while (0)
 
 #define ASM_OUTPUT_SKIP(FILE,SIZE)		\
@@ -1195,7 +1160,7 @@ do { char __buf[256];					\
 
 #define ASM_OUTPUT_LOCAL(FILE, NAME, SIZE, ROUNDED) 	\
 do { 						\
-    switch_to_section (data_section);				\
+    data_section();				\
     if ((SIZE) >= (unsigned int) 4 ) ASM_OUTPUT_ALIGN(FILE,2);	\
     ASM_OUTPUT_SIZE_DIRECTIVE (FILE, NAME, SIZE);		\
     ASM_OUTPUT_LABEL (FILE, NAME);				\
@@ -1210,13 +1175,11 @@ do { 						\
 
 #define ASM_COMMENT_START "//"
 
-#define FUNCTION_PROFILER(FILE, LABELNO)	\
-  do {						\
-    fprintf (FILE, "\tCALL __mcount;\n");	\
+#define FUNCTION_PROFILER(FILE, LABELNO) \
+  do {\
+    fprintf (FILE, "\tP1.l =LP$%d; P1.h =LP$%d; call mcount;\n", \
+       LABELNO, LABELNO);\
   } while(0)
-
-#undef NO_PROFILE_COUNTERS
-#define NO_PROFILE_COUNTERS 1
 
 #define ASM_OUTPUT_REG_PUSH(FILE, REGNO) fprintf (FILE, "[SP--] = %s;\n", reg_names[REGNO])
 #define ASM_OUTPUT_REG_POP(FILE, REGNO)  fprintf (FILE, "%s = [SP++];\n", reg_names[REGNO])
@@ -1226,6 +1189,10 @@ extern struct rtx_def *bfin_cc_rtx, *bfin_rets_rtx;
 
 /* This works for GAS and some other assemblers.  */
 #define SET_ASM_OP              ".set "
+
+/* Don't know how to order these.  UNALIGNED_WORD_ASM_OP is in
+   dwarf2.out. */
+#define UNALIGNED_WORD_ASM_OP ".4byte"
 
 /* DBX register number for a given compiler register number */
 #define DBX_REGISTER_NUMBER(REGNO)  (REGNO) 

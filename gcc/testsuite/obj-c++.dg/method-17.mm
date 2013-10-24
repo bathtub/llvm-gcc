@@ -1,12 +1,13 @@
+/* APPLE LOCAL file mainline */
 /* When there is only one candidate method available, make sure the
    compiler uses its argument/return types when constructing the
    message sends (so that proper C/C++ argument conversions may
    take place).  */
 /* { dg-do run } */
 
-#include <objc/Object.h>
-#include <stdlib.h>
-
+/* APPLE LOCAL radar 4894756 */
+#include "../objc/execute/Object2.h"
+extern "C" void abort(void);
 #define CHECK_IF(expr) if(!(expr)) abort()
 
 static double d = 4.5920234e2;

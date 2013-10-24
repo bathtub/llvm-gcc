@@ -17,7 +17,7 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
-Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+Foundation, 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
  In other words, you are welcome to use, share and improve this program.
  You are forbidden to forbid anyone else to use, share and improve
@@ -40,8 +40,13 @@ struct macro_arg
 
 /* Macro expansion.  */
 
-static int enter_macro_context (cpp_reader *, cpp_hashnode *);
+/* APPLE LOCAL begin CW asm blocks */
+extern int flag_iasm_blocks;
+static int enter_macro_context (cpp_reader *, cpp_hashnode *, int bol_p);
+/* APPLE LOCAL end CW asm blocks */
 static int builtin_macro (cpp_reader *, cpp_hashnode *);
+static void push_token_context (cpp_reader *, cpp_hashnode *,
+				const cpp_token *, unsigned int);
 static void push_ptoken_context (cpp_reader *, cpp_hashnode *, _cpp_buff *,
 				 const cpp_token **, unsigned int);
 static _cpp_buff *collect_args (cpp_reader *, const cpp_hashnode *);
@@ -123,44 +128,6 @@ _cpp_builtin_macro_text (cpp_reader *pfile, cpp_hashnode *node)
 		 NODE_NAME (node));
       break;
 
-    case BT_TIMESTAMP:
-      {
-	cpp_buffer *pbuffer = cpp_get_buffer (pfile);
-	if (pbuffer->timestamp == NULL)
-	  {
-	    /* Initialize timestamp value of the assotiated file. */
-            struct _cpp_file *file = cpp_get_file (pbuffer);
-	    if (file)
-	      {
-    		/* Generate __TIMESTAMP__ string, that represents 
-		   the date and time of the last modification 
-		   of the current source file. The string constant 
-		   looks like "Sun Sep 16 01:03:52 1973".  */
-		struct tm *tb = NULL;
-		struct stat *st = _cpp_get_file_stat (file);
-		if (st)
-		  tb = localtime (&st->st_mtime);
-		if (tb)
-		  {
-		    char *str = asctime (tb);
-		    size_t len = strlen (str);
-		    unsigned char *buf = _cpp_unaligned_alloc (pfile, len + 2);
-		    buf[0] = '"';
-		    strcpy ((char *) buf + 1, str);
-		    buf[len] = '"';
-		    pbuffer->timestamp = buf;
-		  }
-		else
-		  {
-		    cpp_errno (pfile, CPP_DL_WARNING,
-			"could not determine file timestamp");
-		    pbuffer->timestamp = U"\"??? ??? ?? ??:??:?? ????\"";
-		  }
-	      }
-	  }
-	result = pbuffer->timestamp;
-      }
-      break;
     case BT_FILE:
     case BT_BASE_FILE:
       {
@@ -175,7 +142,7 @@ _cpp_builtin_macro_text (cpp_reader *pfile, cpp_hashnode *node)
 
 	name = map->to_file;
 	len = strlen (name);
-	buf = _cpp_unaligned_alloc (pfile, len * 2 + 3);
+	buf = _cpp_unaligned_alloc (pfile, len * 4 + 3);
 	result = buf;
 	*buf = '"';
 	buf = cpp_quote_string (buf + 1, (const unsigned char *) name, len);
@@ -207,12 +174,16 @@ _cpp_builtin_macro_text (cpp_reader *pfile, cpp_hashnode *node)
 	 However, if (a) we are in a system header, (b) the option
 	 stdc_0_in_system_headers is true (set by target config), and
 	 (c) we are not in strictly conforming mode, then it has the
-	 value 0.  (b) and (c) are already checked in cpp_init_builtins.  */
+	 value 0.  */
     case BT_STDC:
-      if (cpp_in_system_header (pfile))
-	number = 0;
-      else
-	number = 1;
+      {
+	if (cpp_in_system_header (pfile)
+	    && CPP_OPTION (pfile, stdc_0_in_system_headers)
+	    && !CPP_OPTION (pfile,std))
+	  number = 0;
+	else
+	  number = 1;
+      }
       break;
 
     case BT_DATE:
@@ -293,12 +264,19 @@ builtin_macro (cpp_reader *pfile, cpp_hashnode *node)
 	return 0;
 
       _cpp_do__Pragma (pfile);
+      if (pfile->directive_result.type == CPP_PRAGMA) 
+	{
+	  cpp_token *tok = _cpp_temp_token (pfile);
+	  *tok = pfile->directive_result;
+	  push_token_context (pfile, NULL, tok, 1);
+	}
+
       return 1;
     }
 
   buf = _cpp_builtin_macro_text (pfile, node);
   len = ustrlen (buf);
-  nbuf = (char *) alloca (len + 1);
+  nbuf = alloca (len + 1);
   memcpy (nbuf, buf, len);
   nbuf[len]='\n';
 
@@ -307,7 +285,7 @@ builtin_macro (cpp_reader *pfile, cpp_hashnode *node)
 
   /* Set pfile->cur_token as required by _cpp_lex_direct.  */
   pfile->cur_token = _cpp_temp_token (pfile);
-  _cpp_push_token_context (pfile, NULL, _cpp_lex_direct (pfile), 1);
+  push_token_context (pfile, NULL, _cpp_lex_direct (pfile), 1);
   if (pfile->buffer->cur != pfile->buffer->rlimit)
     cpp_error (pfile, CPP_DL_ICE, "invalid built-in macro \"%s\"",
 	       NODE_NAME (node));
@@ -317,8 +295,9 @@ builtin_macro (cpp_reader *pfile, cpp_hashnode *node)
 }
 
 /* Copies SRC, of length LEN, to DEST, adding backslashes before all
-   backslashes and double quotes. DEST must be of sufficient size.
-   Returns a pointer to the end of the string.  */
+   backslashes and double quotes.  Non-printable characters are
+   converted to octal.  DEST must be of sufficient size.  Returns
+   a pointer to the end of the string.  */
 uchar *
 cpp_quote_string (uchar *dest, const uchar *src, unsigned int len)
 {
@@ -332,7 +311,15 @@ cpp_quote_string (uchar *dest, const uchar *src, unsigned int len)
 	  *dest++ = c;
 	}
       else
-	  *dest++ = c;
+	{
+	  if (ISPRINT (c))
+	    *dest++ = c;
+	  else
+	    {
+	      sprintf ((char *) dest, "\\%03o", c);
+	      dest += 4;
+	    }
+	}
     }
 
   return dest;
@@ -396,13 +383,17 @@ stringify_arg (cpp_reader *pfile, macro_arg *arg)
 	{
 	  _cpp_buff *buff = _cpp_get_buff (pfile, len);
 	  unsigned char *buf = BUFF_FRONT (buff);
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 	  len = cpp_spell_token (pfile, token, buf, true) - buf;
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 	  dest = cpp_quote_string (dest, buf, len);
 	  _cpp_release_buff (pfile, buff);
 	}
       else
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 	dest = cpp_spell_token (pfile, token, dest, true);
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
       if (token->type == CPP_OTHER && token->val.str.text[0] == '\\')
 	backslash_count++;
       else
@@ -430,22 +421,27 @@ stringify_arg (cpp_reader *pfile, macro_arg *arg)
 static bool
 paste_tokens (cpp_reader *pfile, const cpp_token **plhs, const cpp_token *rhs)
 {
-  unsigned char *buf, *end, *lhsend;
+  unsigned char *buf, *end;
   const cpp_token *lhs;
   unsigned int len;
+  bool valid;
 
   lhs = *plhs;
   len = cpp_token_len (lhs) + cpp_token_len (rhs) + 1;
-  buf = (unsigned char *) alloca (len);
-  end = lhsend = cpp_spell_token (pfile, lhs, buf, false);
+  buf = alloca (len);
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
+  end = cpp_spell_token (pfile, lhs, buf, false);
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
   /* Avoid comment headers, since they are still processed in stage 3.
      It is simpler to insert a space here, rather than modifying the
      lexer to ignore comments in some circumstances.  Simply returning
      false doesn't work, since we want to clear the PASTE_LEFT flag.  */
   if (lhs->type == CPP_DIV && rhs->type != CPP_EQ)
     *end++ = ' ';
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
   end = cpp_spell_token (pfile, rhs, end, false);
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
   *end = '\n';
 
   cpp_push_buffer (pfile, buf, end - buf, /* from_stage3 */ true);
@@ -454,22 +450,10 @@ paste_tokens (cpp_reader *pfile, const cpp_token **plhs, const cpp_token *rhs)
   /* Set pfile->cur_token as required by _cpp_lex_direct.  */
   pfile->cur_token = _cpp_temp_token (pfile);
   *plhs = _cpp_lex_direct (pfile);
-  if (pfile->buffer->cur != pfile->buffer->rlimit)
-    {
-      _cpp_pop_buffer (pfile);
-      _cpp_backup_tokens (pfile, 1);
-      *lhsend = '\0';
-
-      /* Mandatory error for all apart from assembler.  */
-      if (CPP_OPTION (pfile, lang) != CLK_ASM)
-	cpp_error (pfile, CPP_DL_ERROR,
-	 "pasting \"%s\" and \"%s\" does not give a valid preprocessing token",
-		   buf, cpp_token_as_text (pfile, rhs));
-      return false;
-    }
-
+  valid = pfile->buffer->cur == pfile->buffer->rlimit;
   _cpp_pop_buffer (pfile);
-  return true;
+
+  return valid;
 }
 
 /* Handles an arbitrarily long sequence of ## operators, with initial
@@ -501,12 +485,22 @@ paste_all_tokens (cpp_reader *pfile, const cpp_token *lhs)
 	abort ();
 
       if (!paste_tokens (pfile, &lhs, rhs))
-	break;
+	{
+	  _cpp_backup_tokens (pfile, 1);
+
+	  /* Mandatory error for all apart from assembler.  */
+	  if (CPP_OPTION (pfile, lang) != CLK_ASM)
+	    cpp_error (pfile, CPP_DL_ERROR,
+	 "pasting \"%s\" and \"%s\" does not give a valid preprocessing token",
+		       cpp_token_as_text (pfile, lhs),
+		       cpp_token_as_text (pfile, rhs));
+	  break;
+	}
     }
   while (rhs->flags & PASTE_LEFT);
 
   /* Put the resulting token in its own context.  */
-  _cpp_push_token_context (pfile, NULL, lhs, 1);
+  push_token_context (pfile, NULL, lhs, 1);
 }
 
 /* Returns TRUE if the number of arguments ARGC supplied in an
@@ -720,7 +714,7 @@ funlike_invocation_p (cpp_reader *pfile, cpp_hashnode *node)
 	 too difficult.  We re-insert it in its own context.  */
       _cpp_backup_tokens (pfile, 1);
       if (padding)
-	_cpp_push_token_context (pfile, NULL, padding, 1);
+	push_token_context (pfile, NULL, padding, 1);
     }
 
   return NULL;
@@ -731,7 +725,8 @@ funlike_invocation_p (cpp_reader *pfile, cpp_hashnode *node)
    containing its yet-to-be-rescanned replacement list and return one.
    Otherwise, we don't push a context and return zero.  */
 static int
-enter_macro_context (cpp_reader *pfile, cpp_hashnode *node)
+/* APPLE LOCAL CW asm blocks */
+enter_macro_context (cpp_reader *pfile, cpp_hashnode *node, int bol_p)
 {
   /* The presence of a macro invalidates a file's controlling macro.  */
   pfile->mi_valid = false;
@@ -776,7 +771,13 @@ enter_macro_context (cpp_reader *pfile, cpp_hashnode *node)
       macro->used = 1;
 
       if (macro->paramc == 0)
-	_cpp_push_token_context (pfile, node, macro->exp.tokens, macro->count);
+	push_token_context (pfile, node, macro->exp.tokens, macro->count);
+
+      /* APPLE LOCAL begin CW asm blocks */
+      /* Mark this context as being at the beginning of a line.  */
+      if (bol_p && pfile->context)
+	pfile->context->bol_p = true;
+      /* APPLE LOCAL end CW asm blocks */
 
       return 1;
     }
@@ -964,20 +965,24 @@ push_ptoken_context (cpp_reader *pfile, cpp_hashnode *macro, _cpp_buff *buff,
   context->direct_p = false;
   context->macro = macro;
   context->buff = buff;
+  /* APPLE LOCAL CW asm blocks */
+  context->bol_p = false;
   FIRST (context).ptoken = first;
   LAST (context).ptoken = first + count;
 }
 
 /* Push a list of tokens.  */
-void
-_cpp_push_token_context (cpp_reader *pfile, cpp_hashnode *macro,
-			 const cpp_token *first, unsigned int count)
+static void
+push_token_context (cpp_reader *pfile, cpp_hashnode *macro,
+		    const cpp_token *first, unsigned int count)
 {
   cpp_context *context = next_context (pfile);
 
   context->direct_p = true;
   context->macro = macro;
   context->buff = NULL;
+  /* APPLE LOCAL CW asm blocks */
+  context->bol_p = false;
   FIRST (context).token = first;
   LAST (context).token = first + count;
 }
@@ -1018,7 +1023,7 @@ expand_arg (cpp_reader *pfile, macro_arg *arg)
 
   /* Loop, reading in the arguments.  */
   capacity = 256;
-  arg->expanded = XNEWVEC (const cpp_token *, capacity);
+  arg->expanded = xmalloc (capacity * sizeof (cpp_token *));
 
   push_ptoken_context (pfile, NULL, NULL, arg->first, arg->count + 1);
   for (;;)
@@ -1028,8 +1033,8 @@ expand_arg (cpp_reader *pfile, macro_arg *arg)
       if (arg->expanded_count + 1 >= capacity)
 	{
 	  capacity *= 2;
-	  arg->expanded = XRESIZEVEC (const cpp_token *, arg->expanded,
-                                      capacity);
+	  arg->expanded = xrealloc (arg->expanded,
+				    capacity * sizeof (cpp_token *));
 	}
 
       token = cpp_get_token (pfile);
@@ -1093,6 +1098,23 @@ cpp_get_token (cpp_reader *pfile)
 	  else
 	    result = *FIRST (context).ptoken++;
 
+	  /* APPLE LOCAL begin CW asm blocks */
+	  /* Make the context's bol flag stick to the first token, and
+	     only the first.  */
+	  if (context->bol_p)
+	    {
+	      ((cpp_token *)result)->flags |= BOL;
+	      context->bol_p = false;
+	    }
+	  else
+	    {
+	      /* We can reinject macro bodies into the stream of tokens, we have to
+		 reset the BOL flag for this on the basis of the context alone to
+		 avoid previous BOL setting for prior uses of the macro.  */
+	      ((cpp_token *)result)->flags &= ~BOL;
+	    }
+	  /* APPLE LOCAL end CW asm blocks */
+
 	  if (result->flags & PASTE_LEFT)
 	    {
 	      paste_all_tokens (pfile, result);
@@ -1123,7 +1145,15 @@ cpp_get_token (cpp_reader *pfile)
       if (!(node->flags & NODE_DISABLED))
 	{
 	  if (!pfile->state.prevent_expansion
-	      && enter_macro_context (pfile, node))
+              /* APPLE LOCAL begin AltiVec */
+              /* Conditional macros require that a predicate be
+                 evaluated first.  */
+              && (!(node->flags & NODE_CONDITIONAL)
+                  || (pfile->cb.macro_to_expand
+                      && (node = pfile->cb.macro_to_expand (pfile, result))))
+              /* APPLE LOCAL end AltiVec */
+	      /* APPLE LOCAL CW asm blocks */
+	      && enter_macro_context (pfile, node, (flag_iasm_blocks && result->flags & BOL)))
 	    {
 	      if (pfile->state.in_directive)
 		continue;
@@ -1181,26 +1211,34 @@ cpp_scan_nooutput (cpp_reader *pfile)
   pfile->state.prevent_expansion--;
 }
 
-/* Step back one (or more) tokens.  Can only step back more than 1 if
+/* APPLE LOCAL begin AltiVec */
+/* Step back one or more tokens obtained from the lexer.  */
+void
+_cpp_backup_tokens_direct (cpp_reader *pfile, unsigned int count)
+{
+  pfile->lookaheads += count;
+  while (count--)
+    {
+      pfile->cur_token--;
+      if (pfile->cur_token == pfile->cur_run->base
+          /* Possible with -fpreprocessed and no leading #line.  */
+          && pfile->cur_run->prev != NULL)
+        {
+          pfile->cur_run = pfile->cur_run->prev;
+          pfile->cur_token = pfile->cur_run->limit;
+        }
+    }
+}
+/* APPLE LOCAL end AltiVec */
+
+/* Step back one (or more) tokens.  Can only step mack more than 1 if
    they are from the lexer, and not from macro expansion.  */
 void
 _cpp_backup_tokens (cpp_reader *pfile, unsigned int count)
 {
   if (pfile->context->prev == NULL)
-    {
-      pfile->lookaheads += count;
-      while (count--)
-	{
-	  pfile->cur_token--;
-	  if (pfile->cur_token == pfile->cur_run->base
-	      /* Possible with -fpreprocessed and no leading #line.  */
-	      && pfile->cur_run->prev != NULL)
-	    {
-	      pfile->cur_run = pfile->cur_run->prev;
-	      pfile->cur_token = pfile->cur_run->limit;
-	    }
-	}
-    }
+    /* APPLE LOCAL AltiVec */
+    _cpp_backup_tokens_direct (pfile, count);
   else
     {
       if (count != 1)
@@ -1225,6 +1263,13 @@ warn_of_redefinition (cpp_reader *pfile, const cpp_hashnode *node,
   /* Some redefinitions need to be warned about regardless.  */
   if (node->flags & NODE_WARN)
     return true;
+
+  /* APPLE LOCAL begin AltiVec */
+  /* Redefinitions of conditional (context-sensitive) macros, on
+     the other hand, must be allowed silently.  */
+  if (node->flags & NODE_CONDITIONAL)
+    return false;
+  /* APPLE LOCAL end AltiVec */
 
   /* Redefinition of a macro is allowed if and only if the old and new
      definitions are the same.  (6.10.3 paragraph 2).  */
@@ -1289,8 +1334,7 @@ _cpp_save_parameter (cpp_reader *pfile, cpp_macro *macro, cpp_hashnode *node)
   len = macro->paramc * sizeof (union _cpp_hashnode_value);
   if (len > pfile->macro_buffer_len)
     {
-      pfile->macro_buffer = XRESIZEVEC (unsigned char, pfile->macro_buffer,
-                                        len);
+      pfile->macro_buffer = xrealloc (pfile->macro_buffer, len);
       pfile->macro_buffer_len = len;
     }
   ((union _cpp_hashnode_value *) pfile->macro_buffer)[macro->paramc - 1]
@@ -1437,9 +1481,8 @@ create_iso_definition (cpp_reader *pfile, cpp_macro *macro)
       /* Success.  Commit or allocate the parameter array.  */
       if (pfile->hash_table->alloc_subobject)
 	{
-	  cpp_hashnode **params =
-            (cpp_hashnode **) pfile->hash_table->alloc_subobject
-            (sizeof (cpp_hashnode *) * macro->paramc);
+	  cpp_hashnode **params = pfile->hash_table->alloc_subobject
+	    (sizeof (cpp_hashnode *) * macro->paramc);
 	  memcpy (params, macro->params,
 		  sizeof (cpp_hashnode *) * macro->paramc);
 	  macro->params = params;
@@ -1551,9 +1594,8 @@ create_iso_definition (cpp_reader *pfile, cpp_macro *macro)
   /* Commit or allocate the memory.  */
   if (pfile->hash_table->alloc_subobject)
     {
-      cpp_token *tokns =
-        (cpp_token *) pfile->hash_table->alloc_subobject (sizeof (cpp_token)
-                                                          * macro->count);
+      cpp_token *tokns = pfile->hash_table->alloc_subobject (sizeof (cpp_token)
+							     * macro->count);
       memcpy (tokns, macro->exp.tokens, sizeof (cpp_token) * macro->count);
       macro->exp.tokens = tokns;
     }
@@ -1572,8 +1614,7 @@ _cpp_create_definition (cpp_reader *pfile, cpp_hashnode *node)
   bool ok;
 
   if (pfile->hash_table->alloc_subobject)
-    macro = (cpp_macro *) pfile->hash_table->alloc_subobject
-      (sizeof (cpp_macro));
+    macro = pfile->hash_table->alloc_subobject (sizeof (cpp_macro));
   else
     macro = (cpp_macro *) _cpp_aligned_alloc (pfile, sizeof (cpp_macro));
   macro->line = pfile->directive_line;
@@ -1743,8 +1784,7 @@ cpp_macro_definition (cpp_reader *pfile, const cpp_hashnode *node)
 
   if (len > pfile->macro_buffer_len)
     {
-      pfile->macro_buffer = XRESIZEVEC (unsigned char,
-                                        pfile->macro_buffer, len);
+      pfile->macro_buffer = xrealloc (pfile->macro_buffer, len);
       pfile->macro_buffer_len = len;
     }
 
@@ -1804,8 +1844,10 @@ cpp_macro_definition (cpp_reader *pfile, const cpp_hashnode *node)
 	      buffer += NODE_LEN (macro->params[token->val.arg_no - 1]);
 	    }
 	  else
+/* APPLE LOCAL begin mainline UCNs 2005-04-17 3892809 */
 	    buffer = cpp_spell_token (pfile, token, buffer, false);
 
+/* APPLE LOCAL end mainline UCNs 2005-04-17 3892809 */
 	  if (token->flags & PASTE_LEFT)
 	    {
 	      *buffer++ = ' ';
