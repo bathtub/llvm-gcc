@@ -30,6 +30,8 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "cfglayout.h"
 #include "cfghooks.h"
 #include "output.h"
+/* APPLE LOCAL 4321079 */
+#include "options.h"
 
 static void duplicate_subloops (struct loops *, struct loop *, struct loop *);
 static void copy_loops_to (struct loops *, struct loop **, int,

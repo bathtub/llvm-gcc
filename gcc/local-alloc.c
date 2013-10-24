@@ -284,6 +284,19 @@ static struct equivalence *reg_equiv;
 /* Nonzero if we recorded an equivalence for a LABEL_REF.  */
 static int recorded_label_ref;
 
+/* APPLE LOCAL begin 5695218 */
+/* Pseudo registers that inherit from the PIC_OFFSET_TABLE_RTX have
+   their bit set here.  Used to predict when a not-yet-allocated
+   pseudo-register might turn into a pic reference during reload.  */
+GTY(()) sbitmap pic_rtx_inheritance;
+/* max_allocno by max_allocno array of bits, recording inheritance;
+   bits j and k set in row m mean that allocno m was set by a
+   computation involving j and k.  */
+static GTY(()) sbitmap *reg_inheritance_matrix;
+static int reg_inheritance_1 (rtx *, void *);
+static void reg_inheritance (void);
+/* APPLE LOCAL end 5695218 */
+
 static void alloc_qty (int, enum machine_mode, int, int);
 static void validate_equiv_mem_from_store (rtx, rtx, void *);
 static int validate_equiv_mem (rtx, rtx, rtx);
@@ -311,6 +324,8 @@ static void mark_life (int, enum machine_mode, int);
 static void post_mark_life (int, enum machine_mode, int, int, int);
 static int no_conflict_p (rtx, rtx, rtx);
 static int requires_inout (const char *);
+/* APPLE LOCAL 7511696 pic register reuse */
+static void dump_inheritance (FILE *);
 
 /* Allocate a new quantity (new within current basic block)
    for register number REGNO which is born at index BIRTH
@@ -357,9 +372,39 @@ local_alloc (void)
   ORDER_REGS_FOR_LOCAL_ALLOC;
 #endif
 
+  /* APPLE LOCAL begin 5695218 */
+  gcc_assert (!reg_inheritance_matrix);
+  /* The max_regno check limits the size of the reg_inheritance_matrix
+     to avoid malloc failure.  10033^2 / 8 = 12MB.  */
+  if (PIC_OFFSET_TABLE_REGNUM != INVALID_REGNUM
+      && max_regno <= 10033)
+    {
+      reg_inheritance_matrix = sbitmap_vector_alloc (max_regno, max_regno);
+      sbitmap_vector_zero (reg_inheritance_matrix, max_regno);
+    }
+  /* APPLE LOCAL end 5695218 */
+
   /* Promote REG_EQUAL notes to REG_EQUIV notes and adjust status of affected
      registers.  */
   update_equiv_regs ();
+
+  /* APPLE LOCAL begin 5695218 */
+  /* APPLE LOCAL begin 7511696 pic register reuse */
+  if (reg_inheritance_matrix)
+    reg_inheritance ();
+  if (dump_file)
+    {
+      timevar_push (TV_DUMP);
+      dump_inheritance (dump_file);
+      timevar_pop (TV_DUMP);
+    }
+  if (reg_inheritance_matrix)
+    {
+      sbitmap_vector_free (reg_inheritance_matrix);
+      reg_inheritance_matrix = (sbitmap *)0;
+    }
+  /* APPLE LOCAL end 7511696 pic register reuse */
+  /* APPLE LOCAL end 5695218 */
 
   /* This sets the maximum number of quantities we can have.  Quantity
      numbers start at zero and we can have one for each pseudo.  */
@@ -852,6 +897,18 @@ update_equiv_regs (void)
 
 	  dest = SET_DEST (set);
 	  src = SET_SRC (set);
+
+	  /* APPLE LOCAL begin 5695218 */
+	  if (reg_inheritance_matrix)
+	    {
+	      int dstregno;
+		if (REG_P (dest))
+		{
+		  dstregno = REGNO (dest);
+		  for_each_rtx (&src, reg_inheritance_1, (void*)dstregno);
+		}
+	    }
+	  /* APPLE LOCAL end 5695218 */
 
 	  /* See if this is setting up the equivalence between an argument
 	     register and its stack slot.  */
@@ -1647,9 +1704,25 @@ block_alloc (int b)
      First try the register class that is cheapest for this qty,
      if there is more than one class.  */
 
+/* APPLE LOCAL begin ARM conditionally disable local RA */
+/* At -O0 GRA is not run, so turning off LRA as well is a bad idea.  (Appears
+   to be needed for correctness as well; non-local goto's load FP, then SP,
+   from saved locations in memory; if the memory address has to be reloaded
+   from [FP+offset] in between this doesn't work, see gcc.c-torture/execute/
+   920428-2.c and others.  I'm not entirely sure running LRA is enough to
+   guarantee this will work anyway, but it works on the dejagnu cases, and
+   this isn't an important enough issue to dig into just now....if a fix
+   is needed probably we need a special pattern to represent both loads
+   at once.) */
+if (flag_local_alloc || !optimize)
+/* APPLE LOCAL end ARM conditionally disable local RA */
   for (i = 0; i < next_qty; i++)
     {
       q = qty_order[i];
+      /* APPLE LOCAL begin 4321079 */
+      if (optimize && VECTOR_MODE_P (qty[q].mode))
+	continue;
+      /* APPLE LOCAL end 4321079 */
       if (qty[q].phys_reg < 0)
 	{
 #ifdef INSN_SCHEDULING
@@ -2294,6 +2367,12 @@ find_free_reg (enum reg_class class, enum machine_mode mode, int qtyno,
 #else
       int regno = i;
 #endif
+/* APPLE LOCAL begin 5831562 add DIMODE_REG_ALLOC_ORDER */
+#ifdef DIMODE_REG_ALLOC_ORDER
+      if (mode == DImode)
+	regno = dimode_reg_alloc_order[i];
+#endif
+/* APPLE LOCAL end 5831562 add DIMODE_REG_ALLOC_ORDER */
       if (! TEST_HARD_REG_BIT (first_used, regno)
 	  && HARD_REGNO_MODE_OK (regno, mode)
 	  && (qty[qtyno].n_calls_crossed == 0
@@ -2521,6 +2600,187 @@ dump_local_alloc (FILE *file)
       fprintf (file, ";; Register %d in %d.\n", i, reg_renumber[i]);
 }
 
+/* APPLE LOCAL begin radar 4216496, 4229407, 4120689, 4095567 */
+#ifdef TARGET_386
+/* These bits moved to other places and the functionality here needs
+   to move to those places as well.  */
+
+static int MaxAlignForThisBlock (tree block)
+{
+  tree decl, t;
+  unsigned int align, max_align = 0;
+
+  for (decl = BLOCK_VARS (block); decl; decl = TREE_CHAIN (decl))
+     {
+       if (TREE_CODE (decl) == VAR_DECL
+           && DECL_ALIGN (decl) > max_align)
+         max_align = DECL_ALIGN (decl);
+     }
+
+  for (t = BLOCK_SUBBLOCKS (block); t ; t = BLOCK_CHAIN (t))
+     if ((align = MaxAlignForThisBlock (t)) > max_align)
+       max_align = align;
+
+  return max_align;
+
+}
+
+static int
+LargestAlignmentOfVariables (void)
+{
+  return MaxAlignForThisBlock (DECL_INITIAL (current_function_decl));
+}
+#endif
+/* APPLE LOCAL end radar 4216496, 4229407, 4120689, 4095567 */
+
+/* APPLE LOCAL begin 5695218 */
+static void
+dump_inheritance (FILE *dumpfile)
+{
+  sbitmap_iterator sbiter;
+  unsigned int ui;
+  int emitted, width;
+  /* APPLE LOCAL begin 7511696 pic register reuse */
+  const char *funcname = (IDENTIFIER_POINTER
+                          (DECL_ASSEMBLER_NAME (current_function_decl)));
+  if (!reg_inheritance_matrix)
+    {
+      fprintf (dumpfile, ";; pic_rtx_inheritance omitted (function %s).\n"
+               ";; Function too large.\n", funcname);
+      return;
+    }
+  fprintf (dumpfile, ";; FIRST_PSEUDO_REGISTER = %d, max_regno = %d\n",
+           FIRST_PSEUDO_REGISTER, max_regno);
+  dump_sbitmap_vector (dumpfile, ";; register inheritance matrix:",
+                       ";; register", reg_inheritance_matrix, max_regno);
+  /* APPLE LOCAL end 7511696 pic register reuse */
+  if (pic_rtx_inheritance)
+    {
+      /* APPLE LOCAL begin 7511696 pic register reuse */
+      fprintf (dumpfile, "\n;; pic_rtx_inheritance bitmap (function %s):\n",
+               funcname);
+      /* APPLE LOCAL end 7511696 pic register reuse */
+      dump_sbitmap (dumpfile, pic_rtx_inheritance);
+      fprintf (dumpfile, "\n;; pseudo-regs that inherit PIC_OFFSET_TABLE_REGNUM (=%d):\n",
+	       PIC_OFFSET_TABLE_REGNUM);
+      width = 0;
+      EXECUTE_IF_SET_IN_SBITMAP (pic_rtx_inheritance, FIRST_PSEUDO_REGISTER, ui, sbiter)
+	{
+	  emitted = fprintf (dumpfile, " %d,", ui);
+	  gcc_assert (emitted >= 0);
+	  width += emitted;
+	  if (width > 75)
+	    {
+	      width = 0;
+	      fprintf (dumpfile, "\n");
+	    }
+	}
+      fprintf (dumpfile, "\n\n");
+    }
+  else
+    /* APPLE LOCAL 7511696 pic register reuse */
+    fprintf (dumpfile, ";; pic_rtx_inheritance=0 (function %s)\n", funcname);
+}
+void debug_inheritance (void);
+void
+debug_inheritance (void)
+{
+  dump_inheritance (stdout);
+}
+/* If we've walked into a SUBREG or REG, record it as inherited.  See
+   reg_inheritance() below.  */
+static int
+reg_inheritance_1 (rtx *px, void *data)
+{
+  rtx x = *px;
+  unsigned int srcregno, dstregno;
+
+  dstregno = (int)data;
+#ifdef TARGET_386
+  /*
+    Ugly special case: When moving a DI/SI/mode constant into an FP
+    register, GCC will use the mov/df/sf/_nointeger pattern, pushing
+    the DI/SI/mode constant into memory and loading therefrom into an
+    FP register ('387 or SSE).  It looks like this: (set (reg:DF)
+    (subreg:DF (reg:DI))).  We're choosing to match the subreg; hope
+    this is sufficient.  See Radars 6050374 and 6951876.
+  */
+  if (GET_CODE (x) == SUBREG)
+    if ((GET_MODE (x) == DFmode
+	 && GET_MODE (SUBREG_REG (x)) == DImode)
+	||
+	(GET_MODE (x) == SFmode
+	 && GET_MODE (SUBREG_REG (x)) == SImode))
+      {
+	SET_BIT (reg_inheritance_matrix[dstregno], PIC_OFFSET_TABLE_REGNUM);
+	return 0;
+      }
+#endif
+  if (GET_CODE (x) == SUBREG)
+    x = SUBREG_REG (x);
+  if (REG_P (x))
+    {
+      srcregno = REGNO (x);
+      SET_BIT (reg_inheritance_matrix[dstregno], srcregno);
+    }
+  if (GET_CODE (x) == CONST_VECTOR)
+    {
+      SET_BIT (reg_inheritance_matrix[dstregno], PIC_OFFSET_TABLE_REGNUM);
+    }
+  return 0;	/* Keep walking the RTX; visit all the REGs.  */
+}
+/* Walk all the insns and set the reg_inheritance_matrix[].  */
+void
+reg_inheritance (void)
+{
+  unsigned int /* dstregno, */ pic_rtx_regno, ui;
+  /* int i; */
+  /* rtx dst, insn, set, src; */
+  bool changing;
+
+  if (!optimize)
+    return;
+
+  if (pic_rtx_inheritance)
+    sbitmap_free (pic_rtx_inheritance);
+  pic_rtx_inheritance = sbitmap_alloc (max_regno);
+  sbitmap_zero (pic_rtx_inheritance);
+  pic_rtx_regno = PIC_OFFSET_TABLE_REGNUM;
+  /* Now loop over reg_inheritance_matrix[], computing pic_rtx_inheritance.  */
+  for (ui = FIRST_PSEUDO_REGISTER; ui < (unsigned)max_regno; ui++)
+    {
+      /* This row of the matrix represents the regnos (pseudo and
+	 hard) that are inherited by pseudo regno ui.  If regno ui
+	 inherits from the PIC_OFFSET_TABLE_REGNUM, set the ui bit in
+	 pic_rtx_inheritance.  */
+      if (TEST_BIT (reg_inheritance_matrix[ui], pic_rtx_regno))
+	SET_BIT (pic_rtx_inheritance, ui);
+      /* else AND pic_rtx_inheritance with reg_inheritance_matrix[ui *
+	 max_regno_row_words + (PIC_OFFSET_TABLE_REGNUM / INT_BITS)],
+	 if nonzero, set the same bit  */
+    }
+  /* pic_rtx_inheritance has a bit set for every pseudo that inherits
+     the PIC_OFFSET_TABLE_REGNUM directly.  Now compute all the pseudo
+     registers that inherit PIC_OFFSET_TABLE_REGNUM indirectly.  */
+  /* now, indefinite loop over reg_inheritance_matrix[], ANDing with each entry;
+     when non-zero, OR in bit as above.
+     continue until no more change observed  */
+  /* FIXME: obvious candidate for sbitmap.h:EXECUTE_IF_SET_IN_SBITMAP() */
+  do {
+    changing = false;
+    for (ui = FIRST_PSEUDO_REGISTER; ui < (unsigned)max_regno; ui++)
+      if (!TEST_BIT (pic_rtx_inheritance, ui)
+	  && sbitmap_any_common_bits (reg_inheritance_matrix[ui], pic_rtx_inheritance))
+	{
+	  SET_BIT (pic_rtx_inheritance, ui);
+	  changing = true;
+	}
+  } while (changing);  
+  /* APPLE LOCAL 7511696 pic register reuse */
+  /* Lines deleted */
+}
+/* APPLE LOCAL end 5695218 */
+
 /* Run old register allocator.  Return TRUE if we must exit
    rest_of_compilation upon return.  */
 static unsigned int
@@ -2532,6 +2792,28 @@ rest_of_handle_local_alloc (void)
      since this can impact optimizations done by the prologue and
      epilogue thus changing register elimination offsets.  */
   current_function_is_leaf = leaf_function_p ();
+
+/* APPLE LOCAL begin radar 4216496, 4229407, 4120689, 4095567 */
+#ifdef TARGET_386
+  {
+    int align;
+    SAVE_PREFERRED_STACK_BOUNDARY = 0;
+    if ((optimize > 0 || optimize_size)
+         && current_function_is_leaf
+         && PREFERRED_STACK_BOUNDARY >= 128
+  /* APPLE LOCAL begin radar 4120689 */
+         && !DECL_STRUCT_FUNCTION (current_function_decl)->uses_vector
+         && (align = LargestAlignmentOfVariables()) < 128)
+  /* APPLE LOCAL end radar 4120689 */
+      {
+        SAVE_PREFERRED_STACK_BOUNDARY = PREFERRED_STACK_BOUNDARY;
+        PREFERRED_STACK_BOUNDARY = MAX (align, 32);
+        cfun->stack_alignment_needed = STACK_BOUNDARY;
+        cfun->preferred_stack_boundary = STACK_BOUNDARY;
+      }
+  }
+#endif
+/* APPLE LOCAL end radar 4216496, 4229407, 4120689, 4095567 */
 
   /* Allocate the reg_renumber array.  */
   allocate_reg_info (max_regno, FALSE, TRUE);

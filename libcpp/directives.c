@@ -68,12 +68,20 @@ struct pragma_entry
    means this directive should be handled even if -fpreprocessed is in
    effect (these are the directives with callback hooks).
 
+   APPLE LOCAL begin pch distcc --mrs
+   IN_I_PCH means that this directive should be handled even if
+   -fpreprocessed is in effect as long as pch_preprocess is also in
+   effect.
+   APPLE LOCAL end pch distcc --mrs
+
    EXPAND is set on directives that are always macro-expanded.  */
 #define COND		(1 << 0)
 #define IF_COND		(1 << 1)
 #define INCL		(1 << 2)
 #define IN_I		(1 << 3)
 #define EXPAND		(1 << 4)
+/* APPLE LOCAL pch distcc --mrs */
+#define IN_I_PCH        (1 << 5)
 
 /* Defines one #-directive, including how to handle it.  */
 typedef void (*directive_handler) (cpp_reader *);
@@ -136,6 +144,8 @@ static void handle_assertion (cpp_reader *, const char *, int);
 #define DIRECTIVE_TABLE							\
 D(define,	T_DEFINE = 0,	KANDR,     IN_I)	   /* 270554 */ \
 D(include,	T_INCLUDE,	KANDR,     INCL | EXPAND)  /*  52262 */ \
+/* APPLE LOCAL pch distcc --mrs */ \
+D(include_pch,  T_INCLUDE_PCH,  KANDR,     INCL | IN_I_PCH)             \
 D(endif,	T_ENDIF,	KANDR,     COND)	   /*  45855 */ \
 D(ifdef,	T_IFDEF,	KANDR,     COND | IF_COND) /*  22000 */ \
 D(if,		T_IF,		KANDR, COND | IF_COND | EXPAND) /*  18162 */ \
@@ -210,7 +220,10 @@ skip_rest_of_line (cpp_reader *pfile)
 static void
 check_eol (cpp_reader *pfile)
 {
-  if (! SEEN_EOL () && _cpp_lex_token (pfile)->type != CPP_EOF)
+  /* APPLE LOCAL begin -Wextra-tokens 2001-08-02 --sts */
+  if (! SEEN_EOL () && _cpp_lex_token (pfile)->type != CPP_EOF
+      && CPP_OPTION (pfile, warn_extra_tokens))
+  /* APPLE LOCAL end -Wextra-tokens 2001-08-02 --sts */
     cpp_error (pfile, CPP_DL_PEDWARN, "extra tokens at end of #%s directive",
 	       pfile->directive->name);
 }
@@ -339,7 +352,11 @@ directive_diagnostics (cpp_reader *pfile, const directive *dir, int indented)
   /* Issue -pedantic warnings for extensions.  */
   if (CPP_PEDANTIC (pfile)
       && ! pfile->state.skipping
-      && dir->origin == EXTENSION)
+      /* APPLE LOCAL begin import valid for objc 4588440 */
+      && dir->origin == EXTENSION
+      && (!CPP_OPTION (pfile, objc)
+	  || dir != &dtable[T_IMPORT]))
+      /* APPLE LOCAL end import valid for objc 4588440 */
     cpp_error (pfile, CPP_DL_PEDWARN, "#%s is a GCC extension", dir->name);
 
   /* Traditionally, a directive is ignored unless its # is in
@@ -425,7 +442,11 @@ _cpp_handle_directive (cpp_reader *pfile, int indented)
 	 -fpreprocessed mode only if the # is in column 1.  macro.c
 	 puts a space in front of any '#' at the start of a macro.  */
       if (CPP_OPTION (pfile, preprocessed)
-	  && (indented || !(dir->flags & IN_I)))
+          /* APPLE LOCAL begin pch distcc --mrs */
+          && (indented || !(dir->flags & IN_I))
+          && ! (CPP_OPTION (pfile, pch_preprocess)
+                && (dir->flags & IN_I_PCH)))
+          /* APPLE LOCAL end pch distcc --mrs */
 	{
 	  skip = 0;
 	  dir = 0;
@@ -759,6 +780,14 @@ do_include (cpp_reader *pfile)
   do_include_common (pfile, IT_INCLUDE);
 }
 
+/* APPLE LOCAL begin pch distcc --mrs */
+static void
+do_include_pch (cpp_reader *pfile)
+{
+  do_include_common (pfile, IT_INCLUDE_PCH);
+}
+/* APPLE LOCAL end pch distcc --mrs */
+
 static void
 do_import (cpp_reader *pfile)
 {
@@ -866,7 +895,8 @@ do_line (cpp_reader *pfile)
     {
       cpp_string s = { 0, 0 };
       if (cpp_interpret_string_notranslate (pfile, &token->val.str, 1,
-					    &s, false))
+					    /* APPLE LOCAL pascal strings */
+					    &s, false, false))
 	new_file = (const char *)s.text;
       check_eol (pfile);
     }
@@ -919,7 +949,8 @@ do_linemarker (cpp_reader *pfile)
     {
       cpp_string s = { 0, 0 };
       if (cpp_interpret_string_notranslate (pfile, &token->val.str,
-					    1, &s, false))
+					    /* APPLE LOCAL pascal strings */
+					    1, &s, false, false))
 	new_file = (const char *)s.text;
 
       new_sysp = 0;
@@ -972,8 +1003,68 @@ _cpp_do_file_change (cpp_reader *pfile, enum lc_reason reason,
   if (map != NULL)
     linemap_line_start (pfile->line_table, map->to_line, 127);
 
+  /* APPLE LOCAL begin 4137741 */
   if (pfile->cb.file_change)
-    pfile->cb.file_change (pfile, map);
+    {
+      struct line_map *old_maps = pfile->line_table->maps;
+      source_location old_loc = 0;
+
+      if (map)
+        old_loc = map->start_location;
+
+      pfile->cb.file_change (pfile, map);
+
+      /* The file_change callback could reallocate the line_table maps causing
+         "map" we got to be invalid */
+      if (map && old_maps != pfile->line_table->maps)
+        map = linemap_lookup (pfile->line_table, old_loc);
+    }
+
+  /* If file change debug hook callbacks are being deferred, we will
+     need special CPP_BINCL and CPP_EINCL tokens to carry the information
+     to the front-end.  */
+  if (map && CPP_OPTION (pfile, defer_file_change_debug_hooks))
+    {
+      cpp_token *tok;
+
+      if ((reason == LC_ENTER && !MAIN_FILE_P (map)))
+       {
+         uchar *s;
+         cpp_string body;
+
+         /* We can handle '#include' similarly to '#pragma'.  */
+         tok = &pfile->directive_result;
+         tok->type = CPP_BINCL;
+         body.len = strlen (map->to_file);
+         s = _cpp_unaligned_alloc (pfile, body.len + 1);
+         memcpy (s, map->to_file, body.len + 1);
+         body.text = s;
+         tok->val.str = body;
+#ifdef USE_MAPPED_LOCATION
+          tok->src_loc = LAST_SOURCE_LINE_LOCATION (map - 1);
+#else
+          tok->src_loc = LAST_SOURCE_LINE (map - 1);
+#endif
+       }
+      else if (reason == LC_LEAVE)
+       {
+         /* Grow CPP_EINCL buffer if necessary.  This should be extremely
+            rare, since it requires that more than 250 nested headers reach
+            end-of-file simultaneously.  */
+         if (pfile->end_eincl == pfile->cur_eincl->limit)
+           {
+             pfile->cur_eincl = _cpp_next_tokenrun (pfile->cur_eincl);
+             pfile->end_eincl = pfile->cur_eincl->base;
+           }
+
+         tok = pfile->end_eincl++;
+         tok->type = CPP_EINCL;
+         tok->src_loc = map->to_line;
+         tok->flags = 0;
+         pfile->have_eincl = true;
+       }
+    }
+  /* APPLE LOCAL end 4137741 */
 }
 
 /* Report a warning or error detected by the program we are
@@ -986,7 +1077,11 @@ do_diagnostic (cpp_reader *pfile, int code, int print_dir)
       if (print_dir)
 	fprintf (stderr, "#%s ", pfile->directive->name);
       pfile->state.prevent_expansion++;
+      /* APPLE LOCAL #error with unmatched quotes 5607574 */
+      pfile->state.in_diagnostic++;
       cpp_output_line (pfile, stderr);
+      /* APPLE LOCAL #error with unmatched quotes 5607574 */
+      pfile->state.in_diagnostic--;
       pfile->state.prevent_expansion--;
     }
 }
@@ -1001,7 +1096,14 @@ static void
 do_warning (cpp_reader *pfile)
 {
   /* We want #warning diagnostics to be emitted in system headers too.  */
-  do_diagnostic (pfile, CPP_DL_WARNING_SYSHDR, 1);
+  /* APPLE LOCAL begin handle -Wno-system-headers (2910306)  --ilr */
+  /* Unless explicitly suppressed with -Wno-system-headers or
+     -Wno-#warning.  */
+    if (!CPP_OPTION (pfile, no_pound_warnings)
+        && (!CPP_IN_SYSTEM_HEADER (pfile)
+            || CPP_OPTION (pfile, warn_system_headers)))
+      do_diagnostic (pfile, CPP_DL_WARNING_SYSHDR, 1);
+  /* APPLE LOCAL end handle -Wno-system-headers (2910306)  --ilr */
 }
 
 /* Report program identification.  */
@@ -1168,12 +1270,25 @@ cpp_register_deferred_pragma (cpp_reader *pfile, const char *space,
     }
 }  
 
+/* APPLE LOCAL begin pragma mark 5614511 */
+/* Handle #pragma mark.  */
+static void
+do_pragma_mark (cpp_reader *pfile)
+{
+  ++pfile->state.skipping;
+  skip_rest_of_line (pfile);
+  --pfile->state.skipping;
+}
+/* APPLE LOCAL end pragma mark 5614511 */
+
 /* Register the pragmas the preprocessor itself handles.  */
 void
 _cpp_init_internal_pragmas (cpp_reader *pfile)
 {
   /* Pragmas in the global namespace.  */
   register_pragma_internal (pfile, 0, "once", do_pragma_once);
+  /* APPLE LOCAL pragma mark 5614511 */
+  register_pragma_internal (pfile, 0, "mark", do_pragma_mark);
 
   /* New GCC-specific pragmas should be put in the GCC namespace.  */
   register_pragma_internal (pfile, "GCC", "poison", do_pragma_poison);
@@ -1687,7 +1802,10 @@ do_else (cpp_reader *pfile)
       ifs->mi_cmacro = 0;
 
       /* Only check EOL if was not originally skipping.  */
-      if (!ifs->was_skipping && CPP_OPTION (pfile, warn_endif_labels))
+      /* APPLE LOCAL begin -Wextra-tokens */
+      if (!ifs->was_skipping
+          && (CPP_OPTION (pfile, warn_endif_labels) || CPP_OPTION (pfile, warn_extra_tokens)))
+      /* APPLE LOCAL end -Wextra-tokens */
 	check_eol (pfile);
     }
 }
@@ -1740,7 +1858,10 @@ do_endif (cpp_reader *pfile)
   else
     {
       /* Only check EOL if was not originally skipping.  */
-      if (!ifs->was_skipping && CPP_OPTION (pfile, warn_endif_labels))
+      /* APPLE LOCAL begin -Wextra-tokens */
+      if (!ifs->was_skipping
+          && (CPP_OPTION (pfile, warn_endif_labels) || CPP_OPTION (pfile, warn_extra_tokens)))
+      /* APPLE LOCAL end -Wextra-tokens */
 	check_eol (pfile);
 
       /* If potential control macro, we go back outside again.  */
@@ -2127,6 +2248,20 @@ cpp_get_options (cpp_reader *pfile)
 {
   return &pfile->opts;
 }
+
+/* APPLE LOCAL begin predictive compilation */
+void
+set_stdin_option (cpp_reader *pfile, int predict_comp_size)
+{
+  if (! CPP_OPTION (pfile, preprocessed))
+  {
+    /* -fpreprocessed -fpredictive-compilation=n: compiler is reading from
+       the processed file in this case. */
+    CPP_OPTION (pfile, predictive_compilation) = true;
+    CPP_OPTION (pfile, predictive_compilation_size) =  predict_comp_size;
+  }
+}
+/* APPLE LOCAL end predictive compilation */
 
 /* The callbacks structure.  */
 cpp_callbacks *

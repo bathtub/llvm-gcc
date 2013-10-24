@@ -154,11 +154,14 @@ static void expand_operands (tree, tree, rtx, rtx*, rtx*,
 static rtx reduce_to_bit_field_precision (rtx, rtx, tree);
 static rtx do_store_flag (tree, rtx, enum machine_mode, int);
 #ifdef PUSH_ROUNDING
-static void emit_single_push_insn (enum machine_mode, rtx, tree);
+/* APPLE LOCAL radar 4087332 */
+static void emit_single_push_insn (enum machine_mode, rtx, tree, rtx);
 #endif
 static void do_tablejump (rtx, enum machine_mode, rtx, rtx, rtx);
 static rtx const_vector_from_tree (tree);
 static void write_complex_part (rtx, rtx, bool);
+/* APPLE LOCAL bswap uxtb16 support */
+static rtx look_for_bytemanip (tree, rtx);
 
 /* Record for each mode whether we can move a register directly to or
    from an object of that mode in memory.  If we can't, we won't try
@@ -361,6 +364,10 @@ convert_move (rtx to, rtx from, int unsignedp)
 
 
   gcc_assert (to_real == from_real);
+  /* APPLE LOCAL begin mainline */
+  gcc_assert (to_mode != BLKmode);
+  gcc_assert (from_mode != BLKmode);
+  /* APPLE LOCAL end mainline */
 
   /* If the source and destination are already the same, then there's
      nothing to do.  */
@@ -1118,7 +1125,8 @@ move_by_pieces_1 (rtx (*genfun) (rtx, ...), enum machine_mode mode,
       else
 	{
 #ifdef PUSH_ROUNDING
-	  emit_single_push_insn (mode, from1, NULL);
+	  /* APPLE LOCAL radar 4087332 */
+	  emit_single_push_insn (mode, from1, NULL, NULL_RTX);
 #else
 	  gcc_unreachable ();
 #endif
@@ -2038,7 +2046,9 @@ emit_group_store (rtx orig_dst, rtx src, tree type ATTRIBUTE_UNUSED, int ssize)
 	emit_move_insn (adjust_address (dest, mode, bytepos), tmps[i]);
       else
 	store_bit_field (dest, bytelen * BITS_PER_UNIT, bytepos * BITS_PER_UNIT,
-			 mode, tmps[i]);
+			 /* APPLE LOCAL begin 6020402 */
+			 mode, tmps[i], NULL_TREE);
+			 /* APPLE LOCAL end 6020402 */
     }
 
   /* Copy from the pseudo into the (probable) hard reg.  */
@@ -2122,7 +2132,10 @@ copy_blkmode_from_reg (rtx tgtblk, rtx srcreg, tree type)
       store_bit_field (dst, bitsize, bitpos % BITS_PER_WORD, word_mode,
 		       extract_bit_field (src, bitsize,
 					  xbitpos % BITS_PER_WORD, 1,
-					  NULL_RTX, word_mode, word_mode));
+		       /* APPLE LOCAL begin 6020402 */
+					  NULL_RTX, word_mode, word_mode),
+		       NULL_TREE);
+		       /* APPLE LOCAL end 6020402 */
     }
 
   return tgtblk;
@@ -2766,7 +2779,10 @@ write_complex_part (rtx cplx, rtx val, bool imag_p)
 	gcc_assert (MEM_P (cplx) && ibitsize < BITS_PER_WORD);
     }
 
-  store_bit_field (cplx, ibitsize, imag_p ? ibitsize : 0, imode, val);
+  /* APPLE LOCAL begin 6020402 */
+  store_bit_field (cplx, ibitsize, imag_p ? ibitsize : 0, imode, val,
+		   NULL_TREE);
+  /* APPLE LOCAL end 6020402 */
 }
 
 /* Extract one of the components of the complex value CPLX.  Extract the
@@ -3462,7 +3478,8 @@ push_block (rtx size, int extra, int below)
 /* Emit single push insn.  */
 
 static void
-emit_single_push_insn (enum machine_mode mode, rtx x, tree type)
+/* APPLE LOCAL radar 4087332 */
+emit_single_push_insn (enum machine_mode mode, rtx x, tree type, rtx args_so_far)
 {
   rtx dest_addr;
   unsigned rounded_size = PUSH_ROUNDING (GET_MODE_SIZE (mode));
@@ -3471,6 +3488,22 @@ emit_single_push_insn (enum machine_mode mode, rtx x, tree type)
   insn_operand_predicate_fn pred;
 
   stack_pointer_delta += PUSH_ROUNDING (GET_MODE_SIZE (mode));
+  /* APPLE LOCAL begin radar 4087332 */
+  if (args_so_far != NULL_RTX && GET_CODE (args_so_far) == CONST_INT)
+    {
+      int offset = INTVAL (args_so_far);
+      unsigned int unit_stack_boundary = cfun->preferred_stack_boundary / BITS_PER_UNIT;
+      if (!(offset % unit_stack_boundary) && (stack_pointer_delta % unit_stack_boundary))
+	{
+	  /* argument must be aligned on stack boundary, but it is not.
+	     align 'sp' before the push. */
+	  int delta = unit_stack_boundary - (stack_pointer_delta % unit_stack_boundary);	
+	  expand_simple_binop (Pmode, PLUS, stack_pointer_rtx,
+			       GEN_INT (-delta), stack_pointer_rtx, 1, OPTAB_DIRECT);
+	  stack_pointer_delta += delta;
+	}
+    }
+  /* APPLE LOCAL end radar 4087332 */
   /* If there is push pattern, use it.  Otherwise try old way of throwing
      MEM representing push operation to move expander.  */
   icode = push_optab->handlers[(int) mode].insn_code;
@@ -3800,7 +3833,8 @@ emit_push_insn (rtx x, enum machine_mode mode, tree type, rtx size,
 
 #ifdef PUSH_ROUNDING
       if (args_addr == 0 && PUSH_ARGS)
-	emit_single_push_insn (mode, x, type);
+	/* APPLE LOCAL radar 4087332 */
+	emit_single_push_insn (mode, x, type, args_so_far);
       else
 #endif
 	{
@@ -4440,8 +4474,15 @@ store_expr (tree exp, rtx target, int call_param_p)
 	      temp = convert_to_mode (GET_MODE (target), temp, unsignedp);
 	      emit_move_insn (target, temp);
 	    }
+	  /* APPLE LOCAL begin mainline */
+	  else if (GET_MODE (target) == BLKmode)
+	    emit_block_move (target, temp, expr_size (exp),
+			     (call_param_p
+			      ? BLOCK_OP_CALL_PARM
+			      : BLOCK_OP_NORMAL));
 	  else
 	    convert_move (target, temp, unsignedp);
+	  /* APPLE LOCAL end mainline */
 	}
 
       else if (GET_MODE (temp) == BLKmode && TREE_CODE (exp) == STRING_CST)
@@ -4556,7 +4597,8 @@ categorize_ctor_elements_1 (tree ctor, HOST_WIDE_INT *p_nz_elts,
       HOST_WIDE_INT mult;
 
       mult = 1;
-      if (TREE_CODE (purpose) == RANGE_EXPR)
+      /* APPLE LOCAL Altivec initializers 4869813 */
+      if (purpose && TREE_CODE (purpose) == RANGE_EXPR)
 	{
 	  tree lo_index = TREE_OPERAND (purpose, 0);
 	  tree hi_index = TREE_OPERAND (purpose, 1);
@@ -4770,6 +4812,8 @@ count_type_elements (tree type, bool allow_flexarr)
     case ENUMERAL_TYPE:
     case BOOLEAN_TYPE:
     case POINTER_TYPE:
+    /* APPLE LOCAL radar 5732232 - blocks */
+    case BLOCK_POINTER_TYPE:
     case OFFSET_TYPE:
     case REFERENCE_TYPE:
       return 1;
@@ -5588,7 +5632,9 @@ store_field (rtx target, HOST_WIDE_INT bitsize, HOST_WIDE_INT bitpos,
 	}
 
       /* Store the value in the bitfield.  */
-      store_bit_field (target, bitsize, bitpos, mode, temp);
+      /* APPLE LOCAL begin 6020402 */
+      store_bit_field (target, bitsize, bitpos, mode, temp, type);
+      /* APPLE LOCAL end 6020402 */
 
       return const0_rtx;
     }
@@ -5703,6 +5749,8 @@ get_inner_reference (tree exp, HOST_WIDE_INT *pbitsize,
 
 	case COMPONENT_REF:
 	  {
+	    /* APPLE LOCAL radar 4441049 */
+	    tree field_bit_offset;
 	    tree field = TREE_OPERAND (exp, 1);
 	    tree this_offset = component_ref_field_offset (exp);
 
@@ -5713,8 +5761,13 @@ get_inner_reference (tree exp, HOST_WIDE_INT *pbitsize,
 	      break;
 
 	    offset = size_binop (PLUS_EXPR, offset, this_offset);
+	    /* APPLE LOCAL begin radar 4441049 */
+	    field_bit_offset = objc_v2_bitfield_ivar_bitpos (exp);
+	    if (!field_bit_offset)
+	      field_bit_offset = DECL_FIELD_BIT_OFFSET (field);
 	    bit_offset = size_binop (PLUS_EXPR, bit_offset,
-				     DECL_FIELD_BIT_OFFSET (field));
+				     field_bit_offset);
+	    /* APPLE LOCAL end radar 4441049 */
 
 	    /* ??? Right now we don't do anything with DECL_OFFSET_ALIGN.  */
 	  }
@@ -5789,6 +5842,49 @@ get_inner_reference (tree exp, HOST_WIDE_INT *pbitsize,
   return exp;
 }
 
+/* APPLE LOCAL begin mainline 4.2 5569774 */
+/* Given an expression EXP that may be a COMPONENT_REF or an ARRAY_REF,
+   look for whether EXP or any nested component-refs within EXP is marked
+   as PACKED.  */
+
+bool
+contains_packed_reference (tree exp)
+{
+  bool packed_p = false;
+
+  while (1)
+    {
+      switch (TREE_CODE (exp))
+	{
+	case COMPONENT_REF:
+	  {
+	    tree field = TREE_OPERAND (exp, 1);
+	    packed_p = DECL_PACKED (field) 
+		       || TYPE_PACKED (TREE_TYPE (field))
+		       || TYPE_PACKED (TREE_TYPE (exp));
+	    if (packed_p)
+	      goto done;
+	  }
+	  break;
+
+	case BIT_FIELD_REF:
+	case ARRAY_REF:
+	case ARRAY_RANGE_REF:
+	case REALPART_EXPR:
+	case IMAGPART_EXPR:
+	case VIEW_CONVERT_EXPR:
+	  break;
+
+	default:
+	  goto done;
+	}
+      exp = TREE_OPERAND (exp, 0);
+    }
+ done:
+  return packed_p;
+}
+/* APPLE LOCAL end mainline 4.2 5569774 */
+
 /* Return a tree of sizetype representing the size, in bytes, of the element
    of EXP, an ARRAY_REF.  */
 
@@ -5862,7 +5958,12 @@ component_ref_field_offset (tree exp)
 {
   tree aligned_offset = TREE_OPERAND (exp, 2);
   tree field = TREE_OPERAND (exp, 1);
+  /* APPLE LOCAL begin radar 4441049 */
+  tree offset = objc_v2_component_ref_field_offset (exp);
 
+  if (offset)
+    return offset;
+  /* APPLE LOCAL end radar 4441049 */
   /* If an offset was specified in the COMPONENT_REF, it's the offset measured
      in units of DECL_OFFSET_ALIGN / BITS_PER_UNIT.  So multiply by that
      value.  */
@@ -7739,6 +7840,26 @@ expand_expr_real_1 (tree exp, rtx target, enum machine_mode tmode,
 	  return REDUCE_BIT_FIELD (op0);
 	}
 
+/* APPLE LOCAL begin ARM improve (int) (longlong >> 32) */
+#ifdef TARGET_ARM
+      /* Look for (int) (longlong  >> 32).  This is just subreg:SI (longlong).
+	 This is not a great place to do this.  Signedness of shift does not
+	 matter.  */
+      if (mode == SImode
+	  && TYPE_MODE (TREE_TYPE (TREE_OPERAND (exp, 0))) == DImode
+	  && TREE_CODE (TREE_OPERAND (exp, 0)) == RSHIFT_EXPR
+	  && TREE_CODE (TREE_OPERAND (TREE_OPERAND (exp, 0), 1)) == INTEGER_CST
+	  && TREE_INT_CST_HIGH (TREE_OPERAND (TREE_OPERAND (exp, 0), 1)) == 0
+	  && TREE_INT_CST_LOW (TREE_OPERAND (TREE_OPERAND (exp, 0), 1)) == 32)
+	{
+	  op0 = expand_expr (TREE_OPERAND (TREE_OPERAND (exp, 0), 0), NULL_RTX,
+			     DImode, 0);
+	  op0 = simplify_gen_subreg (SImode, op0, DImode, 4);
+	}
+      else
+#endif
+/* APPLE LOCAL end ARM improve (int) (longlong >> 32) */
+
       op0 = expand_expr (TREE_OPERAND (exp, 0), NULL_RTX, mode,
 			 modifier == EXPAND_SUM ? EXPAND_NORMAL : modifier);
       if (GET_MODE (op0) == mode)
@@ -8378,12 +8499,23 @@ expand_expr_real_1 (tree exp, rtx target, enum machine_mode tmode,
 
     case TRUTH_AND_EXPR:
       code = BIT_AND_EXPR;
+/* APPLE LOCAL begin bswap uxtb16 support */
+      goto binop;
+
     case BIT_AND_EXPR:
+      temp = look_for_bytemanip (exp, subtarget);
+      if (temp)
+	return REDUCE_BIT_FIELD (temp);
       goto binop;
 
     case TRUTH_OR_EXPR:
       code = BIT_IOR_EXPR;
+      goto binop;
+
     case BIT_IOR_EXPR:
+      temp = look_for_bytemanip (exp, subtarget);
+      if (temp)
+	return REDUCE_BIT_FIELD (temp);
       goto binop;
 
     case TRUTH_XOR_EXPR:
@@ -8393,6 +8525,11 @@ expand_expr_real_1 (tree exp, rtx target, enum machine_mode tmode,
 
     case LSHIFT_EXPR:
     case RSHIFT_EXPR:
+      temp = look_for_bytemanip (exp, subtarget);
+      if (temp)
+	return REDUCE_BIT_FIELD (temp);
+      /* fall through */
+/* APPLE LOCAL end bswap uxtb16 support */
     case LROTATE_EXPR:
     case RROTATE_EXPR:
       if (! safe_from_p (subtarget, TREE_OPERAND (exp, 1), 1))
@@ -9470,4 +9607,391 @@ const_vector_from_tree (tree exp)
 
   return gen_rtx_CONST_VECTOR (mode, v);
 }
+
+/* APPLE LOCAL begin bswap uxtb16 support */
+
+/* This struct represents one shift-and-and sequence that moves one
+   or more bytes from input to output.
+   Shift may be 0, and mask may be all 1 bits.
+   In these cases the parent operator may be missing as well.  */
+
+#if defined (HAVE_bswapsi2) || defined (HAVE_bswapdi2) || defined (HAVE_uxtb16)
+struct bytemanip 
+{
+  int shiftcount;   /* negative left, positive right, 0 none, 
+		       666 ending sentinel */
+  HOST_WIDE_INT andmask_high;	    /* both ffffffff if none */
+  HOST_WIDE_INT andmask_low;	    /* both ffffffff if none */
+  int bitmask;			    /* insn dependent, see below */
+};
+#endif
+
+#ifdef HAVE_bswapsi2
+/* Tables for bswapsi2.  Bitmask values:
+   1 =   0x00000000 000000ff used 
+   2 =   0x00000000 0000ff00 used 
+   4 =   0x00000000 00ff0000 used
+   8 =   0x00000000 ff000000 used */
+
+/* This table is for when the shift is done before the mask:
+      (x >> shift) & mask */
+
+static struct bytemanip bswap32_shift_first[] =
+  {
+    { -24, 0x00000000, 0xff000000, 8 },
+    {  -8, 0x00000000, 0x00ff0000, 4 },
+    {   8, 0x00000000, 0x0000ff00, 2 },
+    {  24, 0x00000000, 0x000000ff, 1 },
+    { -24, 0xffffffff, 0xffffffff, 8 },
+    {  24, 0xffffffff, 0xffffffff, 1 },
+    { 666,          0,          0, 0 }
+  };
+
+/* This table is for when the shift is done after the mask:
+      (x & mask) >> shift */
+
+static struct bytemanip bswap32_and_first[] =
+  {
+    { -24, 0x00000000, 0x000000ff, 8 },
+    {  -8, 0x00000000, 0x0000ff00, 4 },
+    {   8, 0x00000000, 0x00ff0000, 2 },
+    {  24, 0x00000000, 0xff000000, 1 },
+    { 666,          0,          0, 0 }
+  };
+#endif /* HAVE_bswapsi2 */
+
+#ifdef HAVE_bswapdi2
+/* Tables for bswapdi2, analogous to the above.  Bitmask values:
+   1 =   0x00000000 000000ff used 
+   2 =   0x00000000 0000ff00 used 
+   4 =   0x00000000 00ff0000 used
+   8 =   0x00000000 ff000000 used
+   16 =  0x000000ff 00000000 used
+   32 =  0x0000ff00 00000000 used
+   64 =  0x00ff0000 00000000 used
+   128 = 0xff000000 00000000 used */
+
+static struct bytemanip bswap64_shift_first[] =
+  {
+    { -56, 0xff000000, 0x00000000, 128 },
+    { -40, 0x00ff0000, 0x00000000,  64 },
+    { -24, 0x0000ff00, 0x00000000,  32 },
+    {  -8, 0x000000ff, 0x00000000,  16 },
+    {   8, 0x00000000, 0xff000000,   8 },
+    {  24, 0x00000000, 0x00ff0000,   4 },
+    {  40, 0x00000000, 0x0000ff00,   2 },
+    {  56, 0x00000000, 0x000000ff,   1 },
+    { -56, 0xffffffff, 0xffffffff, 128 },
+    {  56, 0xffffffff, 0xffffffff,   1 },
+    { 666,          0,          0,   0 }
+  };
+
+static struct bytemanip bswap64_and_first[] =
+  {
+    { -56, 0x00000000, 0x000000ff, 128 },
+    { -40, 0x00000000, 0x0000ff00,  64 },
+    { -24, 0x00000000, 0x00ff0000,  32 },
+    {  -8, 0x00000000, 0xff000000,  16 },
+    {   8, 0x000000ff, 0x00000000,   8 },
+    {  24, 0x0000ff00, 0x00000000,   4 },
+    {  40, 0x00ff0000, 0x00000000,   2 },
+    {  56, 0xff000000, 0x00000000,   1 },
+    { 666,          0,          0,   0 }
+  };
+#endif /* HAVE_bswapdi2 */
+
+#ifdef HAVE_uxtb16
+/* A uxtb16 instruction is currently only supported on the ARM
+   architecture.  It zero-extends two selected bytes, at 16-bit
+   offsets from each other, into the two halfwords of the
+   destination register.  */
+/* Tables for uxtb16, analogous to the above.  Bitmask values:
+   1 =   000000ff used ROR 0
+   2 =   00ff0000 used ROR 0
+   4 =   000000ff used ROR 8
+   8 =   00ff0000 used ROR 8
+   16 =  000000ff used ROR 16
+   32 =  00ff0000 used ROR 16
+   64 =  000000ff used ROR 24
+   128 = 00ff0000 used ROR 24 
+  Note that some of the table entries represent a 2-byte operation. */
+
+static struct bytemanip uxtb16_shift_first[] =
+  {
+    {   0, 0x00000000, 0x00ff00ff,   3 },
+    {   8, 0x00000000, 0x000000ff,   4 },
+    {   8, 0x00000000, 0x00ff0000,   8 },
+    {   8, 0x00000000, 0x00ff00ff,  12 },
+    {  16, 0x00000000, 0x000000ff,  16 },
+    { -16, 0x00000000, 0x00ff0000,  32 },
+    {  24, 0x00000000, 0x000000ff,  64 },
+    {  -8, 0x00000000, 0x00ff0000, 128 }, 
+    {  24, 0xffffffff, 0xffffffff,  64 },
+    { 666,          0,          0,   0 }
+  };
+
+static struct bytemanip uxtb16_and_first[] =
+  {
+    {   8, 0x00000000, 0x0000FF00,   4 },
+    {   8, 0x00000000, 0xFF000000,   8 },
+    {   8, 0x00000000, 0xFF00FF00,  12 },
+    {  16, 0x00000000, 0x00FF0000,  16 },
+    { -16, 0x00000000, 0x000000FF,  32 },
+    {  24, 0x00000000, 0xFF000000,  64 },
+    {  -8, 0x00000000, 0x0000FF00, 128 },
+    { 666,          0,          0,   0 }
+  };
+#endif /* HAVE_uxtb16 */
+
+#if defined (HAVE_bswapsi2) || defined (HAVE_bswapdi2) || defined (HAVE_uxtb16)
+/* Examine one operand (expected to handle 1 or more bytes of the whole)
+   to see if the shift count and mask match one of the valid pairs.  A table
+   to look in is provided.  */
+
+static bool 
+find_and_record_values (tree lhs, HOST_WIDE_INT shiftcount,
+			    HOST_WIDE_INT andmask_low, HOST_WIDE_INT andmask_high,
+			    struct bytemanip *table, tree *operand, int *bitmask)
+{
+  int i;
+  /* All lhs's must be the same (pointer equality).  Function calls, ++, etc. are not shared,
+     so won't match. */
+  if (*operand != NULL_TREE && *operand != lhs)
+    return false;
+  *operand = lhs;
+ 
+  for (i = 0; table[i].shiftcount != 666; i++)
+    {
+      if (shiftcount == table[i].shiftcount
+	  && andmask_low == table[i].andmask_low
+	  && andmask_high == table[i].andmask_high)
+	{
+	  if ((*bitmask) & table[i].bitmask)
+	    return false;
+	  *bitmask |= table[i].bitmask;
+	  return true;
+	}
+    }
+  return false;
+}
+
+/* For ORs, just recurse to analyzing the operands.
+   For ANDs, look for ((x shift const) and const),
+     also for just (x and const)
+   For shifts, look for ((x & const) shift const),
+     also for just (x shift const)
+*/
+
+static bool
+analyze_leg (tree t, int *bitmask, tree *operand, enum machine_mode mode,
+		 struct bytemanip *shift_first, 
+		 struct bytemanip *and_first)
+{
+  HOST_WIDE_INT count;
+  bool m64_p;
+
+  gcc_assert (HOST_BITS_PER_WIDE_INT == 32 || HOST_BITS_PER_WIDE_INT == 64);
+  m64_p = (HOST_BITS_PER_WIDE_INT == 64);
+
+  if (!TYPE_UNSIGNED (TREE_TYPE (t)) || TYPE_MODE (TREE_TYPE (t)) != mode)
+    return false;
+  if (TREE_CODE (t) == BIT_IOR_EXPR)
+    {
+      if (!analyze_leg (TREE_OPERAND (t, 0), bitmask, operand, mode,
+			    shift_first, and_first)
+          || !analyze_leg (TREE_OPERAND (t, 1), bitmask, operand, mode,
+			    shift_first, and_first))
+	return false;
+    }
+  else if (TREE_CODE (t) == BIT_AND_EXPR)
+    {
+      if (TREE_CODE (TREE_OPERAND (t, 1)) != INTEGER_CST)
+	return false;
+      if (TREE_CODE (TREE_OPERAND (t, 0)) == LSHIFT_EXPR
+	  || TREE_CODE (TREE_OPERAND (t, 0)) == RSHIFT_EXPR)
+	{
+	  if (TREE_CODE (TREE_OPERAND (TREE_OPERAND (t, 0), 1)) != INTEGER_CST)
+	    return false;
+	  if (!TYPE_UNSIGNED (TREE_TYPE (TREE_OPERAND (t, 0)))
+	      || TYPE_MODE (TREE_TYPE (TREE_OPERAND (t, 0))) != mode)
+	    return false;
+	  count = TREE_INT_CST_LOW (TREE_OPERAND (TREE_OPERAND (t, 0), 1));
+	  if (TREE_CODE (TREE_OPERAND (t, 0)) == LSHIFT_EXPR)
+	    count = -count;
+	  if (!find_and_record_values (
+		TREE_OPERAND (TREE_OPERAND (t, 0), 0),
+		count,
+		m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (t, 1)) & 0xffffffff
+		      : TREE_INT_CST_LOW (TREE_OPERAND (t, 1)),
+		/* I'd really like ">> 32" here, but that generates a warning
+		   when HOST_BITS_PER_WIDE_INT == 32 */
+		m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (t, 1)) / 0x100000000ll
+		      : (unsigned HOST_WIDE_INT)
+			TREE_INT_CST_HIGH (TREE_OPERAND (t, 1)),
+		shift_first,
+		operand,
+		bitmask))
+	    return false;
+	}
+      else
+	if (!find_and_record_values (
+	      TREE_OPERAND (t, 0),
+	      (HOST_WIDE_INT)0,
+	      m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (t, 1)) & 0xffffffff
+		    : TREE_INT_CST_LOW (TREE_OPERAND (t, 1)),
+	      /* I'd really like ">> 32" here, but that generates a warning
+		 when HOST_BITS_PER_WIDE_INT == 32 */
+	      m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (t, 1)) / 0x100000000ll
+		    : (unsigned HOST_WIDE_INT)
+		      TREE_INT_CST_HIGH (TREE_OPERAND (t, 1)),
+	      shift_first,
+	      operand,
+	      bitmask))
+	  return false;
+    }
+  else if (TREE_CODE (t) == RSHIFT_EXPR
+	   || TREE_CODE (t) == LSHIFT_EXPR)
+    {
+      if (TREE_CODE (TREE_OPERAND (t, 1)) != INTEGER_CST)
+	return false;
+      count = TREE_INT_CST_LOW (TREE_OPERAND (t, 1));
+      if (TREE_CODE (t) == LSHIFT_EXPR)
+	count = -count;
+      if (TREE_CODE (TREE_OPERAND (t, 0)) == BIT_AND_EXPR
+	  && TREE_CODE (TREE_OPERAND (TREE_OPERAND (t, 0), 1)) == INTEGER_CST)
+	{
+	  if (!TYPE_UNSIGNED (TREE_TYPE (TREE_OPERAND (t, 0)))
+	      || TYPE_MODE (TREE_TYPE (TREE_OPERAND (t, 0))) != mode)
+	    return false;
+	  if (!find_and_record_values (
+		TREE_OPERAND (TREE_OPERAND (t, 0), 0),
+		count,
+		m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (TREE_OPERAND (t, 0), 1)) & 0xffffffff
+		      : TREE_INT_CST_LOW (TREE_OPERAND (TREE_OPERAND (t, 0), 1)),
+		/* I'd really like ">> 32" here, but that generates a warning
+		   when HOST_BITS_PER_WIDE_INT == 32 */
+		m64_p ? TREE_INT_CST_LOW (TREE_OPERAND (TREE_OPERAND (t, 0), 1)) / 0x100000000ll
+		      : (unsigned HOST_WIDE_INT)
+			TREE_INT_CST_HIGH (TREE_OPERAND (TREE_OPERAND (t, 0), 1)),
+		and_first,
+		operand,
+		bitmask))
+	    return false;
+	}
+     else
+      if (!find_and_record_values (
+	    TREE_OPERAND (t, 0),
+	    count,
+	    (HOST_WIDE_INT) 0xffffffff,
+	    (HOST_WIDE_INT) 0xffffffff,
+	    shift_first,
+	    operand,
+	    bitmask))
+	return false;
+    }
+  else
+    return false;
+
+  return true;
+}
+#endif /* defined (HAVE_bswapsi2) || defined (HAVE_bswapdi2) || defined (HAVE_uxtb16) */
+
+/* This is called for OR, AND, and SHIFT trees.
+   We look for the trees used to represent various byte manipulation
+   operations for which we have insn patterns on the target architecture.
+   Currently, these include: 
+   32-bit bswap:
+	 (x<<24) | ((x & 0x0000ff00) << 8)
+	 | ((x & 0x00ff0000) >> 8) | (x >> 24)
+      or alternatively
+	 ((x <<24) & 0xff000000) | ((x << 8)  & 0x00ff0000))
+	 | ((x >> 8) & 0x0000ff00) >> 8) | ((x >> 24) & 0x000000ff)
+      etc.
+   64 bit bswap
+   uxtb16
+   The table-driven code here is intended to handle arbitrary combinations
+   of byte movements like the above, provided all the bytes involved
+   are handled exactly once each.
+   If a match is found, the result is returned in a register.  */
+
+static rtx
+look_for_bytemanip (tree t, rtx subtarget ATTRIBUTE_UNUSED)
+{
+  enum machine_mode mode;
+
+  gcc_assert (TREE_CODE (t) == BIT_IOR_EXPR
+	      || TREE_CODE (t) == BIT_AND_EXPR
+	      || TREE_CODE (t) == LSHIFT_EXPR
+	      || TREE_CODE (t) == RSHIFT_EXPR);
+
+  if (!TYPE_UNSIGNED (TREE_TYPE (t)))
+    return NULL_RTX;
+  mode = TYPE_MODE (TREE_TYPE (t));
+  if (mode != SImode && mode != DImode)
+    return NULL_RTX;
+
+#ifdef HAVE_bswapsi2
+  if (HAVE_bswapsi2)
+    {
+      int bitmask = 0;
+      tree operand = NULL_TREE;
+      if (mode == SImode
+	  && analyze_leg (t, &bitmask, &operand, mode,
+			  bswap32_shift_first, bswap32_and_first)
+	  && bitmask == 0xf)
+	{
+	  /* This expression matches.  Now generate RTL. */
+	  rtx x = expand_expr (operand, subtarget, VOIDmode, 0);
+	  return expand_simple_unop (mode, BSWAP, x, NULL_RTX, 1);
+	}
+    }
+#endif
+
+#ifdef HAVE_bswapdi2
+  if (HAVE_bswapdi2)
+    {
+      int bitmask = 0;
+      tree operand = NULL_TREE;
+      if (mode == DImode
+	  && analyze_leg (t, &bitmask, &operand, mode,
+			  bswap64_shift_first, bswap64_and_first)
+	  && bitmask == 0xff)
+	{
+	  /* This expression matches.  Now generate RTL. */
+	  rtx x = expand_expr (operand, subtarget, VOIDmode, 0);
+	  return expand_simple_unop (mode, BSWAP, x, NULL_RTX, 1);
+	}
+    }
+#endif
+
+#ifdef HAVE_uxtb16
+  if (HAVE_uxtb16)
+    {
+      int bitmask = 0;
+      tree operand = NULL_TREE;
+      if (mode == SImode
+	  && analyze_leg (t, &bitmask, &operand, mode,
+			  uxtb16_shift_first, uxtb16_and_first)
+	  && (bitmask == 0x3 || bitmask == 0xc || bitmask == 0x30 || bitmask == 0xc0))
+	{
+	  /* This expression matches.  Now generate RTL. */
+	  rtx x = expand_expr (operand, subtarget, VOIDmode, 0);
+	  x = force_reg (SImode, x);
+	  x = gen_rtx_UNSPEC (SImode,
+			      gen_rtvec (2, x, bitmask == 0x3 ? const0_rtx :
+					       bitmask == 0xc ? gen_rtx_CONST_INT (SImode, 8) :
+					       bitmask == 0x30 ? gen_rtx_CONST_INT (SImode, 16) :
+					       /*bitmask == 0xc0*/ gen_rtx_CONST_INT (SImode, 24)),
+			      UNSPEC_UXTB16);
+	  x = force_reg (SImode, x);
+	  return x;
+	}
+    }
+#endif /* HAVE_uxtb16 */
+
+  /* Not an instruction we recognize. */
+  return NULL_RTX;
+}
+/* APPLE LOCAL end bswap uxtb16 support */
+
 #include "gt-expr.h"

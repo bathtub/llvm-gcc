@@ -656,7 +656,12 @@
 	&& GET_CODE (XEXP (inner, 0)) != PRE_DEC
 	&& (GET_CODE (XEXP (inner, 0)) != PLUS
 	    || GET_CODE (XEXP (XEXP (inner, 0), 1)) != CONST_INT
-	    || INTVAL (XEXP (XEXP (inner, 0), 1)) % 4 == 0));
+        /* APPLE LOCAL begin radar 4805365 */
+	    || INTVAL (XEXP (XEXP (inner, 0), 1)) % 4 == 0)
+        /* Return 1 if the alignment is known and 32 bits aligned. */
+        && (MEM_ALIGN (inner) != 0
+            && MEM_ALIGN (inner) % 32 == 0));
+        /* APPLE LOCAL end radar 4805365 */
 })
 
 ;; Return 1 if the operand, used inside a MEM, is a SYMBOL_REF.
@@ -686,6 +691,11 @@
   (if_then_else (match_code "reg")
      (match_test "REGNO (op) == LINK_REGISTER_REGNUM
 		  || REGNO (op) == COUNT_REGISTER_REGNUM
+		  /* APPLE LOCAL begin accept hard R12 as target reg */
+#ifdef MAGIC_INDIRECT_CALL_REG
+		  || REGNO (op) == MAGIC_INDIRECT_CALL_REG
+#endif
+		  /* APPLE LOCAL end accept hard R12 as target reg */
 		  || REGNO (op) >= FIRST_PSEUDO_REGISTER")
      (match_code "symbol_ref")))
 

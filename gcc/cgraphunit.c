@@ -458,6 +458,19 @@ cgraph_lower_function (struct cgraph_node *node)
   node->lowered = true;
 }
 
+/* APPLE LOCAL begin radar 6305545 */
+/** lower_if_nested_functions - This routine is called from cplus side only.
+    Its purpose is to lower block helper (or any other nested function)
+    which may have been nested in a constructor or destructor. We have to
+    do this because structors are cloned and are not lowered themselves (which
+    is the only way to lower the nested functions). */
+void 
+lower_if_nested_functions (tree decl)
+{
+    lower_nested_functions (decl, true);
+}
+/* APPLE LOCAL end radar 6305545 */
+
 /* DECL has been parsed.  Take it, queue it, compile it at the whim of the
    logic in effect.  If NESTED is true, then our caller cannot stand to have
    the garbage collector run at the moment.  We would need to either create
@@ -468,6 +481,12 @@ cgraph_finalize_function (tree decl, bool nested)
 {
   struct cgraph_node *node = cgraph_node (decl);
 
+  /* APPLE LOCAL begin regparmandstackparm */
+#if TARGET_MACHO && defined TARGET_SSE2
+  ix86_darwin_handle_regparmandstackparm (decl);
+#endif
+  /* APPLE LOCAL end regparmandstackparm */
+
   if (node->local.finalized)
     cgraph_reset_node (node);
 
@@ -476,7 +495,8 @@ cgraph_finalize_function (tree decl, bool nested)
   node->local.finalized = true;
   node->lowered = DECL_STRUCT_FUNCTION (decl)->cfg != NULL;
   if (node->nested)
-    lower_nested_functions (decl);
+    /* APPLE LOCAL radar 6305545 */
+    lower_nested_functions (decl, false);
   gcc_assert (!node->nested);
 
   /* If not unit at a time, then we need to create the call graph
@@ -513,6 +533,35 @@ cgraph_finalize_function (tree decl, bool nested)
     do_warn_unused_parameter (decl);
 }
 
+/* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+static bool
+fndecl_uses_vector_p (tree fndecl)
+{
+   tree arg, vars, var;
+   struct function *my_cfun = DECL_STRUCT_FUNCTION (fndecl);
+
+   if (TREE_CODE (TREE_TYPE (fndecl)) == VECTOR_TYPE)
+     return true;
+
+   arg = DECL_ARGUMENTS (fndecl);
+   while (arg)
+     {
+       if (TREE_CODE (TREE_TYPE (arg)) == VECTOR_TYPE)
+       return true;
+       arg = TREE_CHAIN (arg);
+     }
+
+   for (vars = my_cfun->unexpanded_var_list; vars; vars = TREE_CHAIN (vars))
+     {
+       var = TREE_VALUE (vars);
+       if (TREE_CODE (TREE_TYPE (var)) == VECTOR_TYPE)
+       return true;
+     }
+   /* Treewalk part folded into record_call_1 below.  */
+   return false;
+}
+/* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
+
 /* Walk tree and record all calls.  Called via walk_tree.  */
 static tree
 record_reference (tree *tp, int *walk_subtrees, void *data)
@@ -522,6 +571,18 @@ record_reference (tree *tp, int *walk_subtrees, void *data)
   switch (TREE_CODE (t))
     {
     case VAR_DECL:
+      /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+      {
+	struct cgraph_node *node = (struct cgraph_node *)data;
+	if (node)
+	  {
+	    struct function *my_cfun = DECL_STRUCT_FUNCTION (node->decl);
+
+	    if (TREE_CODE (TREE_TYPE (t)) == VECTOR_TYPE)
+	      my_cfun->uses_vector = 1;
+	  }
+      }
+      /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
       /* ??? Really, we should mark this decl as *potentially* referenced
 	 by this function and re-examine whether the decl is actually used
 	 after rtl has been generated.  */
@@ -573,6 +634,12 @@ cgraph_create_edges (struct cgraph_node *node, tree body)
   struct function *this_cfun = DECL_STRUCT_FUNCTION (body);
   block_stmt_iterator bsi;
   tree step;
+
+  /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+  if (!DECL_STRUCT_FUNCTION (node->decl)->uses_vector)
+    DECL_STRUCT_FUNCTION (node->decl)->uses_vector = fndecl_uses_vector_p (node->decl);
+  /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
+
   visited_nodes = pointer_set_create ();
 
   /* Reach the trees by walking over the CFG, and note the
@@ -1135,6 +1202,12 @@ cgraph_finalize_compilation_unit (void)
       cgraph_varpool_analyze_pending_decls ();
     }
 
+  /* APPLE LOCAL begin regparmandstackparm */
+#if TARGET_MACHO && defined TARGET_SSE2
+  ix86_darwin_redirect_calls ();
+#endif
+  /* APPLE LOCAL end regparmandstackparm */
+
   /* Collect entry points to the unit.  */
   if (cgraph_dump_file)
     {
@@ -1678,8 +1751,10 @@ cgraph_build_static_cdtor (char which, tree body, int priority)
   tree decl, name, resdecl;
 
   sprintf (which_buf, "%c_%d", which, counter++);
-  name = get_file_function_name_long (which_buf);
+/* APPLE LOCAL begin mainline 2006-11-01 5125268 */ \
+  name = get_file_function_name (which_buf);
 
+/* APPLE LOCAL end mainline 2006-11-01 5125268 */ \
   decl = build_decl (FUNCTION_DECL, name,
 		     build_function_type (void_type_node, void_list_node));
   current_function_decl = decl;

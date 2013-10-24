@@ -21,6 +21,14 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #ifndef GCC_OPTS_H
 #define GCC_OPTS_H
 
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+extern void set_flags_from_O (unsigned int);
+extern void decode_options (unsigned int, const char **);
+extern void record_func_cl_pf_opts_mapping (tree);
+extern void restore_func_cl_pf_opts_mapping (tree);
+extern void copy_func_cl_pf_opts_mapping (tree, tree);
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
+
 /* Specifies how a switch's VAR_VALUE relates to its FLAG_VAR.  */
 enum cl_var_type {
   /* The switch is enabled when FLAG_VAR is nonzero.  */
@@ -49,6 +57,8 @@ struct cl_option
   int neg_index;
   unsigned int flags;
   void *flag_var;
+  /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+  int (*access_flag) (int, unsigned int);
   enum cl_var_type var_type;
   int var_value;
 };
@@ -66,6 +76,10 @@ extern const unsigned int cl_options_count;
 extern const char *const lang_names[];
 extern bool no_unit_at_a_time_default;
 
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+#define CL_VARUINT		(1 << 17) /* Associated vbl is uint not bool. */
+#define CL_PERFUNC		(1 << 18) /* Changeable per function.  */
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
 #define CL_DISABLED		(1 << 21) /* Disabled in this configuration.  */
 #define CL_TARGET		(1 << 22) /* Target-specific option.  */
 #define CL_REPORT		(1 << 23) /* Report argument with -fverbose-asm  */

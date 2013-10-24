@@ -182,6 +182,8 @@ CONSTRAINT(ridbits_fit, RID_LAST_MODIFIER < sizeof(unsigned long) * CHAR_BIT);
 static const struct resword reswords[] =
 {
   { "_Complex",		RID_COMPLEX,	0 },
+  /* APPLE LOCAL CW asm blocks */
+  { "_asm",		RID_ASM,	0 },
   { "__FUNCTION__",	RID_FUNCTION_NAME, 0 },
   { "__PRETTY_FUNCTION__", RID_PRETTY_FUNCTION_NAME, 0 },
   { "__alignof",	RID_ALIGNOF,	0 },
@@ -204,6 +206,8 @@ static const struct resword reswords[] =
   { "__inline__",	RID_INLINE,	0 },
   { "__label__",	RID_LABEL,	0 },
   { "__null",		RID_NULL,	0 },
+   /* APPLE LOCAL private extern */
+  { "__private_extern__", RID_PRIVATE_EXTERN, 0 },
   { "__real",		RID_REALPART,	0 },
   { "__real__",		RID_REALPART,	0 },
   { "__restrict",	RID_RESTRICT,	0 },
@@ -294,6 +298,12 @@ static const struct resword reswords[] =
   { "end",		RID_AT_END,		D_OBJC },
   { "implementation",	RID_AT_IMPLEMENTATION,	D_OBJC },
   { "interface",	RID_AT_INTERFACE,	D_OBJC },
+  /* APPLE LOCAL C* language */
+  { "optional",         RID_AT_OPTIONAL,        D_OBJC },
+  /* APPLE LOCAL C* language */
+  { "required",         RID_AT_REQUIRED,        D_OBJC },
+  /* APPLE LOCAL C* property (Radar 4436866) */
+  { "property",		RID_AT_PROPERTY,	D_OBJC },
   { "protocol",		RID_AT_PROTOCOL,	D_OBJC },
   { "selector",		RID_AT_SELECTOR,	D_OBJC },
   { "finally",		RID_AT_FINALLY,		D_OBJC },
@@ -305,6 +315,24 @@ static const struct resword reswords[] =
   { "inout",		RID_INOUT,		D_OBJC },
   { "oneway",		RID_ONEWAY,		D_OBJC },
   { "out",		RID_OUT,		D_OBJC },
+  /* APPLE LOCAL begin C* property (Radar 4436866) */
+  /* These are recognized inside a property attribute list */
+  { "readonly",         RID_READONLY,           D_OBJC },
+  { "getter",           RID_GETTER,             D_OBJC },
+  { "setter",           RID_SETTER,             D_OBJC },
+  /* APPLE LOCAL end C* property (Radar 4436866) */
+  /* APPLE LOCAL begin objc new property */
+  { "synthesize",       RID_AT_SYNTHESIZE,   D_OBJC },
+  { "dynamic",          RID_AT_DYNAMIC,      D_OBJC },
+  { "readwrite",        RID_READWRITE,    D_OBJC },
+  { "assign",           RID_ASSIGN,       D_OBJC },
+  { "retain",           RID_RETAIN,       D_OBJC },
+  { "copy",             RID_COPY,         D_OBJC },
+  /* APPLE LOCAL end objc new property */
+  /* APPLE LOCAL radar 4947014 - objc atomic property */
+  { "nonatomic",       RID_NONATOMIC,          D_OBJC },
+  /* APPLE LOCAL radar 4564694 */
+  { "package",          RID_AT_PACKAGE,         D_OBJC },
 };
 
 void
@@ -325,6 +353,25 @@ init_reswords (void)
       if (! (reswords[i].disable & mask))
 	C_IS_RESERVED_WORD (id) = 1;
     }
+    
+  /* APPLE LOCAL begin private extern  Radar 2872481 --ilr */
+  /* For C++ there is always a -D__private_extern__=extern on the
+     command line.  However, if -fpreprocessed was specified then
+     macros are not expanded so the -D is meaningless.  But this
+     replacement is required for C++.  There for we have to "pretend"
+     that '__private_extern__' is 'extern' and we can do this simply by
+     making the rid code for '__private_extern__' be the same as for
+     extern.  Note, we probably could always do this here since
+     '__private_extern__' is always to be treated like 'extern' for
+     c++.  But we'll be conservative and only do it when -fpreprocessed
+     is specified and depend on the macro substitution in all other
+     cases.  */
+  if (flag_preprocessed)
+    {
+      id = get_identifier ("__private_extern__");
+      C_RID_CODE (id) = RID_EXTERN;
+    }
+  /* APPLE LOCAL end private extern  Radar 2872481 --ilr */
 }
 
 static void
@@ -601,7 +648,10 @@ unqualified_name_lookup_error (tree name)
     }
   else
     {
-      error ("%qD was not declared in this scope", name);
+      /* APPLE LOCAL begin radar 4133425 */
+      if (!objc_diagnose_private_ivar (name))
+        error ("%qD was not declared in this scope", name);
+      /* APPLE LOCAL end radar 4133425 */
       /* Prevent repeated error messages by creating a VAR_DECL with
 	 this NAME in the innermost block scope.  */
       if (current_function_decl)
@@ -827,3 +877,20 @@ make_aggr_type (enum tree_code code)
 
   return t;
 }
+/* APPLE LOCAL begin mainline radar 6194879 */
+
+/* Returns true if we are currently in the main source file, or in a
+   template instantiation started from the main source file.  */
+
+bool
+in_main_input_context (void)
+{
+  tree tl = outermost_tinst_level();
+
+  if (tl)
+    return strcmp (main_input_filename,
+		   LOCATION_FILE (TINST_LOCATION (tl))) == 0;
+  else
+    return strcmp (main_input_filename, input_filename) == 0;
+}
+/* APPLE LOCAL end mainline radar 6194879 */

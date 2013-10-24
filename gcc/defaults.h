@@ -796,6 +796,14 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #define TARGET_C99_FUNCTIONS 0
 #endif
 
+/* APPLE LOCAL begin track initialization status 4964532  */
+/* Determine whether gcc should output DWARF information about
+   uninitialized variables or not.  */
+#ifndef TARGET_DWARF_UNINIT_VARS
+#define TARGET_DWARF_UNINIT_VARS 0
+#endif
+/* APPLE LOCAL end track initialization status 4964532  */
+
 /* Indicate that CLZ and CTZ are undefined at zero.  */
 #ifndef CLZ_DEFINED_VALUE_AT_ZERO
 #define CLZ_DEFINED_VALUE_AT_ZERO(MODE, VALUE)  0
@@ -866,6 +874,12 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #define LEGITIMATE_PIC_OPERAND_P(X) 1
 #endif
 
+/* APPLE LOCAL begin ARM -mdynamic-no-pic support */
+#ifndef LEGITIMATE_INDIRECT_OPERAND_P
+#define LEGITIMATE_INDIRECT_OPERAND_P(X) (! flag_pic || LEGITIMATE_PIC_OPERAND_P(X))
+#endif
+/* APPLE LOCAL end ARM -mdynamic-no-pic support */
+
 #ifndef REVERSIBLE_CC_MODE
 #define REVERSIBLE_CC_MODE(MODE) 0
 #endif
@@ -895,9 +909,33 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #define INCOMING_FRAME_SP_OFFSET 0
 #endif
 
+/* APPLE LOCAL begin KEXT */
+#ifndef TARGET_KEXTABI
+#define TARGET_KEXTABI false
+#endif
+/* APPLE LOCAL end KEXT */
+
 #ifndef HARD_REGNO_NREGS_HAS_PADDING
 #define HARD_REGNO_NREGS_HAS_PADDING(REGNO, MODE) 0
 #define HARD_REGNO_NREGS_WITH_PADDING(REGNO, MODE) -1
 #endif
+
+/* APPLE LOCAL begin ARM compact switch tables */
+/* Extra cases to add to switch tables.  */
+#ifndef TARGET_EXTRA_CASES
+#define TARGET_EXTRA_CASES 0
+#endif
+/* APPLE LOCAL end ARM compact switch tables */
+
+/* APPLE LOCAL begin 5946347 ms_struct support */
+/* On most machines, the default type alignment is sufficient */
+#ifndef TARGET_FIELD_MS_STRUCT_ALIGN
+#define TARGET_FIELD_MS_STRUCT_ALIGN(FIELD) TYPE_ALIGN (TREE_TYPE (FIELD))
+#endif
+#ifndef BIGGEST_MS_STRUCT_ALIGNMENT
+#define BIGGEST_MS_STRUCT_ALIGNMENT BIGGEST_ALIGNMENT
+#endif
+
+/* APPLE LOCAL end 5946347 ms_struct support */
 
 #endif  /* ! GCC_DEFAULTS_H */

@@ -53,6 +53,8 @@ typedef struct align_stack GTY(())
 
 static GTY(()) struct align_stack * alignment_stack;
 
+/* APPLE LOCAL Macintosh alignment */
+#if 0
 #ifdef HANDLE_PRAGMA_PACK
 static void handle_pragma_pack (cpp_reader *);
 
@@ -244,6 +246,8 @@ handle_pragma_pack (cpp_reader * ARG_UNUSED (dummy))
     }
 }
 #endif  /* HANDLE_PRAGMA_PACK */
+/* APPLE LOCAL Macintosh alignment */
+#endif
 
 static GTY(()) tree pending_weaks;
 
@@ -812,12 +816,19 @@ init_pragma (void)
   cpp_register_deferred_pragma (parse_in, "GCC", "pch_preprocess",
 				PRAGMA_GCC_PCH_PREPROCESS, false, false);
 
+/* APPLE LOCAL begin Macintosh alignment 2002-1-22 --ff */
+  /* Remove the handling of pragma pack here because it is handled
+     in config/darwin-c.c.  */
+#if 0
+/* APPLE LOCAL end Macintosh alignment 2002-1-22 --ff */
 #ifdef HANDLE_PRAGMA_PACK
 #ifdef HANDLE_PRAGMA_PACK_WITH_EXPANSION
   c_register_pragma_with_expansion (0, "pack", handle_pragma_pack);
 #else
   c_register_pragma (0, "pack", handle_pragma_pack);
 #endif
+#endif
+/* APPLE LOCAL Macintosh alignment 2002-1-22 --ff */
 #endif
 #ifdef HANDLE_PRAGMA_WEAK
   c_register_pragma (0, "weak", handle_pragma_weak);
@@ -830,6 +841,13 @@ init_pragma (void)
 
   c_register_pragma_with_expansion (0, "redefine_extname", handle_pragma_redefine_extname);
   c_register_pragma (0, "extern_prefix", handle_pragma_extern_prefix);
+
+  /* APPLE LOCAL begin OS pragma hook */
+  /* Allow registration of OS-specific but arch-independent pragmas.  */
+#ifdef REGISTER_OS_PRAGMAS
+  REGISTER_OS_PRAGMAS ();
+#endif
+  /* APPLE LOCAL end OS pragma hook */
 
 #ifdef REGISTER_TARGET_PRAGMAS
   REGISTER_TARGET_PRAGMAS ();

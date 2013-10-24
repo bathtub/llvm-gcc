@@ -368,6 +368,14 @@ lhd_tree_inlining_anon_aggr_type_p (tree t ATTRIBUTE_UNUSED)
   return 0;
 }
 
+/* APPLE LOCAL begin kext identify vtables */
+int
+lhd_vtable_p (tree t ATTRIBUTE_UNUSED)
+{
+  return 0;
+}
+/* APPLE LOCAL end kext identify vtables */
+
 /* lang_hooks.tree_inlining.start_inlining and end_inlining perform any
    language-specific bookkeeping necessary for processing
    FN. start_inlining returns nonzero if inlining should proceed, zero if
@@ -514,7 +522,8 @@ lhd_print_error_function (diagnostic_context *context, const char *file)
       pp_set_prefix (context->printer, new_prefix);
 
       if (current_function_decl == NULL)
-	pp_printf (context->printer, _("At top level:"));
+	/* APPLE LOCAL default to Wformat-security 5764921 */
+	pp_printf (context->printer, "%s", _("At top level:"));
       else
 	{
 	  if (TREE_CODE (TREE_TYPE (current_function_decl)) == METHOD_TYPE)
@@ -554,6 +563,22 @@ lhd_to_target_charset (HOST_WIDE_INT c)
   return c;
 }
 
+/* APPLE LOCAL begin 4133801 */
+#if 0
+void
+lhd_start_source_file (int n, const char *s)
+{
+  (*debug_hooks->start_source_file) (n, s);
+}
+
+void
+lhd_end_source_file (int n, const char *s ATTRIBUTE_UNUSED)
+{
+  (*debug_hooks->end_source_file) (n);
+}
+#endif
+/* APPLE LOCAL end 4133801 */
+
 tree
 lhd_expr_to_decl (tree expr, bool *tc ATTRIBUTE_UNUSED,
 		  bool *ti ATTRIBUTE_UNUSED, bool *se ATTRIBUTE_UNUSED)
@@ -588,3 +613,19 @@ lhd_omp_firstprivatize_type_sizes (struct gimplify_omp_ctx *c ATTRIBUTE_UNUSED,
 				   tree t ATTRIBUTE_UNUSED)
 {
 }
+
+/* APPLE LOCAL begin radar 6353006  */
+tree 
+lhd_build_generic_block_struct_type (void)
+{
+  return NULL_TREE;
+}
+/* APPLE LOCAL end radar 6353006  */
+
+/* APPLE LOCAL begin radar 6386976  */
+bool
+lhd_is_runtime_specific_type (tree type ATTRIBUTE_UNUSED)
+{
+  return false;
+}
+/* APPLE LOCAL end radar 6386976  */

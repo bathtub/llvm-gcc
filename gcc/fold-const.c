@@ -992,7 +992,8 @@ fold_overflow_warning (const char* gmsgid, enum warn_strict_overflow_code wc)
 	}
     }
   else if (issue_strict_overflow_warning (wc))
-    warning (OPT_Wstrict_overflow, gmsgid);
+    /* APPLE LOCAL default to Wformat-security 5764921 */
+    warning (OPT_Wstrict_overflow, "%s", gmsgid);
 }
 
 /* Return true if the built-in mathematical function specified by CODE
@@ -2150,6 +2151,8 @@ fold_convert (tree type, tree arg)
     {
     case INTEGER_TYPE: case ENUMERAL_TYPE: case BOOLEAN_TYPE:
     case POINTER_TYPE: case REFERENCE_TYPE:
+      /* APPLE LOCAL blocks 5862465 */
+    case BLOCK_POINTER_TYPE:
     case OFFSET_TYPE:
       if (TREE_CODE (arg) == INTEGER_CST)
 	{
@@ -5661,6 +5664,14 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type,
             }
           break;
         }
+      /* APPLE LOCAL begin radar 5612779, mainline candidate */
+      /* Do not move a negative constant from an ABS_EXPR. */
+      else if (!TYPE_UNSIGNED (ctype)
+               && !TYPE_UNSIGNED (type)
+               && TREE_CODE (c) == INTEGER_CST
+               && TREE_INT_CST_HIGH (c) < 0)
+        break;
+      /* APPLE LOCAL end radar 5612779, mainline candidate */
       /* FALLTHROUGH */
     case NEGATE_EXPR:
       if ((t1 = extract_muldiv (op0, c, code, wide_type, strict_overflow_p))
@@ -5802,6 +5813,11 @@ extract_muldiv_1 (tree t, tree c, enum tree_code code, tree wide_type,
 	 (C * 8) % 4 since we know that's zero.  */
       if ((code == TRUNC_MOD_EXPR || code == CEIL_MOD_EXPR
 	   || code == FLOOR_MOD_EXPR || code == ROUND_MOD_EXPR)
+	  /* APPLE LOCAL begin mod overflow 6486153 */
+	  && (TYPE_OVERFLOW_UNDEFINED (TREE_TYPE (t))
+	      || (TREE_CODE (TREE_TYPE (t)) == INTEGER_TYPE
+		  && TYPE_IS_SIZETYPE (TREE_TYPE (t))))
+	  /* APPLE LOCAL end mod overflow 6486153 */
 	  && TREE_CODE (TREE_OPERAND (t, 1)) == INTEGER_CST
 	  && integer_zerop (const_binop (TRUNC_MOD_EXPR, op1, c, 0)))
 	return omit_one_operand (type, integer_zero_node, op0);
@@ -6211,7 +6227,8 @@ fold_inf_compare (enum tree_code code, tree type, tree arg0, tree arg1)
 {
   enum machine_mode mode;
   REAL_VALUE_TYPE max;
-  tree temp;
+  /* APPLE LOCAL 5752613 equality comparison to inf sets inv flag */
+  /* Removed temp */
   bool neg;
 
   mode = TYPE_MODE (TREE_TYPE (arg0));
@@ -6243,12 +6260,8 @@ fold_inf_compare (enum tree_code code, tree type, tree arg0, tree arg1)
 	}
       break;
 
-    case EQ_EXPR:
-    case GE_EXPR:
-      /* x == +Inf and x >= +Inf are always equal to x > DBL_MAX.  */
-      real_maxval (&max, neg, mode);
-      return fold_build2 (neg ? LT_EXPR : GT_EXPR, type,
-			  arg0, build_real (TREE_TYPE (arg0), max));
+    /* APPLE LOCAL 5752613 equality comparison to inf sets inv flag */
+    /* removed lines */
 
     case LT_EXPR:
       /* x < +Inf is always equal to x <= DBL_MAX.  */
@@ -6256,21 +6269,8 @@ fold_inf_compare (enum tree_code code, tree type, tree arg0, tree arg1)
       return fold_build2 (neg ? GE_EXPR : LE_EXPR, type,
 			  arg0, build_real (TREE_TYPE (arg0), max));
 
-    case NE_EXPR:
-      /* x != +Inf is always equal to !(x > DBL_MAX).  */
-      real_maxval (&max, neg, mode);
-      if (! HONOR_NANS (mode))
-	return fold_build2 (neg ? GE_EXPR : LE_EXPR, type,
-			    arg0, build_real (TREE_TYPE (arg0), max));
-
-      /* The transformation below creates non-gimple code and thus is
-	 not appropriate if we are in gimple form.  */
-      if (in_gimple_form)
-	return NULL_TREE;
-
-      temp = fold_build2 (neg ? LT_EXPR : GT_EXPR, type,
-			  arg0, build_real (TREE_TYPE (arg0), max));
-      return fold_build1 (TRUTH_NOT_EXPR, type, temp);
+    /* APPLE LOCAL 5752613 equality comparison to inf sets inv flag */
+    /* removed lines */
 
     default:
       break;
@@ -10536,12 +10536,14 @@ fold_binary (enum tree_code code, tree type, tree op0, tree op1)
       /* bool_var != 1 becomes !bool_var. */
       if (TREE_CODE (TREE_TYPE (arg0)) == BOOLEAN_TYPE && integer_onep (arg1)
           && code == NE_EXPR)
-        return fold_build1 (TRUTH_NOT_EXPR, type, arg0);
+        /* APPLE LOCAL radar 6286881 */
+        return fold_build1 (TRUTH_NOT_EXPR, type, fold_convert (type, arg0));
 
       /* bool_var == 0 becomes !bool_var. */
       if (TREE_CODE (TREE_TYPE (arg0)) == BOOLEAN_TYPE && integer_zerop (arg1)
           && code == EQ_EXPR)
-        return fold_build1 (TRUTH_NOT_EXPR, type, arg0);
+        /* APPLE LOCAL radar 6286881 */
+        return fold_build1 (TRUTH_NOT_EXPR, type, fold_convert (type, arg0));
 
       /*  ~a != C becomes a != ~C where C is a constant.  Likewise for ==.  */
       if (TREE_CODE (arg0) == BIT_NOT_EXPR
@@ -10575,7 +10577,13 @@ fold_binary (enum tree_code code, tree type, tree op0, tree op1)
 	  && ! DECL_WEAK (TREE_OPERAND (arg1, 0))
 	  && ! lookup_attribute ("alias",
 				 DECL_ATTRIBUTES (TREE_OPERAND (arg1, 0)))
-	  && ! DECL_EXTERNAL (TREE_OPERAND (arg1, 0)))
+	  /* APPLE LOCAL begin folding of anon union 6120295 */
+	  && ! DECL_EXTERNAL (TREE_OPERAND (arg1, 0))
+	  && ! (TREE_CODE (TREE_OPERAND (arg0, 0)) == VAR_DECL
+		&& DECL_HAS_VALUE_EXPR_P (TREE_OPERAND (arg0, 0))
+		&& TREE_CODE (TREE_OPERAND (arg0, 0)) == VAR_DECL
+		&& DECL_HAS_VALUE_EXPR_P (TREE_OPERAND (arg0, 0))))
+	  /* APPLE LOCAL end folding of anon union 6120295 */
 	{
 	  /* We know that we're looking at the address of two
 	     non-weak, unaliased, static _DECL nodes.
@@ -11227,10 +11235,24 @@ fold_binary (enum tree_code code, tree type, tree op0, tree op1)
 		if (code == LE_EXPR || code == GT_EXPR)
 		  {
 		    tree st;
+		    /* APPLE LOCAL begin 7105615 */
+		    tree ov_zero;
 		    st = lang_hooks.types.signed_type (TREE_TYPE (arg1));
+		    /*
+		     * We need a zero that is NOT part of the constant
+		     * pool, because we're going to set its
+		     * TREE_OVERFLOW bit.  If the returned
+		     * CONSTANT_INT is part of the constant pool, it
+		     * may be returned to another caller in another
+		     * context (i.e. tree-vrp.c), who may arbitrarily
+		     * *clear* this TREE_OVERFLOW bit.
+		     */
+		    ov_zero = copy_node (build_int_cst (st, 0));
+		    TREE_OVERFLOW (ov_zero) = 1;
 		    return fold_build2 (code == LE_EXPR ? GE_EXPR : LT_EXPR,
 					type, fold_convert (st, arg0),
-					build_int_cst (st, 0));
+					ov_zero);
+		    /* APPLE LOCAL end 7105615 */
 		  }
 	      }
 	  }
@@ -12578,6 +12600,10 @@ tree_expr_nonnegative_warnv_p (tree t, bool *strict_overflow_p)
 	    CASE_INT_FN (BUILT_IN_FFS):
 	    CASE_INT_FN (BUILT_IN_PARITY):
 	    CASE_INT_FN (BUILT_IN_POPCOUNT):
+	    /* APPLE LOCAL begin mainline bswap */
+	    case BUILT_IN_BSWAP32:
+	    case BUILT_IN_BSWAP64:
+	    /* APPLE LOCAL end mainline bswap */
 	      /* Always true.  */
 	      return 1;
 

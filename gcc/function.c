@@ -114,6 +114,10 @@ int current_function_uses_only_leaf_regs;
    post-instantiation libcalls.  */
 int virtuals_instantiated;
 
+/* APPLE LOCAL begin radar 5732232 - blocks */
+struct block_sema_info *cur_block;
+/* APPLE LOCAL end radar 5732232 - blocks */
+
 /* Assign unique numbers to labels generated for profiling, debugging, etc.  */
 static GTY(()) int funcdef_no;
 
@@ -212,6 +216,8 @@ static void prepare_function_start (tree);
 static void do_clobber_return_reg (rtx, void *);
 static void do_use_return_reg (rtx, void *);
 static void set_insn_locators (rtx, int) ATTRIBUTE_UNUSED;
+/* APPLE LOCAL radar 6163705, Blocks prologues  */
+static rtx find_block_prologue_insns (void);
 
 /* Pointer to chain of `struct function' for containing functions.  */
 struct function *outer_function_chain;
@@ -509,6 +515,23 @@ assign_stack_local (enum machine_mode mode, HOST_WIDE_INT size, int align)
 {
   return assign_stack_local_1 (mode, size, align, cfun);
 }
+
+/* APPLE LOCAL begin new function for rs6000 consumption */
+/* Wrapper around assign_stack_local_1;  assign a local stack slot for the
+   current function, then set the mem_alias to a new alias set.
+   This can be used only in situations where the target code can
+   guarantee that the slot is used in a way that cannot conflict
+   with anything else.  */
+
+rtx
+assign_stack_local_with_alias (enum machine_mode mode, HOST_WIDE_INT size, 
+			       int align)
+{
+  rtx mem = assign_stack_local_1 (mode, size, align, cfun);
+  set_mem_alias_set (mem, new_alias_set ());
+  return mem;
+}
+/* APPLE LOCAL end new function for rs6000 consumption */
 
 
 /* Removes temporary slot TEMP from LIST.  */
@@ -1531,7 +1554,18 @@ instantiate_virtual_regs_in_insn (rtx insn)
       if (!safe_insn_predicate (insn_code, i, x))
 	{
 	  start_sequence ();
-	  x = force_reg (insn_data[insn_code].operand[i].mode, x);
+	  /* APPLE LOCAL begin 4987589 */
+	  if (recog_data.operand_type[i] == OP_IN)
+	    x = force_reg (insn_data[insn_code].operand[i].mode, x);
+	  else
+	    {
+	      /* OP_INOUT or OP_OUT.  Calculate the address into a
+		 register.  */
+	      gcc_assert (GET_CODE (x) == MEM);
+	      x = copy_to_reg (XEXP (x, 0));
+	      x = gen_rtx_MEM (insn_data[insn_code].operand[i].mode, x);
+	    }
+	  /* APPLE LOCAL end 4987589 */
 	  seq = get_insns ();
 	  end_sequence ();
 	  if (seq)
@@ -2660,6 +2694,17 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
   promoted_nominal_mode
     = promote_mode (data->nominal_type, data->nominal_mode, &unsignedp, 1);
 
+  /* APPLE LOCAL begin CW asm blocks */
+  /* In asm functions with no stack frame, leave it in the register.  */
+  if (cfun->iasm_frame_size == -2
+      && cfun->iasm_noreturn)
+    {
+      parmreg = DECL_INCOMING_RTL (parm);
+      if (promoted_nominal_mode != GET_MODE (parmreg))
+	warning (0, "wrong mode for arg %qD", parm);
+    }
+  else
+  /* APPLE LOCAL end CW asm blocks */
   parmreg = gen_reg_rtx (promoted_nominal_mode);
 
   if (!DECL_ARTIFICIAL (parm))
@@ -2981,6 +3026,8 @@ assign_parms (tree fndecl)
 {
   struct assign_parm_data_all all;
   tree fnargs, parm;
+  /* APPLE LOCAL AltiVec */
+  int pass, last_pass;
 
   current_function_internal_arg_pointer
     = targetm.calls.internal_arg_pointer ();
@@ -2988,50 +3035,63 @@ assign_parms (tree fndecl)
   assign_parms_initialize_all (&all);
   fnargs = assign_parms_augmented_arg_list (&all);
 
-  for (parm = fnargs; parm; parm = TREE_CHAIN (parm))
+  /* APPLE LOCAL begin AltiVec */
+  last_pass = 1;
+
+  for (pass = 1; pass <= last_pass; pass++)
     {
-      struct assign_parm_data_one data;
+      for (parm = fnargs; parm; parm = TREE_CHAIN (parm))
+        {
+          struct assign_parm_data_one data;
 
-      /* Extract the type of PARM; adjust it according to ABI.  */
-      assign_parm_find_data_types (&all, parm, &data);
+          tree type = TREE_TYPE (parm);
+          /* In 1st iteration over actual arguments, only consider non-vectors.
+             During 2nd iteration, finish off with vector parameters. */
+          if (!current_function_stdarg && targetm.calls.skip_vec_args (type, pass, &last_pass))
+            continue;
 
-      /* Early out for errors and void parameters.  */
-      if (data.passed_mode == VOIDmode)
-	{
-	  SET_DECL_RTL (parm, const0_rtx);
-	  DECL_INCOMING_RTL (parm) = DECL_RTL (parm);
-	  continue;
-	}
+          /* Extract the type of PARM; adjust it according to ABI.  */
+          assign_parm_find_data_types (&all, parm, &data);
 
-      if (current_function_stdarg && !TREE_CHAIN (parm))
-	assign_parms_setup_varargs (&all, &data, false);
+          /* Early out for errors and void parameters.  */
+          if (data.passed_mode == VOIDmode)
+	    {
+	      SET_DECL_RTL (parm, const0_rtx);
+	      DECL_INCOMING_RTL (parm) = DECL_RTL (parm);
+	      continue;
+	    }
 
-      /* Find out where the parameter arrives in this function.  */
-      assign_parm_find_entry_rtl (&all, &data);
+	  if (current_function_stdarg && !TREE_CHAIN (parm))
+	    assign_parms_setup_varargs (&all, &data, false);
 
-      /* Find out where stack space for this parameter might be.  */
-      if (assign_parm_is_stack_parm (&all, &data))
-	{
-	  assign_parm_find_stack_rtl (parm, &data);
-	  assign_parm_adjust_entry_rtl (&data);
-	}
+          /* Find out where the parameter arrives in this function.  */
+          assign_parm_find_entry_rtl (&all, &data);
 
-      /* Record permanently how this parm was passed.  */
-      set_decl_incoming_rtl (parm, data.entry_parm);
+          /* Find out where stack space for this parameter might be.  */
+          if (assign_parm_is_stack_parm (&all, &data))
+	    {
+	      assign_parm_find_stack_rtl (parm, &data);
+	      assign_parm_adjust_entry_rtl (&data);
+	    }
 
-      /* Update info on where next arg arrives in registers.  */
-      FUNCTION_ARG_ADVANCE (all.args_so_far, data.promoted_mode,
-			    data.passed_type, data.named_arg);
+          /* Record permanently how this parm was passed.  */
+          set_decl_incoming_rtl (parm, data.entry_parm);
 
-      assign_parm_adjust_stack_rtl (&data);
+          /* Update info on where next arg arrives in registers.  */
+          FUNCTION_ARG_ADVANCE (all.args_so_far, data.promoted_mode,
+			        data.passed_type, data.named_arg);
 
-      if (assign_parm_setup_block_p (&data))
-	assign_parm_setup_block (&all, parm, &data);
-      else if (data.passed_pointer || use_register_for_decl (parm))
-	assign_parm_setup_reg (&all, parm, &data);
-      else
-	assign_parm_setup_stack (&all, parm, &data);
+          assign_parm_adjust_stack_rtl (&data);
+
+          if (assign_parm_setup_block_p (&data))
+	    assign_parm_setup_block (&all, parm, &data);
+          else if (data.passed_pointer || use_register_for_decl (parm))
+	    assign_parm_setup_reg (&all, parm, &data);
+          else
+	    assign_parm_setup_stack (&all, parm, &data);
+        }
     }
+    /* APPLE LOCAL end AltiVec */
 
   if (targetm.calls.split_complex_arg && fnargs != all.orig_fnargs)
     assign_parms_unsplit_complex (&all, fnargs);
@@ -3065,6 +3125,8 @@ assign_parms (tree fndecl)
   current_function_pretend_args_size = all.pretend_args_size;
   all.stack_args_size.constant += all.extra_pretend_bytes;
   current_function_args_size = all.stack_args_size.constant;
+  /* APPLE LOCAL sibcall optimization stomped CW frames (radar 3007352) */
+  cfun->unrounded_args_size = all.stack_args_size.constant;
 
   /* Adjust function incoming argument size for alignment and
      minimum length.  */
@@ -3090,8 +3152,10 @@ assign_parms (tree fndecl)
   /* See how many bytes, if any, of its args a function should try to pop
      on return.  */
 
+  /* APPLE LOCAL begin stdcall vs 16 byte alignment 4284121 */
   current_function_pops_args = RETURN_POPS_ARGS (fndecl, TREE_TYPE (fndecl),
-						 current_function_args_size);
+						 cfun->unrounded_args_size);
+  /* APPLE LOCAL end stdcall vs 16 byte alignment 4284121 */
 
   /* For stdarg.h function, save info about
      regs and stack space used by the named args.  */
@@ -3811,17 +3875,23 @@ allocate_struct_function (tree fndecl)
   DECL_STRUCT_FUNCTION (fndecl) = cfun;
   cfun->decl = fndecl;
 
-  result = DECL_RESULT (fndecl);
-  if (aggregate_value_p (result, fndecl))
+  /* APPLE LOCAL begin radar 5732232 - blocks */
+  /* We cannot support blocks which return aggregates because at this
+     point we do not have info on the return type. */
+  if (!cur_block)
+  {
+    result = DECL_RESULT (fndecl);
+    if (aggregate_value_p (result, fndecl))
     {
 #ifdef PCC_STATIC_STRUCT_RETURN
       current_function_returns_pcc_struct = 1;
 #endif
       current_function_returns_struct = 1;
     }
-
-  current_function_returns_pointer = POINTER_TYPE_P (TREE_TYPE (result));
-
+    /* This code is not used anywhere ! */
+    current_function_returns_pointer = POINTER_TYPE_P (TREE_TYPE (result));
+  }
+  /* APPLE LOCAL end radar 5732232 - blocks */
   current_function_stdarg
     = (fntype
        && TYPE_ARG_TYPES (fntype) != 0
@@ -3883,6 +3953,14 @@ init_function_start (tree subr)
 {
   prepare_function_start (subr);
 
+  /* APPLE LOCAL begin CW asm blocks */
+  if (DECL_IASM_ASM_FUNCTION (subr))
+    {
+      cfun->iasm_asm_function = true;
+      cfun->iasm_noreturn = DECL_IASM_NORETURN (subr);
+      cfun->iasm_frame_size = DECL_IASM_FRAME_SIZE (subr);
+    }
+  /* APPLE LOCAL end CW asm blocks */
   /* Prevent ever trying to delete the first instruction of a
      function.  Also tell final how to output a linenum before the
      function prologue.  Note linenums could be missing, e.g. when
@@ -4100,7 +4178,10 @@ expand_function_start (tree subr)
 	  SET_DECL_RTL (DECL_RESULT (subr), x);
 	}
     }
-  else if (DECL_MODE (DECL_RESULT (subr)) == VOIDmode)
+  /* APPLE LOCAL begin CW asm blocks */
+  else if (DECL_MODE (DECL_RESULT (subr)) == VOIDmode
+	   || cfun->iasm_asm_function)
+  /* APPLE LOCAL end CW asm blocks */
     /* If return mode is void, this decl rtl should not be used.  */
     SET_DECL_RTL (DECL_RESULT (subr), NULL_RTX);
   else
@@ -4341,6 +4422,11 @@ expand_function_end (void)
 
   clear_pending_stack_adjust ();
   do_pending_stack_adjust ();
+
+  /* APPLE LOCAL begin CW asm blocks */
+  if (cfun->iasm_asm_function)
+    expand_naked_return ();
+  /* APPLE LOCAL end CW asm blocks */ 
 
   /* Mark the end of the function body.
      If control reaches this insn, the function can drop through
@@ -5046,6 +5132,140 @@ emit_equiv_load (struct epi_info *p)
 }
 #endif
 
+/* APPLE LOCAL begin radar 6163705, Blocks prologues  */
+
+/* The function should only be called for Blocks functions.
+   
+   On being called, the main instruction list for the Blocks function
+   may contain instructions for setting up the ref_decl and byref_decl
+   variables in the Block.  Those isns really need to go before the
+   function prologue note rather than after.  If such instructions are
+   present, they are identifiable by their source line number, which
+   will be one line preceding the declaration of the function.  If
+   they are present, there will also be a source line note instruction
+   for that line.
+
+   This function does a set of things:
+   - It finds the first such prologue insn.
+   - It finds the last such prologue insn.
+   - It changes the insn locator of all such prologue insns to
+     the prologue locator.
+   - It finds the source line note for the bogus location and
+     removes it.
+   - It decides if it is safe to place the prolgoue end note
+     after the last prologue insn it finds, and if so, returns
+     the last prologue insn (otherwise it returns NULL).
+   
+   This function makes the following checks to determine if it is
+   safe to move the prologue end note to just below the last
+   prologue insn it finds.  If ALL of the checks succeed then it
+   is safe.  If any check fails, this function returns NULL.  The
+   checks it makes are:
+   
+       - There were no INSN_P instructions that occurred before the
+         first prologue insn.
+       - If there are any non-prologue insns between the first & last
+         prologue insn, the non-prologue insns do not outnumber the
+	 prologue insns.
+       - The first prologue insn & the last prologue insn are in the
+         same basic block.
+*/
+
+static rtx
+find_block_prologue_insns (void)
+{
+  rtx first_prologue_insn = NULL;
+  rtx last_prologue_insn = NULL;
+  rtx line_number_note = NULL;
+  rtx tmp_insn;
+  int num_prologue_insns = 0;
+  int total_insns = 0;
+  int prologue_line = DECL_SOURCE_LINE (cfun->decl) - 1;
+  bool other_insns_before_prologue = false;
+  bool start_of_fnbody_found = false;
+
+  /* Go through all the insns and find the first prologue insn, the
+     last prologue insn, the source line location note, and whether or
+     not there are any "real" insns that occur before the first
+     prologue insn.  Re-set the insn locator for prologue insns to the
+     prologue locator.  */
+
+  for (tmp_insn = get_insns(); tmp_insn; tmp_insn = NEXT_INSN (tmp_insn))
+    {
+      if (INSN_P (tmp_insn))
+	{
+	  if (insn_line (tmp_insn) == prologue_line)
+	    {
+	      if (!first_prologue_insn)
+		first_prologue_insn = tmp_insn;
+	      num_prologue_insns++;
+	      last_prologue_insn = tmp_insn;
+	      INSN_LOCATOR (tmp_insn) = prologue_locator;
+	    }
+	  else if (!first_prologue_insn
+		   && start_of_fnbody_found)
+	    other_insns_before_prologue = true;
+	}
+      else if (NOTE_P (tmp_insn)
+	       && NOTE_LINE_NUMBER (tmp_insn) == NOTE_INSN_FUNCTION_BEG)
+	start_of_fnbody_found = true;
+      else if (NOTE_P (tmp_insn)
+	       && (XINT (tmp_insn, 5) == prologue_line))
+	line_number_note = tmp_insn;
+    }
+
+  /* If there were no prologue insns, return now.  */
+
+  if (!first_prologue_insn)
+    return NULL;
+
+  /* If the source location note for the line before the beginning of the
+     function was found, remove it.  */
+
+  if (line_number_note)
+    remove_insn (line_number_note);
+
+  /* If other real insns got moved above the prologue insns, we can't
+     pull out the prologue insns, so return now.  */
+
+  if (other_insns_before_prologue && (optimize > 0))
+    return NULL;
+
+  /* Count the number of insns between the first prologue insn and the
+     last prologue insn; also count the number of non-prologue insns
+     between the first prologue insn and the last prologue insn.  */
+
+  tmp_insn = first_prologue_insn;
+  while (tmp_insn != last_prologue_insn)
+    {
+      total_insns++;
+      tmp_insn = NEXT_INSN (tmp_insn);
+    }
+  total_insns++;
+
+  /* If more than half of the insns between the first & last prologue
+     insns are not prologue insns, then there is too much code that
+     got moved in between prologue insns (by optimizations), so we
+     will not try to pull it out.  */
+  
+  if ((num_prologue_insns * 2) <= total_insns)
+    return NULL;
+
+  /* Make sure all the prologue insns are within one basic block.
+     If the insns cross a basic block boundary, then there is a chance
+     that moving them will cause incorrect code, so don't do it.  */
+
+  gcc_assert (first_prologue_insn != NULL);
+  gcc_assert (last_prologue_insn != NULL);
+
+  if (BLOCK_FOR_INSN (first_prologue_insn) != 
+      BLOCK_FOR_INSN (last_prologue_insn))
+    return NULL;
+
+  return last_prologue_insn;
+}
+/* APPLE LOCAL end radar 6163705, Blocks prologues  */
+
 /* Generate the prologue and epilogue RTL if the machine supports it.  Thread
    this into place with notes indicating where the prologue ends and where
    the epilogue begins.  Update the basic block information when possible.  */
@@ -5069,13 +5289,24 @@ thread_prologue_and_epilogue_insns (rtx f ATTRIBUTE_UNUSED)
 #ifdef HAVE_prologue
   if (HAVE_prologue)
     {
+      /* APPLE LOCAL begin radar 6163705, Blocks prologues  */
+      rtx last_prologue_insn = NULL;
+
+      if (BLOCK_SYNTHESIZED_FUNC (cfun->decl))
+	last_prologue_insn = find_block_prologue_insns();
+      /* APPLE LOCAL end radar 6163705, Blocks prologues  */
+
       start_sequence ();
       seq = gen_prologue ();
       emit_insn (seq);
 
       /* Retain a map of the prologue insns.  */
       record_insns (seq, &prologue);
-      prologue_end = emit_note (NOTE_INSN_PROLOGUE_END);
+
+      /* APPLE LOCAL begin radar 6163705, Blocks prologues  */
+      if (!last_prologue_insn)
+	prologue_end = emit_note (NOTE_INSN_PROLOGUE_END);
+      /* APPLE LOCAL end radar 6163705, Blocks prologues  */
  
 #ifndef PROFILE_BEFORE_PROLOGUE
       /* Ensure that instructions are not moved into the prologue when
@@ -5096,7 +5327,11 @@ thread_prologue_and_epilogue_insns (rtx f ATTRIBUTE_UNUSED)
 
       insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
       inserted = 1;
-    }
+
+      /* APPLE LOCAL begin radar 6163705, Blocks prologues  */
+      if (last_prologue_insn)
+	emit_note_after (NOTE_INSN_PROLOGUE_END, last_prologue_insn);
+      /* APPLE LOCAL end radar 6163705, Blocks prologues  */    }
 #endif
 
   /* If the exit block has no non-fake predecessors, we don't need

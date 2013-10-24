@@ -1301,14 +1301,29 @@ push_reload (rtx in, rtx out, rtx *inloc, rtx *outloc,
 	 and IN or CLASS and OUT.  Get the icode and push any required reloads
 	 needed for each of them if so.  */
 
+      /* APPLE LOCAL begin restoration of inmode/outmode */
       if (in != 0)
-	secondary_in_reload
-	  = push_secondary_reload (1, in, opnum, optional, class, inmode, type,
-				   &secondary_in_icode, NULL);
+	{
+	  secondary_in_reload
+	    = push_secondary_reload (1, in, opnum, optional, class, inmode, type,
+				     &secondary_in_icode, NULL);
+#ifdef TARGET_POWERPC
+	  if ( secondary_in_reload != -1 && in_subreg_loc )
+	    inmode = GET_MODE (*in_subreg_loc);
+#endif
+	}
+
       if (out != 0 && GET_CODE (out) != SCRATCH)
-	secondary_out_reload
-	  = push_secondary_reload (0, out, opnum, optional, class, outmode,
-				   type, &secondary_out_icode, NULL);
+	{
+	  secondary_out_reload
+	    = push_secondary_reload (0, out, opnum, optional, class, outmode,
+				     type, &secondary_out_icode, NULL);
+#ifdef TARGET_POWERPC
+	  if ( secondary_out_reload != -1 && out_subreg_loc )
+	    outmode = GET_MODE (*out_subreg_loc);
+#endif
+	}
+      /* APPLE LOCAL end restoration of inmode/outmode */
 
       /* We found no existing reload suitable for re-use.
 	 So add an additional reload.  */
@@ -1724,7 +1739,13 @@ combine_reloads (void)
     if ((rld[i].when_needed == RELOAD_FOR_OUTPUT_ADDRESS
 	 || rld[i].when_needed == RELOAD_FOR_OUTADDR_ADDRESS)
 	&& rld[i].opnum == rld[output_reload].opnum)
+      /* APPLE LOCAL begin try destroyed input */
+#ifdef TARGET_POWERPC
+      goto try_destroyed_input;
+#else
       return;
+#endif
+      /* APPLE LOCAL end try destroyed input */
 
   /* Check each input reload; can we combine it?  */
 
@@ -1821,6 +1842,11 @@ combine_reloads (void)
      that it does not occur in the output (we already know it isn't an
      earlyclobber.  If this is an asm insn, give up.  */
 
+  /* APPLE LOCAL begin try destroyed input */
+#ifdef TARGET_POWERPC
+ try_destroyed_input:
+#endif
+  /* APPLE LOCAL end try destroyed input */
   if (INSN_CODE (this_insn) == -1)
     return;
 
@@ -3284,7 +3310,8 @@ find_reloads (rtx insn, int replace, int ind_levels, int live_known,
 		  break;
 	      case 'i':
 		if (CONSTANT_P (operand)
-		    && (! flag_pic || LEGITIMATE_PIC_OPERAND_P (operand)))
+		    /* APPLE LOCAL ARM -mdynamic-no-pic support */
+		    && LEGITIMATE_INDIRECT_OPERAND_P (operand))
 		  win = 1;
 		break;
 
@@ -3321,8 +3348,8 @@ find_reloads (rtx insn, int replace, int ind_levels, int live_known,
 		    /* A SCRATCH is not a valid operand.  */
 		    && GET_CODE (operand) != SCRATCH
 		    && (! CONSTANT_P (operand)
-			|| ! flag_pic
-			|| LEGITIMATE_PIC_OPERAND_P (operand))
+			/* APPLE LOCAL ARM -mdynamic-no-pic support */
+			|| LEGITIMATE_INDIRECT_OPERAND_P (operand))
 		    && (GENERAL_REGS == ALL_REGS
 			|| !REG_P (operand)
 			|| (REGNO (operand) >= FIRST_PSEUDO_REGISTER

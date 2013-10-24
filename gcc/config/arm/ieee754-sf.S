@@ -41,7 +41,8 @@
 #ifdef L_negsf2
 	
 ARM_FUNC_START negsf2
-ARM_FUNC_ALIAS aeabi_fneg negsf2
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fneg,negsf2)
 
 	eor	r0, r0, #0x80000000	@ flip sign bit
 	RET
@@ -59,7 +60,8 @@ ARM_FUNC_START aeabi_frsub
 	b	1f
 
 ARM_FUNC_START subsf3
-ARM_FUNC_ALIAS aeabi_fsub subsf3
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fsub,subsf3)
 
 	eor	r1, r1, #0x80000000	@ flip sign bit of second arg
 #if defined(__INTERWORKING_STUBS__)
@@ -67,40 +69,55 @@ ARM_FUNC_ALIAS aeabi_fsub subsf3
 #endif
 
 ARM_FUNC_START addsf3
-ARM_FUNC_ALIAS aeabi_fadd addsf3
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fadd,addsf3)
 
 1:	@ Look for zeroes, equal values, INF, or NAN.
 	movs	r2, r0, lsl #1
-	movnes	r3, r1, lsl #1
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne, ttt
+	COND(mov,s,ne)	r3, r1, lsl #1
 	teqne	r2, r3
-	mvnnes	ip, r2, asr #24
-	mvnnes	ip, r3, asr #24
+	COND(mvn,s,ne)	ip, r2, asr #24
+	COND(mvn,s,ne)	ip, r3, asr #24
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	beq	LSYM(Lad_s)
 
 	@ Compute exponent difference.  Make largest exponent in r2,
 	@ corresponding arg in r0, and positive exponent difference in r3.
 	mov	r2, r2, lsr #24
 	rsbs	r3, r2, r3, lsr #24
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	gt, ttt
 	addgt	r2, r2, r3
 	eorgt	r1, r0, r1
 	eorgt	r0, r1, r0
 	eorgt	r1, r0, r1
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	lt
 	rsblt	r3, r3, #0
 
 	@ If exponent difference is too large, return largest argument
 	@ already in r0.  We need up to 25 bit to handle proper rounding
 	@ of 0x1p25 - 1.1.
 	cmp	r3, #25
+	/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	hi
 	RETc(hi)
+	/* APPLE LOCAL end v7 support. Merge from mainline */
 
 	@ Convert mantissa to signed integer.
 	tst	r0, #0x80000000
 	orr	r0, r0, #0x00800000
 	bic	r0, r0, #0xff000000
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ne
 	rsbne	r0, r0, #0
 	tst	r1, #0x80000000
 	orr	r1, r1, #0x00800000
 	bic	r1, r1, #0xff000000
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ne
 	rsbne	r1, r1, #0
 
 	@ If exponent == difference, one or both args were denormalized.
@@ -114,15 +131,22 @@ LSYM(Lad_x):
 
 	@ Shift and add second arg to first arg in r0.
 	@ Keep leftover bits into r1.
-	adds	r0, r0, r1, asr r3
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	shiftop adds, r0, r0, r1, asr, r3, ip
 	rsb	r3, r3, #32
-	mov	r1, r1, lsl r3
+	shift1	lsl, r1, r1, r3
 
 	@ Keep absolute value in r0-r1, sign in r3 (the n bit was set above)
 	and	r3, r0, #0x80000000
 	bpl	LSYM(Lad_p)
+#if defined(__thumb2__)
+	negs	r1, r1
+	sbc	r0, r0, r0, lsl #1
+#else
 	rsbs	r1, r1, #0
 	rsc	r0, r0, #0
+#endif
+/* APPLE LOCAL end v7 support. Merge from mainline */
 
 	@ Determine how to normalize the result.
 LSYM(Lad_p):
@@ -147,6 +171,8 @@ LSYM(Lad_p):
 LSYM(Lad_e):
 	cmp	r1, #0x80000000
 	adc	r0, r0, r2, lsl #23
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	biceq	r0, r0, #1
 	orr	r0, r0, r3
 	RET
@@ -185,16 +211,26 @@ LSYM(Lad_l):
 	clz	ip, r0
 	sub	ip, ip, #8
 	subs	r2, r2, ip
-	mov	r0, r0, lsl ip
+/* APPLE LOCAL v7 support. Merge from mainline */
+	shift1	lsl, r0, r0, ip
 
 #endif
 
 	@ Final result with sign
 	@ If exponent negative, denormalize result.
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ge, et
 	addge	r0, r0, r2, lsl #23
 	rsblt	r2, r2, #0
 	orrge	r0, r0, r3
+#if defined(__thumb2__)
+	do_it	lt, t
+	lsrlt	r0, r0, r2
+	orrlt	r0, r3, r0
+#else
 	orrlt	r0, r3, r0, lsr r2
+#endif
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	RET
 
 	@ Fixup and adjust bit position for denormalized arguments.
@@ -202,6 +238,8 @@ LSYM(Lad_l):
 LSYM(Lad_d):
 	teq	r2, #0
 	eor	r1, r1, #0x00800000
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq, te
 	eoreq	r0, r0, #0x00800000
 	addeq	r2, r2, #1
 	subne	r3, r3, #1
@@ -211,7 +249,10 @@ LSYM(Lad_s):
 	mov	r3, r1, lsl #1
 
 	mvns	ip, r2, asr #24
-	mvnnes	ip, r3, asr #24
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne
+	COND(mvn,s,ne)	ip, r3, asr #24
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	beq	LSYM(Lad_i)
 
 	teq	r2, r3
@@ -219,12 +260,16 @@ LSYM(Lad_s):
 
 	@ Result is x + 0.0 = x or 0.0 + y = y.
 	teq	r2, #0
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	moveq	r0, r1
 	RET
 
 1:	teq	r0, r1
 
 	@ Result is x - x = 0.
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ne, t
 	movne	r0, #0
 	RETc(ne)
 
@@ -232,9 +277,13 @@ LSYM(Lad_s):
 	tst	r2, #0xff000000
 	bne	2f
 	movs	r0, r0, lsl #1
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	cs
 	orrcs	r0, r0, #0x80000000
 	RET
 2:	adds	r2, r2, #(2 << 24)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	cc, t
 	addcc	r0, r0, #(1 << 23)
 	RETc(cc)
 	and	r3, r0, #0x80000000
@@ -253,11 +302,15 @@ LSYM(Lad_o):
 	@   otherwise return r0 (which is INF or -INF)
 LSYM(Lad_i):
 	mvns	r2, r2, asr #24
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne, et
 	movne	r0, r1
-	mvneqs	r3, r3, asr #24
+	COND(mvn,s,eq)	r3, r3, asr #24
 	movne	r1, r0
 	movs	r2, r0, lsl #9
-	moveqs	r3, r1, lsl #9
+	do_it	eq, te
+	COND(mov,s,eq)	r3, r1, lsl #9
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	teqeq	r0, r1
 	orrne	r0, r0, #0x00400000	@ quiet NAN
 	RET
@@ -269,26 +322,34 @@ LSYM(Lad_i):
 	FUNC_END subsf3
 
 ARM_FUNC_START floatunsisf
-ARM_FUNC_ALIAS aeabi_ui2f floatunsisf
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_ui2f,floatunsisf)
 		
 	mov	r3, #0
 	b	1f
 
 ARM_FUNC_START floatsisf
-ARM_FUNC_ALIAS aeabi_i2f floatsisf
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_i2f,floatsisf)
 	
 	ands	r3, r0, #0x80000000
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	mi
 	rsbmi	r0, r0, #0
 
 1:	movs	ip, r0
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	RETc(eq)
 
 	@ Add initial exponent to sign
 	orr	r3, r3, #((127 + 23) << 23)
 
-	.ifnc	ah, r0
+	/* APPLE LOCAL begin ARM MACH assembler */
+#ifndef __ARMEB__
 	mov	ah, r0
-	.endif
+#endif
+	/* APPLE LOCAL end ARM MACH assembler */
 	mov	al, #0
 	b	2f
 
@@ -298,11 +359,17 @@ ARM_FUNC_ALIAS aeabi_i2f floatsisf
 	FUNC_END floatunsisf
 
 ARM_FUNC_START floatundisf
-ARM_FUNC_ALIAS aeabi_ul2f floatundisf
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_ul2f,floatundisf)
 
 	orrs	r2, r0, r1
 #if !defined (__VFP_FP__) && !defined(__SOFTFP__)
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	eq, t
 	mvfeqs	f0, #0.0
+#else
+	do_it	eq
+/* APPLE LOCAL end v7 support. Merge from mainline */
 #endif
 	RETc(eq)
 
@@ -310,18 +377,31 @@ ARM_FUNC_ALIAS aeabi_ul2f floatundisf
 	b	1f
 
 ARM_FUNC_START floatdisf
-ARM_FUNC_ALIAS aeabi_l2f floatdisf
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_l2f,floatdisf)
 
 	orrs	r2, r0, r1
 #if !defined (__VFP_FP__) && !defined(__SOFTFP__)
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	eq, t
 	mvfeqs	f0, #0.0
+#else
+	do_it	eq
+/* APPLE LOCAL end v7 support. Merge from mainline */
 #endif
 	RETc(eq)
 
 	ands	r3, ah, #0x80000000	@ sign bit in r3
 	bpl	1f
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+#if defined(__thumb2__)
+	negs	al, al
+	sbc	ah, ah, ah, lsl #1
+#else
 	rsbs	al, al, #0
 	rsc	ah, ah, #0
+#endif
+/* APPLE LOCAL end v7 support. Merge from mainline */
 1:
 #if !defined (__VFP_FP__) && !defined(__SOFTFP__)
 	@ For hard FPA code we want to return via the tail below so that
@@ -332,12 +412,16 @@ ARM_FUNC_ALIAS aeabi_l2f floatdisf
 #endif
 
 	movs	ip, ah
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq, tt
 	moveq	ip, al
 	moveq	ah, al
 	moveq	al, #0
 
 	@ Add initial exponent to sign
 	orr	r3, r3, #((127 + 23 + 32) << 23)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	subeq	r3, r3, #(32 << 23)
 2:	sub	r3, r3, #(1 << 23)
 
@@ -345,15 +429,23 @@ ARM_FUNC_ALIAS aeabi_l2f floatdisf
 
 	mov	r2, #23
 	cmp	ip, #(1 << 16)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	hs, t
 	movhs	ip, ip, lsr #16
 	subhs	r2, r2, #16
 	cmp	ip, #(1 << 8)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	hs, t
 	movhs	ip, ip, lsr #8
 	subhs	r2, r2, #8
 	cmp	ip, #(1 << 4)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	hs, t
 	movhs	ip, ip, lsr #4
 	subhs	r2, r2, #4
 	cmp	ip, #(1 << 2)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	hs, e
 	subhs	r2, r2, #2
 	sublo	r2, r2, ip, lsr #1
 	subs	r2, r2, ip, lsr #3
@@ -368,19 +460,23 @@ ARM_FUNC_ALIAS aeabi_l2f floatdisf
 	sub	r3, r3, r2, lsl #23
 	blt	3f
 
-	add	r3, r3, ah, lsl r2
-	mov	ip, al, lsl r2
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	shiftop add, r3, r3, ah, lsl, r2, ip
+	shift1	lsl, ip, al, r2
 	rsb	r2, r2, #32
 	cmp	ip, #0x80000000
-	adc	r0, r3, al, lsr r2
+	shiftop adc, r0, r3, al, lsr, r2, r2
+	do_it	eq
 	biceq	r0, r0, #1
 	RET
 
 3:	add	r2, r2, #32
-	mov	ip, ah, lsl r2
+	shift1	lsl, ip, ah, r2
 	rsb	r2, r2, #32
 	orrs	al, al, ip, lsl #1
-	adc	r0, r3, ah, lsr r2
+	shiftop adc, r0, r3, ah, lsr, r2, r2
+	do_it	eq
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	biceq	r0, r0, ip, lsr #31
 	RET
 
@@ -403,12 +499,16 @@ LSYM(f0_ret):
 #ifdef L_muldivsf3
 
 ARM_FUNC_START mulsf3
-ARM_FUNC_ALIAS aeabi_fmul mulsf3
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fmul,mulsf3)
 
 	@ Mask out exponents, trap any zero/denormal/INF/NAN.
 	mov	ip, #0xff
 	ands	r2, ip, r0, lsr #23
-	andnes	r3, ip, r1, lsr #23
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne, tt
+	COND(and,s,ne)	r3, ip, r1, lsr #23
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	teqne	r2, ip
 	teqne	r3, ip
 	beq	LSYM(Lml_s)
@@ -424,7 +524,10 @@ LSYM(Lml_x):
 	@ If power of two, branch to a separate path.
 	@ Make up for final alignment.
 	movs	r0, r0, lsl #9
-	movnes	r1, r1, lsl #9
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne
+	COND(mov,s,ne)	r1, r1, lsl #9
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	beq	LSYM(Lml_1)
 	mov	r3, #0x08000000
 	orr	r0, r3, r0, lsr #5
@@ -436,7 +539,8 @@ LSYM(Lml_x):
 	and	r3, ip, #0x80000000
 
 	@ Well, no way to make it shorter without the umull instruction.
-	stmfd	sp!, {r3, r4, r5}
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_push	{r3, r4, r5}
 	mov	r4, r0, lsr #16
 	mov	r5, r1, lsr #16
 	bic	r0, r0, r4, lsl #16
@@ -447,7 +551,8 @@ LSYM(Lml_x):
 	mla	r0, r4, r1, r0
 	adds	r3, r3, r0, lsl #16
 	adc	r1, ip, r0, lsr #16
-	ldmfd	sp!, {r0, r4, r5}
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_pop	{r0, r4, r5}
 
 #else
 
@@ -461,6 +566,8 @@ LSYM(Lml_x):
 
 	@ Adjust result upon the MSB position.
 	cmp	r1, #(1 << 23)
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	cc, tt
 	movcc	r1, r1, lsl #1
 	orrcc	r1, r1, r3, lsr #31
 	movcc	r3, r3, lsl #1
@@ -476,6 +583,8 @@ LSYM(Lml_x):
 	@ Round the result, merge final exponent.
 	cmp	r3, #0x80000000
 	adc	r0, r0, r2, lsl #23
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	biceq	r0, r0, #1
 	RET
 
@@ -483,11 +592,15 @@ LSYM(Lml_x):
 LSYM(Lml_1):
 	teq	r0, #0
 	and	ip, ip, #0x80000000
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	eq
 	moveq	r1, r1, lsl #9
 	orr	r0, ip, r0, lsr #9
 	orr	r0, r0, r1, lsr #9
 	subs	r2, r2, #127
-	rsbgts	r3, r2, #255
+	do_it	gt, tt
+	COND(rsb,s,gt)	r3, r2, #255
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	orrgt	r0, r0, r2, lsl #23
 	RETc(gt)
 
@@ -502,18 +615,22 @@ LSYM(Lml_u):
 
 	@ Check if denormalized result is possible, otherwise return signed 0.
 	cmn	r2, #(24 + 1)
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	le, t
 	bicle	r0, r0, #0x7fffffff
 	RETc(le)
 
 	@ Shift value right, round, etc.
 	rsb	r2, r2, #0
 	movs	r1, r0, lsl #1
-	mov	r1, r1, lsr r2
+	shift1	lsr, r1, r1, r2
 	rsb	r2, r2, #32
-	mov	ip, r0, lsl r2
+	shift1	lsl, ip, r0, r2
 	movs	r0, r1, rrx
 	adc	r0, r0, #0
 	orrs	r3, r3, ip, lsl #1
+	do_it	eq
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	biceq	r0, r0, ip, lsr #31
 	RET
 
@@ -522,14 +639,18 @@ LSYM(Lml_u):
 LSYM(Lml_d):
 	teq	r2, #0
 	and	ip, r0, #0x80000000
-1:	moveq	r0, r0, lsl #1
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+1:	do_it	eq, tt
+	moveq	r0, r0, lsl #1
 	tsteq	r0, #0x00800000
 	subeq	r2, r2, #1
 	beq	1b
 	orr	r0, r0, ip
 	teq	r3, #0
 	and	ip, r1, #0x80000000
-2:	moveq	r1, r1, lsl #1
+2:	do_it	eq, tt
+	moveq	r1, r1, lsl #1
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	tsteq	r1, #0x00800000
 	subeq	r3, r3, #1
 	beq	2b
@@ -540,12 +661,16 @@ LSYM(Lml_s):
 	@ Isolate the INF and NAN cases away
 	and	r3, ip, r1, lsr #23
 	teq	r2, ip
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne
 	teqne	r3, ip
 	beq	1f
 
 	@ Here, one or more arguments are either denormalized or zero.
 	bics	ip, r0, #0x80000000
-	bicnes	ip, r1, #0x80000000
+	do_it	ne
+	COND(bic,s,ne)	ip, r1, #0x80000000
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	bne	LSYM(Lml_d)
 
 	@ Result is 0, but determine sign anyway.
@@ -556,6 +681,8 @@ LSYM(Lml_z):
 
 1:	@ One or both args are INF or NAN.
 	teq	r0, #0x0
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ne, ett
 	teqne	r0, #0x80000000
 	moveq	r0, r1
 	teqne	r1, #0x0
@@ -568,6 +695,8 @@ LSYM(Lml_z):
 1:	teq	r3, ip
 	bne	LSYM(Lml_i)
 	movs	r3, r1, lsl #9
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ne
 	movne	r0, r1
 	bne	LSYM(Lml_n)		@ <anything> * NAN -> NAN
 
@@ -592,12 +721,16 @@ LSYM(Lml_n):
 	FUNC_END mulsf3
 
 ARM_FUNC_START divsf3
-ARM_FUNC_ALIAS aeabi_fdiv divsf3
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fdiv,divsf3)
 
 	@ Mask out exponents, trap any zero/denormal/INF/NAN.
 	mov	ip, #0xff
 	ands	r2, ip, r0, lsr #23
-	andnes	r3, ip, r1, lsr #23
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne, tt
+	COND(and,s,ne)	r3, ip, r1, lsr #23
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	teqne	r2, ip
 	teqne	r3, ip
 	beq	LSYM(Ldv_s)
@@ -624,25 +757,33 @@ LSYM(Ldv_x):
 	@ Ensure result will land to known bit position.
 	@ Apply exponent bias accordingly.
 	cmp	r3, r1
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	cc
 	movcc	r3, r3, lsl #1
 	adc	r2, r2, #(127 - 2)
 
 	@ The actual division loop.
 	mov	ip, #0x00800000
 1:	cmp	r3, r1
+	do_it	cs, t
 	subcs	r3, r3, r1
 	orrcs	r0, r0, ip
 	cmp	r3, r1, lsr #1
+	do_it	cs, t
 	subcs	r3, r3, r1, lsr #1
 	orrcs	r0, r0, ip, lsr #1
 	cmp	r3, r1, lsr #2
+	do_it	cs, t
 	subcs	r3, r3, r1, lsr #2
 	orrcs	r0, r0, ip, lsr #2
 	cmp	r3, r1, lsr #3
+	do_it	cs, t
 	subcs	r3, r3, r1, lsr #3
 	orrcs	r0, r0, ip, lsr #3
 	movs	r3, r3, lsl #4
-	movnes	ip, ip, lsr #4
+	do_it	ne
+	COND(mov,s,ne)	ip, ip, lsr #4
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	bne	1b
 
 	@ Check exponent for under/overflow.
@@ -652,6 +793,8 @@ LSYM(Ldv_x):
 	@ Round the result, merge final exponent.
 	cmp	r3, r1
 	adc	r0, r0, r2, lsl #23
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq
 	biceq	r0, r0, #1
 	RET
 
@@ -660,7 +803,10 @@ LSYM(Ldv_1):
 	and	ip, ip, #0x80000000
 	orr	r0, ip, r0, lsr #9
 	adds	r2, r2, #127
-	rsbgts	r3, r2, #255
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	gt, tt
+	COND(rsb,s,gt)	r3, r2, #255
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	orrgt	r0, r0, r2, lsl #23
 	RETc(gt)
 
@@ -674,14 +820,18 @@ LSYM(Ldv_1):
 LSYM(Ldv_d):
 	teq	r2, #0
 	and	ip, r0, #0x80000000
-1:	moveq	r0, r0, lsl #1
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+1:	do_it	eq, tt
+	moveq	r0, r0, lsl #1
 	tsteq	r0, #0x00800000
 	subeq	r2, r2, #1
 	beq	1b
 	orr	r0, r0, ip
 	teq	r3, #0
 	and	ip, r1, #0x80000000
-2:	moveq	r1, r1, lsl #1
+2:	do_it	eq, tt
+	moveq	r1, r1, lsl #1
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	tsteq	r1, #0x00800000
 	subeq	r3, r3, #1
 	beq	2b
@@ -707,7 +857,10 @@ LSYM(Ldv_s):
 	b	LSYM(Lml_n)		@ <anything> / NAN -> NAN
 2:	@ If both are nonzero, we need to normalize and resume above.
 	bics	ip, r0, #0x80000000
-	bicnes	ip, r1, #0x80000000
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne
+	COND(bic,s,ne)	ip, r1, #0x80000000
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	bne	LSYM(Ldv_d)
 	@ One or both arguments are zero.
 	bics	r2, r0, #0x80000000
@@ -739,18 +892,22 @@ LSYM(Ldv_s):
 	@   ip, r0, r1, r2, r3
 
 ARM_FUNC_START gtsf2
-ARM_FUNC_ALIAS gesf2 gtsf2
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(gesf2,gtsf2)
 	mov	ip, #-1
 	b	1f
 
 ARM_FUNC_START ltsf2
-ARM_FUNC_ALIAS lesf2 ltsf2
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(lesf2,ltsf2)
 	mov	ip, #1
 	b	1f
 
 ARM_FUNC_START cmpsf2
-ARM_FUNC_ALIAS nesf2 cmpsf2
-ARM_FUNC_ALIAS eqsf2 cmpsf2
+/* APPLE LOCAL begin ARM MACH assembler */
+ARM_FUNC_ALIAS(nesf2,cmpsf2)
+ARM_FUNC_ALIAS(eqsf2,cmpsf2)
+/* APPLE LOCAL end ARM MACH assembler */
 	mov	ip, #1			@ how should we specify unordered here?
 
 1:	str	ip, [sp, #-4]
@@ -759,18 +916,26 @@ ARM_FUNC_ALIAS eqsf2 cmpsf2
 	mov	r2, r0, lsl #1
 	mov	r3, r1, lsl #1
 	mvns	ip, r2, asr #24
-	mvnnes	ip, r3, asr #24
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	do_it	ne
+	COND(mvn,s,ne)	ip, r3, asr #24
 	beq	3f
 
 	@ Compare values.
 	@ Note that 0.0 is equal to -0.0.
 2:	orrs	ip, r2, r3, lsr #1	@ test if both are 0, clear C flag
+	do_it	ne
 	teqne	r0, r1			@ if not 0 compare sign
-	subpls	r0, r2, r3		@ if same sign compare values, set r0
+	do_it	pl
+	COND(sub,s,pl)	r0, r2, r3		@ if same sign compare values, set r0
 
 	@ Result:
+	do_it	hi
 	movhi	r0, r1, asr #31
+	do_it	lo
 	mvnlo	r0, r1, asr #31
+	do_it	ne
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	orrne	r0, r0, #1
 	RET
 
@@ -802,18 +967,23 @@ ARM_FUNC_START aeabi_cfrcmple
 	b	6f
 
 ARM_FUNC_START aeabi_cfcmpeq
-ARM_FUNC_ALIAS aeabi_cfcmple aeabi_cfcmpeq
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_cfcmple,aeabi_cfcmpeq)
 
 	@ The status-returning routines are required to preserve all
 	@ registers except ip, lr, and cpsr.
-6:	stmfd	sp!, {r0, r1, r2, r3, lr}
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+6:  do_push {r0, r1, r2, r3, lr}
 	ARM_CALL cmpsf2
 	@ Set the Z flag correctly, and the C flag unconditionally.
-	cmp	 r0, #0
+	cmp r0, #0
 	@ Clear the C flag if the return value was -1, indicating
 	@ that the first operand was smaller than the second.
-	cmnmi	 r0, #0
-	RETLDM  "r0, r1, r2, r3"
+	do_it mi
+	cmnmi r0, #0
+/* APPLE LOCAL end v7 support. Merge from mainline */
+	/* APPLE LOCAL ARM MACH assembler */
+	RETLDM1(r0, r1, r2, r3)
 
 	FUNC_END aeabi_cfcmple
 	FUNC_END aeabi_cfcmpeq
@@ -823,6 +993,8 @@ ARM_FUNC_START	aeabi_fcmpeq
 
 	str	lr, [sp, #-8]!
 	ARM_CALL aeabi_cfcmple
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	eq, e
 	moveq	r0, #1	@ Equal to.
 	movne	r0, #0	@ Less than, greater than, or unordered.
 	RETLDM
@@ -833,6 +1005,8 @@ ARM_FUNC_START	aeabi_fcmplt
 
 	str	lr, [sp, #-8]!
 	ARM_CALL aeabi_cfcmple
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	cc, e
 	movcc	r0, #1	@ Less than.
 	movcs	r0, #0	@ Equal to, greater than, or unordered.
 	RETLDM
@@ -843,6 +1017,8 @@ ARM_FUNC_START	aeabi_fcmple
 
 	str	lr, [sp, #-8]!
 	ARM_CALL aeabi_cfcmple
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ls, e
 	movls	r0, #1  @ Less than or equal to.
 	movhi	r0, #0	@ Greater than or unordered.
 	RETLDM
@@ -853,6 +1029,8 @@ ARM_FUNC_START	aeabi_fcmpge
 
 	str	lr, [sp, #-8]!
 	ARM_CALL aeabi_cfrcmple
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	ls, e
 	movls	r0, #1	@ Operand 2 is less than or equal to operand 1.
 	movhi	r0, #0	@ Operand 2 greater than operand 1, or unordered.
 	RETLDM
@@ -863,6 +1041,8 @@ ARM_FUNC_START	aeabi_fcmpgt
 
 	str	lr, [sp, #-8]!
 	ARM_CALL aeabi_cfrcmple
+/* APPLE LOCAL v7 support. Merge from mainline */
+	do_it	cc, e
 	movcc	r0, #1	@ Operand 2 is less than operand 1.
 	movcs	r0, #0  @ Operand 2 is greater than or equal to operand 1,
 			@ or they are unordered.
@@ -875,7 +1055,8 @@ ARM_FUNC_START	aeabi_fcmpgt
 #ifdef L_unordsf2
 
 ARM_FUNC_START unordsf2
-ARM_FUNC_ALIAS aeabi_fcmpun unordsf2
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_fcmpun,unordsf2)
 
 	mov	r2, r0, lsl #1
 	mov	r3, r1, lsl #1
@@ -900,7 +1081,8 @@ ARM_FUNC_ALIAS aeabi_fcmpun unordsf2
 #ifdef L_fixsfsi
 
 ARM_FUNC_START fixsfsi
-ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_f2iz,fixsfsi)
 
 	@ check exponent range.
 	mov	r2, r0, lsl #1
@@ -914,7 +1096,9 @@ ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
 	mov	r3, r0, lsl #8
 	orr	r3, r3, #0x80000000
 	tst	r0, #0x80000000		@ the sign bit
-	mov	r0, r3, lsr r2
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+	shift1	lsr, r0, r3, r2
+	do_it	ne
 	rsbne	r0, r0, #0
 	RET
 
@@ -926,6 +1110,8 @@ ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
 	movs	r2, r0, lsl #9
 	bne	4f			@ r0 is NAN.
 3:	ands	r0, r0, #0x80000000	@ the sign bit
+	do_it	eq
+/* APPLE LOCAL end v7 support. Merge from mainline */
 	moveq	r0, #0x7fffffff		@ the maximum signed positive si
 	RET
 
@@ -940,7 +1126,8 @@ ARM_FUNC_ALIAS aeabi_f2iz fixsfsi
 #ifdef L_fixunssfsi
 
 ARM_FUNC_START fixunssfsi
-ARM_FUNC_ALIAS aeabi_f2uiz fixunssfsi
+/* APPLE LOCAL ARM MACH assembler */
+ARM_FUNC_ALIAS(aeabi_f2uiz,fixunssfsi)
 
 	@ check exponent range.
 	movs	r2, r0, lsl #1
@@ -954,7 +1141,8 @@ ARM_FUNC_ALIAS aeabi_f2uiz fixunssfsi
 	@ scale the value
 	mov	r3, r0, lsl #8
 	orr	r3, r3, #0x80000000
-	mov	r0, r3, lsr r2
+/* APPLE LOCAL v7 support. Merge from mainline */
+	shift1	lsr, r0, r3, r2
 	RET
 
 1:	mov	r0, #0
@@ -974,3 +1162,237 @@ ARM_FUNC_ALIAS aeabi_f2uiz fixunssfsi
 	FUNC_END fixunssfsi
 
 #endif /* L_fixunssfsi */
+
+/* APPLE LOCAL begin ARM 4702983 Thumb VFP math */
+#ifndef NOT_DARWIN
+#if __ARM_ARCH__ > 5
+#ifdef L_mulsf3vfp
+
+ARM_FUNC_START mulsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fmuls	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END mulsf3vfp
+
+#endif
+
+#ifdef L_addsf3vfp
+
+ARM_FUNC_START addsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fadds	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END addsf3vfp
+
+#endif
+
+#ifdef L_subsf3vfp
+
+ARM_FUNC_START subsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fsubs	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END subsf3vfp
+
+#endif
+
+#ifdef L_divsf3vfp
+
+ARM_FUNC_START divsf3vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fdivs	s13, s14, s15
+	fmrs	r0, s13
+	RET
+
+	FUNC_END divsf3vfp
+
+#endif
+
+#ifdef L_eqsf2vfp
+
+ARM_FUNC_START eqsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	ne, e
+	movne	r0, #0
+	moveq	r0, #1
+	RET
+
+	FUNC_END eqsf2vfp
+
+#endif
+
+#ifdef L_nesf2vfp
+
+ARM_FUNC_START nesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	eq, e
+	moveq	r0, #0
+	movne	r0, #1
+	RET
+
+	FUNC_END nesf2vfp
+
+#endif
+
+#ifdef L_ltsf2vfp
+
+ARM_FUNC_START ltsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	pl, e
+	movpl	r0, #0
+	movmi	r0, #1
+	RET
+
+	FUNC_END ltsf2vfp
+
+#endif
+
+#ifdef L_gtsf2vfp
+
+ARM_FUNC_START gtsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	le, e
+	movle	r0, #0
+	movgt	r0, #1
+	RET
+
+	FUNC_END gtsf2vfp
+
+#endif
+
+#ifdef L_lesf2vfp
+
+ARM_FUNC_START lesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	hi, e
+	movhi	r0, #0
+	movls	r0, #1
+	RET
+
+	FUNC_END lesf2vfp
+
+#endif
+
+#ifdef L_gesf2vfp
+
+ARM_FUNC_START gesf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	lt, e
+	movlt	r0, #0
+	movge	r0, #1
+	RET
+
+	FUNC_END gesf2vfp
+
+#endif
+
+#ifdef L_unordsf2vfp
+
+ARM_FUNC_START unordsf2vfp
+
+	fmsr	s14, r0
+	fmsr	s15, r1
+	fcmps	s14, s15
+	fmstat
+	do_it	vc, e
+	movvc	r0, #0
+	movvs	r0, #1
+	RET
+
+	FUNC_END unordsf2vfp
+
+#endif
+
+#ifdef L_fixsfsivfp
+
+ARM_FUNC_START fixsfsivfp
+
+	fmsr	s15, r0
+	ftosizs	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END fixsfsivfp
+
+#endif
+
+#ifdef L_fixunssfsivfp
+
+ARM_FUNC_START fixunssfsivfp
+
+	fmsr	s15, r0
+	ftouizs	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END fixunssfsivfp
+
+#endif
+
+#ifdef L_floatsisfvfp
+
+ARM_FUNC_START floatsisfvfp
+
+	fmsr	s15, r0
+	fsitos	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END floatsisfvfp
+
+#endif
+
+#ifdef L_floatsisfvfp
+
+ARM_FUNC_START floatunssisfvfp
+
+	fmsr	s15, r0
+	fuitos	s15, s15
+	fmrs	r0, s15
+	RET
+
+	FUNC_END floatunssisfvfp
+
+#endif
+
+#endif /* __ARM_ARCH__ > 5 */
+#endif /* NOT_DARWIN */
+/* APPLE LOCAL end ARM 4702983 Thumb VFP math */

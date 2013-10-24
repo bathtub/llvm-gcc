@@ -1920,6 +1920,13 @@ look_for_overrides (tree type, tree fndecl)
   int ix;
   int found = 0;
 
+  /* APPLE LOCAL begin ctor name 6202462 */
+  /* A constructor doesn't have a name, so the concept of name lookup
+     of its name doesn't make sense.  */
+  if (DECL_CONSTRUCTOR_P (fndecl))
+    return false;
+  /* APPLE LOCAL end ctor name 6202462 */
+
   for (ix = 0; BINFO_BASE_ITERATE (binfo, ix, base_binfo); ix++)
     {
       tree basetype = BINFO_TYPE (base_binfo);
@@ -2116,7 +2123,11 @@ note_debug_info_needed (tree type)
   if (TYPE_DECL_SUPPRESS_DEBUG (TYPE_NAME (type)))
     {
       TYPE_DECL_SUPPRESS_DEBUG (TYPE_NAME (type)) = 0;
+      /* APPLE LOCAL 4167759 */
+      cp_set_decl_ignore_flag (type, 1);
       rest_of_type_compilation (type, toplevel_bindings_p ());
+      /* APPLE LOCAL 4167759 */
+      cp_set_decl_ignore_flag (type, 0);
     }
 
   dfs_walk_all (TYPE_BINFO (type), dfs_debug_mark, NULL, 0);

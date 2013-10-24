@@ -89,6 +89,13 @@ extern void ix86_expand_binary_operator (enum rtx_code,
 extern int ix86_binary_operator_ok (enum rtx_code, enum machine_mode, rtx[]);
 extern void ix86_expand_unary_operator (enum rtx_code, enum machine_mode,
 					rtx[]);
+/* APPLE LOCAL begin 4176531 4424891 */
+extern const char *ix86_expand_convert_uns_DF2SI_sse (rtx *);
+extern const char *ix86_expand_convert_uns_SF2SI_sse (rtx *);
+extern const char *ix86_expand_convert_uns_DI2DF_sse (rtx *);
+extern const char *ix86_expand_convert_uns_SI2DF_sse (rtx *);
+extern const char *ix86_expand_convert_sign_DI2DF_sse (rtx *);
+/* APPLE LOCAL end 4176531 4424891 */
 extern rtx ix86_build_signbit_mask (enum machine_mode, bool, bool);
 extern void ix86_expand_fp_absneg_operator (enum rtx_code, enum machine_mode,
 					    rtx[]);
@@ -105,6 +112,10 @@ extern int ix86_expand_int_movcc (rtx[]);
 extern int ix86_expand_fp_movcc (rtx[]);
 extern bool ix86_expand_fp_vcond (rtx[]);
 extern bool ix86_expand_int_vcond (rtx[]);
+/* APPLE LOCAL begin 5612787 mainline sse4 */
+extern void ix86_expand_sse_unpack (rtx[], bool, bool);
+extern void ix86_expand_sse4_unpack (rtx[], bool, bool);
+/* APPLE LOCAL end 5612787 mainline sse4 */
 extern int ix86_expand_int_addcc (rtx[]);
 extern void ix86_expand_call (rtx, rtx, rtx, rtx, rtx, int);
 extern void x86_initialize_trampoline (rtx, rtx, rtx);
@@ -127,6 +138,8 @@ extern bool ix86_function_value_regno_p (int);
 extern bool ix86_function_arg_regno_p (int);
 extern int ix86_function_arg_boundary (enum machine_mode, tree);
 extern int ix86_return_in_memory (tree);
+/* APPLE LOCAL radar 4781080 */
+extern bool ix86_objc_fpreturn_msgcall (tree, bool);
 extern void ix86_va_start (tree, rtx);
 extern rtx ix86_va_arg (tree, tree);
 
@@ -233,4 +246,16 @@ extern void ix86_fp_comparison_codes (enum rtx_code code, enum rtx_code *,
 				      enum rtx_code *, enum rtx_code *);
 extern enum rtx_code ix86_fp_compare_code_to_integer (enum rtx_code);
 #endif
+
+/* APPLE LOCAL begin CW asm blocks */
+extern const char *i386_iasm_register_name (const char *regname, char *buf);
+extern bool iasm_x86_needs_swapping (const char *);
+extern bool iasm_print_op (char *buf, tree arg, unsigned argnum, tree *uses,
+			   bool must_be_reg, bool must_not_be_reg, void *);
+extern void iasm_x86_print_prefix (char *buf, tree prefix_list);
+extern tree iasm_raise_reg (tree);
+/* APPLE LOCAL end CW asm blocks */
+
+/* APPLE LOCAL 3399553 */
+extern void ix86_expand_flt_rounds (rtx);
 extern int asm_preferred_eh_data_format (int, int);

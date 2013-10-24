@@ -252,7 +252,8 @@ strongarm*-*-*)
 	;;
 arm*-*-*)
 	cpu_type=arm
-	extra_headers="mmintrin.h"
+        # APPLE LOCAL ARM v7 support, merge from Codesourcery.
+	extra_headers="mmintrin.h arm_neon.h"
 	;;
 bfin*-*)
 	cpu_type=bfin
@@ -266,15 +267,25 @@ xscale-*-*)
 	cpu_type=arm
 	extra_headers="mmintrin.h"
 	;;
+# APPLE LOCAL begin mainline
 i[34567]86-*-*)
 	cpu_type=i386
-	extra_headers="mmintrin.h mm3dnow.h xmmintrin.h emmintrin.h pmmintrin.h"
+	# APPLE LOCAL begin 5612787 mainline sse4
+	extra_headers="mmintrin.h mm3dnow.h xmmintrin.h emmintrin.h
+		       pmmintrin.h tmmintrin.h ammintrin.h smmintrin.h
+		       nmmintrin.h"
+	# APPLE LOCAL end 5612787 mainline sse4
 	;;
 x86_64-*-*)
 	cpu_type=i386
-	extra_headers="mmintrin.h mm3dnow.h xmmintrin.h emmintrin.h pmmintrin.h"
+	# APPLE LOCAL begin 5612787 mainline sse4
+	extra_headers="mmintrin.h mm3dnow.h xmmintrin.h emmintrin.h
+		       pmmintrin.h tmmintrin.h ammintrin.h smmintrin.h
+		       nmmintrin.h"
+	# APPLE LOCAL end 5612787 mainline sse4
 	need_64bit_hwint=yes
 	;;
+# APPLE LOCAL end mainline
 ia64-*-*)
 	extra_headers=ia64intrin.h
 	need_64bit_hwint=yes
@@ -369,15 +380,23 @@ case ${target} in
   *-*-darwin9*)
     tm_file="${tm_file} darwin9.h"
     ;;
+    # APPLE LOCAL begin .file/.loc 6349436
+  *-*-darwin[12][0-9]*)
+    tm_file="${tm_file} darwin9.h darwin10.h"
+    ;;
+    # APPLE LOCAL end .file/.loc 6349436
   esac
   tm_file="${tm_file} ${cpu_type}/darwin.h"
   tm_p_file="${tm_p_file} darwin-protos.h"
-  tmake_file="t-darwin ${cpu_type}/t-darwin t-slibgcc-darwin"
+  # APPLE LOCAL 5681645
+  tmake_file="t-darwin ${cpu_type}/t-darwin"
   target_gtfiles="\$(srcdir)/config/darwin.c"
   extra_options="${extra_options} darwin.opt"
   c_target_objs="darwin-c.o"
   cxx_target_objs="darwin-c.o"
   extra_objs="darwin.o"
+ # APPLE LOCAL mainline 2007-06-14 5235474
+  extra_gcc_objs="darwin-driver.o"
   default_use_cxa_atexit=yes
   case ${enable_threads} in
     "" | yes | posix) thread_file='posix' ;;
@@ -758,6 +777,14 @@ arm*-*-elf | ep9312-*-elf)
 	tm_file="dbxelf.h elfos.h arm/unknown-elf.h arm/elf.h arm/aout.h arm/arm.h"
 	tmake_file="arm/t-arm arm/t-arm-elf"
 	;;
+# APPLE LOCAL begin ARM darwin target
+arm*-*-darwin*)
+	extra_options="${extra_options} arm/darwin.opt"
+        tm_file="${tm_file} arm/darwin.h"
+        tmake_file="${tmake_file} arm/t-slibgcc-iphoneos"
+	extra_headers="arm_neon.h"
+        ;;
+# APPLE LOCAL end ARM darwin target
 arm*-wince-pe*)
 	tm_file="arm/semi.h arm/aout.h arm/arm.h arm/coff.h dbxcoff.h arm/pe.h arm/wince-pe.h"
 	tmake_file="arm/t-arm arm/t-wince-pe"
@@ -1015,17 +1042,22 @@ hppa[12]*-*-hpux11*)
 	;;
 i[34567]86-*-darwin*)
 	need_64bit_hwint=yes
-
-	# This is so that '.../configure && make' doesn't fail due to
-	# config.guess deciding that the configuration is i386-*-darwin* and
-	# then this file using that to set --with-cpu=i386 which has no -m64
-	# support.
-	with_arch=${with_arch:-nocona}
-	with_cpu=${with_cpu:-generic}
+	# APPLE LOCAL mainline
+	# Deleted a comment here.
+	# APPLE LOCAL mainline
+	with_cpu=${with_cpu:-core2}
+	# APPLE LOCAL Macintosh alignment 2002-2-19 --ff
+	extra_options="${extra_options} i386/darwin.opt"
+	# APPLE LOCAL 4099000 5681645
+	tmake_file="${tmake_file} t-slibgcc-darwin i386/t-darwin"
 	;;
 x86_64-*-darwin*)
-	with_arch=${with_arch:-nocona}
-	with_cpu=${with_cpu:-generic}
+	# APPLE LOCAL mainline
+	# Deleted with_arch
+	# APPLE LOCAL mainline
+	with_cpu=${with_cpu:-core2}
+	# APPLE LOCAL Macintosh alignment 2002-2-19 --ff
+	extra_options="${extra_options} i386/darwin.opt"
 	tmake_file="t-darwin ${cpu_type}/t-darwin64 t-slibgcc-darwin"
 	tm_file="${tm_file} ${cpu_type}/darwin64.h"
 	;;
@@ -1207,14 +1239,16 @@ i[34567]86-*-solaris2*)
 		# FIXME: -m64 for i[34567]86-*-* should be allowed just
 		# like -m32 for x86_64-*-*.
 		case X"${with_cpu}" in
-		Xgeneric|Xnocona|Xx86-64|Xk8|Xopteron|Xathlon64|Xathlon-fx)
+		# APPLE LOCAL mainline
+		Xgeneric|Xcore2|Xnocona|Xx86-64|Xk8|Xopteron|Xathlon64|Xathlon-fx)
 			;;
 		X)
 			with_cpu=generic
 			;;
 		*)
 			echo "Unsupported CPU used in --with-cpu=$with_cpu, supported values:" 1>&2
-			echo "generic nocona x86-64 k8 opteron athlon64 athlon-fx" 1>&2
+			# APPLE LOCAL mainline
+			echo "generic core2 nocona x86-64 k8 opteron athlon64 athlon-fx" 1>&2
 			exit 1
 			;;
 		esac
@@ -1710,8 +1744,11 @@ powerpc-*-beos*)
 	use_fixproto=yes
 	;;
 powerpc-*-darwin*)
+	# APPLE LOCAL ARM 5681645
+	tmake_file="${tmake_file} t-slibgcc-darwin"
 	extra_options="${extra_options} rs6000/darwin.opt"
-	extra_parts="crt2.o"
+	# APPLE LOCAL mainline candidate 2006-06-22 4512244
+	extra_parts="${extra_parts} crt2.o"
 	case ${target} in
 	  *-darwin1[0-9]* | *-darwin[8-9]*)
 	    tmake_file="${tmake_file} rs6000/t-darwin8"
@@ -1727,6 +1764,8 @@ powerpc-*-darwin*)
 	;;
 powerpc64-*-darwin*)
 	tm_file="${tm_file} ${cpu_type}/darwin8.h ${cpu_type}/darwin64.h"
+	# APPLE LOCAL ARM 5681645
+	tmake_file="${tmake_file} t-slibgcc-darwin"
 	extra_options="${extra_options} ${cpu_type}/darwin.opt"
 	# We're omitting t-darwin8 to avoid building any multilibs
 	extra_headers=altivec.h
@@ -2486,6 +2525,7 @@ if test x$with_cpu = x ; then
       # A Cirrus ARM variant.
       with_cpu="ep9312"
       ;;
+# APPLE LOCAL begin mainline 2006-04-19 4434601
     i386-*-*)
       with_cpu=i386
       ;;
@@ -2537,6 +2577,11 @@ if test x$with_cpu = x ; then
         nocona-*)
           with_cpu=nocona
           ;;
+	# APPLE LOCAL begin mainline
+	core2-*)
+	  with_cpu=core2
+	  ;;
+	# APPLE LOCAL end mainline
         pentium_m-*)
           with_cpu=pentium-m
           ;;
@@ -2556,11 +2601,17 @@ if test x$with_cpu = x ; then
         nocona-*)
           with_cpu=nocona
           ;;
+	# APPLE LOCAL begin mainline
+	core2-*)
+	  with_cpu=core2
+	  ;;
+	# APPLE LOCAL end mainline
         *)
           with_cpu=generic
           ;;
       esac
       ;;
+# APPLE LOCAL end mainline 2006-04-19 4434601
     alphaev6[78]*-*-*)
       with_cpu=ev67
       ;;
@@ -2657,10 +2708,13 @@ case "${target}" in
 		done
 
 		case "$with_arch" in
+                # APPLE LOCAL begin ARM v7 support.
 		"" \
 		| armv[23456] | armv2a | armv3m | armv4t | armv5t \
 		| armv5te | armv6j |armv6k | armv6z | armv6zk \
+		| armv7-a \
 		| iwmmxt | ep9312)
+                # APPLE LOCAL end ARM v7 support.
 			# OK
 			;;
 		*)
@@ -2681,8 +2735,10 @@ case "${target}" in
 		esac
 
 		case "$with_fpu" in
+                # APPLE LOCAL begin ARM v7 support, merge from Codesourcery.
 		"" \
-		| fpa | fpe2 | fpe3 | maverick | vfp )
+		| fpa | fpe2 | fpe3 | maverick | vfp | vfp3 | neon)
+                # APPLE LOCAL end ARM v7 support, merge from Codesourcery.
 			# OK
 			;;
 		*)
@@ -2768,6 +2824,7 @@ case "${target}" in
 		esac
 		;;
 
+# APPLE LOCAL begin mainline 2006-04-19 4434601
 	i[34567]86-*-* | x86_64-*-*)
 		supported_defaults="arch cpu tune"
 		for which in arch cpu tune; do
@@ -2787,9 +2844,12 @@ case "${target}" in
 				esac
 				# OK
 				;;
-			"" | k8 | opteron | athlon64 | athlon-fx | nocona | generic)
+# APPLE LOCAL mainline
+			"" | k8 | opteron | athlon64 | athlon-fx | nocona | core2 \
+			   | generic)
 				# OK
 				;;
+# APPLE LOCAL end mainline 2006-04-19 4434601
 			*)
 				echo "Unknown CPU given in --with-$which=$val." 1>&2
 				exit 1

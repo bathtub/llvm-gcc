@@ -24,6 +24,12 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include "cpplib.h"
 #include "internal.h"
 
+/* APPLE LOCAL begin CW asm blocks */
+/* A hack that would be better done with a callback or some such.  */
+extern enum iasm_states { iasm_none, iasm_decls, iasm_asm } iasm_state;
+extern bool iasm_in_operands;
+/* APPLE LOCAL end CW asm blocks */
+
 enum spell_type
 {
   SPELL_OPERATOR = 0,
@@ -59,7 +65,8 @@ static void create_literal (cpp_reader *, cpp_token *, const uchar *,
 			    unsigned int, enum cpp_ttype);
 static bool warn_in_comment (cpp_reader *, _cpp_line_note *);
 static int name_p (cpp_reader *, const cpp_string *);
-static tokenrun *next_tokenrun (tokenrun *);
+/* APPLE LOCAL 4137741 */
+/* 'next_tokenrun' made extern and renamed to '_cpp_next_tokenrun'.  */
 
 static _cpp_buff *new_buff (size_t);
 
@@ -487,6 +494,18 @@ forms_identifier_p (cpp_reader *pfile, int first,
       buffer->cur -= 2;
     }
 
+  /* APPLE LOCAL begin CW asm blocks */
+  /* Allow [.+-] in CW asm opcodes (PowerPC specific).  Do this here
+     so we don't have to figure out "bl- 45" vs "bl -45".  */
+  if (iasm_state >= iasm_decls 
+      && !iasm_in_operands
+      && (*buffer->cur == '.' || *buffer->cur == '+' || *buffer->cur == '-'))
+    {
+      buffer->cur++;
+      return true;
+    }
+  /* APPLE LOCAL end CW asm blocks */
+
   return false;
 }
 
@@ -646,7 +665,12 @@ lex_string (cpp_reader *pfile, cpp_token *token, const uchar *base)
     cpp_error (pfile, CPP_DL_WARNING,
 	       "null character(s) preserved in literal");
 
-  if (type == CPP_OTHER && CPP_OPTION (pfile, lang) != CLK_ASM)
+  /* APPLE LOCAL begin #error with unmatched quotes 5607574 */
+  if (type == CPP_OTHER
+      && CPP_OPTION (pfile, lang) != CLK_ASM
+      && !pfile->state.in_diagnostic
+      && !pfile->state.skipping)
+  /* APPLE LOCAL end #error with unmatched quotes 5607574 */
     cpp_error (pfile, CPP_DL_PEDWARN, "missing terminating %c character",
 	       (int) terminator);
 
@@ -705,8 +729,10 @@ _cpp_init_tokenrun (tokenrun *run, unsigned int count)
 }
 
 /* Returns the next tokenrun, or creates one if there is none.  */
-static tokenrun *
-next_tokenrun (tokenrun *run)
+/* APPLE LOCAL begin 4137741 */
+tokenrun *
+_cpp_next_tokenrun (tokenrun *run)
+/* APPLE LOCAL end 4137741 */
 {
   if (run->next == NULL)
     {
@@ -718,6 +744,47 @@ next_tokenrun (tokenrun *run)
   return run->next;
 }
 
+/* APPLE LOCAL begin AltiVec */
+/* Look ahead in the input stream.  */
+const cpp_token *
+_cpp_peek_token (cpp_reader *pfile, int index)
+{
+  cpp_context *context = pfile->context;
+  const cpp_token *peektok;
+  int count;
+  
+  /* First, scan through any pending cpp_context objects.  */
+  while (context->prev)
+    {
+      ptrdiff_t sz = (context->direct_p
+                      ? LAST (context).token - FIRST (context).token
+                      : LAST (context).ptoken - FIRST (context).ptoken);
+  
+      if (index < (int) sz)
+        return (context->direct_p
+                ? FIRST (context).token + index
+                : *(FIRST (context).ptoken + index));
+
+      index -= (int) sz;
+      context = context->prev;     
+    }
+
+  /* We will have to read some new tokens after all (and do so
+     without invalidating preceding tokens).  */
+  count = index;
+  pfile->keep_tokens++;
+
+  do
+    peektok = _cpp_lex_token (pfile);
+  while (index--);
+
+  _cpp_backup_tokens_direct (pfile, count + 1);
+  pfile->keep_tokens--;
+
+  return peektok;
+}
+/* APPLE LOCAL end AltiVec */
+
 /* Allocate a single token that is invalidated at the same time as the
    rest of the tokens on the line.  Has its line and col set to the
    same as the last lexed token, so that diagnostics appear in the
@@ -726,11 +793,38 @@ cpp_token *
 _cpp_temp_token (cpp_reader *pfile)
 {
   cpp_token *old, *result;
+  /* APPLE LOCAL begin AltiVec */
+  ptrdiff_t sz = pfile->cur_run->limit - pfile->cur_token;
+  ptrdiff_t la = (ptrdiff_t) pfile->lookaheads;
+  /* APPLE LOCAL end AltiVec */
 
   old = pfile->cur_token - 1;
-  if (pfile->cur_token == pfile->cur_run->limit)
+  /* APPLE LOCAL begin AltiVec */
+  /* Any pre-existing lookaheads must not be clobbered.  */
+  if (la)
     {
-      pfile->cur_run = next_tokenrun (pfile->cur_run);
+         /* APPLE LOCAL begin 4137741 */
+      if (sz <= la)
+        {
+          tokenrun *next = _cpp_next_tokenrun (pfile->cur_run);
+
+          if (sz < la)
+            memmove (next->base + 1, next->base,
+                     (la - sz) * sizeof (cpp_token));
+
+          next->base[0] = pfile->cur_run->limit[-1];
+        }
+
+      if (sz > 1)
+        memmove (pfile->cur_token + 1, pfile->cur_token,
+                 MIN (la, sz - 1) * sizeof (cpp_token));
+    }
+
+  if (!sz)
+  /* APPLE LOCAL end AltiVec */
+    {
+      pfile->cur_run = _cpp_next_tokenrun (pfile->cur_run);
+      /* APPLE LOCAL end 4137741 */
       pfile->cur_token = pfile->cur_run->base;
     }
 
@@ -751,7 +845,8 @@ _cpp_lex_token (cpp_reader *pfile)
     {
       if (pfile->cur_token == pfile->cur_run->limit)
 	{
-	  pfile->cur_run = next_tokenrun (pfile->cur_run);
+          /* APPLE LOCAL 4137741 */
+          pfile->cur_run = _cpp_next_tokenrun (pfile->cur_run);
 	  pfile->cur_token = pfile->cur_run->base;
 	}
 
@@ -765,6 +860,35 @@ _cpp_lex_token (cpp_reader *pfile)
 
       if (result->flags & BOL)
 	{
+          /* APPLE LOCAL begin 4137741 */
+          /* If we have squirreled away a CPP_EINCL token, return it now.  */
+          if (pfile->have_eincl)
+            {
+              result = pfile->beg_eincl++;
+ 
+              if (pfile->beg_eincl == pfile->end_eincl)
+                {
+                  pfile->beg_eincl = pfile->end_eincl = pfile->base_eincl.base;
+                  pfile->have_eincl = false;
+                }
+              else if (pfile->beg_eincl == pfile->cur_eincl->limit)
+                {
+                  /* NB: This point will be reached only if there are more
+                         than 250 nested headers that are _simultaneously_
+                         ending; a rare occurrence indeed.  */
+                  pfile->cur_eincl = _cpp_next_tokenrun (pfile->cur_eincl);
+                  pfile->beg_eincl = pfile->cur_eincl->base;
+                }
+ 
+              /* Push back original return value;
+                 we will retrieve it later.  */
+              pfile->lookaheads++;
+              pfile->cur_token--;
+ 
+              return result;
+            }
+ 
+          /* APPLE LOCAL end 4137741 */
 	  /* Is this a directive.  If _cpp_handle_directive returns
 	     false, it is an assembler #.  */
 	  if (result->type == CPP_HASH
@@ -778,6 +902,10 @@ _cpp_lex_token (cpp_reader *pfile)
 		  if (pfile->directive_result.type == CPP_PADDING)
 		    continue;
 		  result = &pfile->directive_result;
+		  /* APPLE LOCAL begin CW asm blocks C++ */
+		  /* We put this back on the result.  */
+		  result->flags |= BOL;
+		  /* APPLE LOCAL end CW asm blocks C++ */
 		}
 	    }
 	  else if (pfile->state.in_deferred_pragma)
@@ -820,6 +948,12 @@ _cpp_get_fresh_line (cpp_reader *pfile)
       if (!buffer->need_line)
 	return true;
 
+      /* APPLE LOCAL begin predictive compilation */
+      if (CPP_OPTION (pfile, predictive_compilation)
+          && buffer->next_line >= buffer->rlimit)
+        read_from_stdin (pfile);
+      /* APPLE LOCAL end predictive compilation */
+
       if (buffer->next_line < buffer->rlimit)
 	{
 	  _cpp_clean_line (pfile);
@@ -837,9 +971,14 @@ _cpp_get_fresh_line (cpp_reader *pfile)
 	{
 	  /* Only warn once.  */
 	  buffer->next_line = buffer->rlimit;
-	  cpp_error_with_line (pfile, CPP_DL_PEDWARN, pfile->line_table->highest_line,
-			       CPP_BUF_COLUMN (buffer, buffer->cur),
-			       "no newline at end of file");
+	  /* APPLE LOCAL begin suppress no newline warning.  */
+	  if ( CPP_OPTION (pfile, warn_newline_at_eof))
+	    {
+	      cpp_error_with_line (pfile, CPP_DL_PEDWARN, pfile->line_table->highest_line,
+				   CPP_BUF_COLUMN (buffer, buffer->cur),
+				   "no newline at end of file");
+	    }
+	  /* APPLE LOCAL end suppress no newline warning.  */
 	}
 
       return_at_eof = buffer->return_at_eof;
@@ -857,6 +996,10 @@ _cpp_get_fresh_line (cpp_reader *pfile)
 	buffer->cur++, result->type = THEN_TYPE;	\
     }							\
   while (0)
+
+/* APPLE LOCAL begin CW asm blocks */
+static bool iasm_label_follows;
+/* APPLE LOCAL end CW asm blocks */
 
 /* Lex a token into pfile->cur_token, which is also incremented, to
    get diagnostics pointing to the correct location.
@@ -942,6 +1085,12 @@ _cpp_lex_direct (cpp_reader *pfile)
 
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
+      /* APPLE LOCAL begin CW asm blocks */
+      /* An '@' in assembly code makes a following digit string into
+	 an identifier.  */
+      if (iasm_label_follows)
+	goto start_ident;
+      /* APPLE LOCAL end CW asm blocks */
       {
 	struct normalize_state nst = INITIAL_NORMALIZE_STATE;
 	result->type = CPP_NUMBER;
@@ -959,6 +1108,8 @@ _cpp_lex_direct (cpp_reader *pfile)
 	}
       /* Fall through.  */
 
+      /* APPLE LOCAL CW asm blocks */
+    start_ident:
     case '_':
     case 'a': case 'b': case 'c': case 'd': case 'e': case 'f':
     case 'g': case 'h': case 'i': case 'j': case 'k': case 'l':
@@ -984,6 +1135,10 @@ _cpp_lex_direct (cpp_reader *pfile)
 	  result->flags |= NAMED_OP;
 	  result->type = (enum cpp_ttype) result->val.node->directive_index;
 	}
+      /* APPLE LOCAL begin CW asm blocks */
+      /* Got an identifier, reset the CW asm label hack flag.  */
+      iasm_label_follows = false;
+      /* APPLE LOCAL end CW asm blocks */
       break;
 
     case '\'':
@@ -1188,10 +1343,24 @@ _cpp_lex_direct (cpp_reader *pfile)
     case ']': result->type = CPP_CLOSE_SQUARE; break;
     case '{': result->type = CPP_OPEN_BRACE; break;
     case '}': result->type = CPP_CLOSE_BRACE; break;
-    case ';': result->type = CPP_SEMICOLON; break;
-
-      /* @ is a punctuator in Objective-C.  */
-    case '@': result->type = CPP_ATSIGN; break;
+      /* APPLE LOCAL begin CW asm blocks */
+    case ';':
+      /* ';' separates instructions in CW asm, so flag that we're no
+	 longer seeing operands.  */
+      if (iasm_state >= iasm_decls)
+	iasm_in_operands = false;
+      result->type = CPP_SEMICOLON;
+      break;
+    case '@':
+      /* In CW asm, @ can indicate a label, which may consist of
+	 either letters or digits, so set a hack flag for this.  (We
+	 still want to return the @ as a separate token so that the
+	 parser can distinguish labels from opcodes.)  */
+      if (iasm_state >= iasm_decls)
+	iasm_label_follows = true;
+      result->type = CPP_ATSIGN;
+      break;
+      /* APPLE LOCAL end CW asm blocks */
 
     case '$':
     case '\\':

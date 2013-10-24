@@ -28,6 +28,10 @@ Boston, MA 02110-1301, USA.  */
 #include "c-common.h"
 #include "toplev.h"
 #include "objc-act.h"
+/* APPLE LOCAL begin radar 6386976  */
+#define OBJCP_REMAP_FUNCTIONS
+#include "objcp-decl.h"
+/* APPLE LOCAL end radar 6386976  */
 #include "langhooks.h"
 #include "langhooks-def.h"
 #include "diagnostic.h"
@@ -36,6 +40,8 @@ Boston, MA 02110-1301, USA.  */
 
 enum c_language_kind c_language = clk_objcxx;
 static void objcxx_init_ts (void);
+/* APPLE LOCAL radar 6386976  */
+static bool objcxx_is_runtime_type (tree);
 
 /* Lang hooks common to C++ and ObjC++ are declared in cp/cp-objcp-common.h;
    consequently, there should be very few hooks below.  */
@@ -52,6 +58,14 @@ static void objcxx_init_ts (void);
 #define LANG_HOOKS_GET_CALLEE_FNDECL	objc_get_callee_fndecl
 #undef LANG_HOOKS_INIT_TS
 #define LANG_HOOKS_INIT_TS objcxx_init_ts
+/* APPLE LOCAL begin radar 3904178 */
+#undef LANG_HOOKS_FOLD_OBJ_TYPE_REF
+#define LANG_HOOKS_FOLD_OBJ_TYPE_REF objc_fold_obj_type_ref
+/* APPLE LOCAL end radar 3904178 */
+/* APPLE LOCAL begin radar 6386976  */
+#undef LANG_HOOKS_IS_RUNTIME_SPECIFIC_TYPE
+#define LANG_HOOKS_IS_RUNTIME_SPECIFIC_TYPE objcxx_is_runtime_type
+/* APPLE LOCAL end radar 6386976  */
 
 /* Each front end provides its own lang hook initializer.  */
 const struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
@@ -129,6 +143,12 @@ objcp_tsubst_copy_and_build (tree t, tree args, tsubst_flags_t complain,
       return objc_get_class_reference
 	(RECURSE (TREE_OPERAND (t, 0)));
 
+    /* APPLE LOCAL begin radar 5887355 */
+    case OBJC_STRING_REFERENCE:
+      return objc_build_string_object
+	(RECURSE (TREE_OPERAND (t, 0)));
+    /* APPLE LOCAL end radar 5887355 */
+
     default:
       break;
     }
@@ -146,22 +166,32 @@ objcxx_init_ts (void)
   tree_contains_struct[CLASS_METHOD_DECL][TS_DECL_NON_COMMON] = 1;
   tree_contains_struct[INSTANCE_METHOD_DECL][TS_DECL_NON_COMMON] = 1;
   tree_contains_struct[KEYWORD_DECL][TS_DECL_NON_COMMON] = 1;
+  /* APPLE LOCAL objc v2 */
+  tree_contains_struct[PROPERTY_DECL][TS_DECL_NON_COMMON] = 1;
   
   tree_contains_struct[CLASS_METHOD_DECL][TS_DECL_WITH_VIS] = 1;
   tree_contains_struct[INSTANCE_METHOD_DECL][TS_DECL_WITH_VIS] = 1;
   tree_contains_struct[KEYWORD_DECL][TS_DECL_WITH_VIS] = 1;
+  /* APPLE LOCAL objc v2 */
+  tree_contains_struct[PROPERTY_DECL][TS_DECL_WITH_VIS] = 1;
 
   tree_contains_struct[CLASS_METHOD_DECL][TS_DECL_WRTL] = 1;
   tree_contains_struct[INSTANCE_METHOD_DECL][TS_DECL_WRTL] = 1;
   tree_contains_struct[KEYWORD_DECL][TS_DECL_WRTL] = 1;
+  /* APPLE LOCAL objc v2 */
+  tree_contains_struct[PROPERTY_DECL][TS_DECL_WRTL] = 1;
   
   tree_contains_struct[CLASS_METHOD_DECL][TS_DECL_MINIMAL] = 1;
   tree_contains_struct[INSTANCE_METHOD_DECL][TS_DECL_MINIMAL] = 1;
   tree_contains_struct[KEYWORD_DECL][TS_DECL_MINIMAL] = 1;
+  /* APPLE LOCAL objc v2 */
+  tree_contains_struct[PROPERTY_DECL][TS_DECL_MINIMAL] = 1;
   
   tree_contains_struct[CLASS_METHOD_DECL][TS_DECL_COMMON] = 1;
   tree_contains_struct[INSTANCE_METHOD_DECL][TS_DECL_COMMON] = 1;
   tree_contains_struct[KEYWORD_DECL][TS_DECL_COMMON] = 1;
+  /* APPLE LOCAL objc v2 */
+  tree_contains_struct[PROPERTY_DECL][TS_DECL_COMMON] = 1;
   
   /* C++ decls */
   tree_contains_struct[NAMESPACE_DECL][TS_DECL_NON_COMMON] = 1;
@@ -193,5 +223,16 @@ finish_file (void)
 {
   objc_finish_file ();
 }
+
+/* APPLE LOCAL begin radar 6386976  */
+static bool
+objcxx_is_runtime_type (tree type)
+{
+  if (TREE_CODE (type) != RECORD_TYPE)
+    return false;
+  else
+    return (TYPE_HAS_OBJCXX_INFO (type));
+}
+/* APPLE LOCAL end radar 6386976  */
 
 #include "gtype-objcp.h"

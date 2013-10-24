@@ -53,7 +53,9 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
    the utilities are not correct for a cross-compiler; we have to hope that
    cross-versions are in the proper directories.  */
 
-#ifdef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifdef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 #undef OBJECT_FORMAT_COFF
 #undef MD_EXEC_PREFIX
 #undef REAL_LD_FILE_NAME
@@ -553,7 +555,9 @@ is_ctor_dtor (const char *s)
 
 static struct path_prefix cpath, path;
 
-#ifdef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifdef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
 /* This is the name of the target machine.  We use it to form the name
    of the files to execute.  */
 
@@ -746,7 +750,9 @@ main (int argc, char **argv)
   static const char *const strip_suffix = "strip";
   static const char *const gstrip_suffix = "gstrip";
 
-#ifdef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifdef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
   /* If we look for a program in the compiler directories, we just use
      the short name, since these directories are already system-specific.
      But it we look for a program in the system directories, we need to
@@ -775,8 +781,10 @@ main (int argc, char **argv)
 #endif
   const char *const full_strip_suffix	= strip_suffix;
   const char *const full_gstrip_suffix	= gstrip_suffix;
-#endif /* CROSS_COMPILE */
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#endif /* CROSS_DIRECTORY_STRUCTURE */
 
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
   const char *arg;
   FILE *outf;
 #ifdef COLLECT_EXPORT_LIST
@@ -957,7 +965,9 @@ main (int argc, char **argv)
   c_file_name = getenv ("COLLECT_GCC");
   if (c_file_name == 0)
     {
-#ifdef CROSS_COMPILE
+/* APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
+#ifdef CROSS_DIRECTORY_STRUCTURE
+/* APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325 */
       c_file_name = concat (target_machine, "-gcc", NULL);
 #else
       c_file_name = "gcc";
@@ -1562,10 +1572,12 @@ collect_execute (const char *prog, char **argv, const char *outname,
       if (err != 0)
 	{
 	  errno = err;
-	  fatal_perror (errmsg);
+	  /* APPLE LOCAL default to Wformat-security 5764921 */
+	  fatal_perror ("%s", errmsg);
 	}
       else
-	fatal (errmsg);
+	/* APPLE LOCAL default to Wformat-security 5764921 */
+	fatal ("%s", errmsg);
     }
 
   return pex;
@@ -2050,10 +2062,12 @@ scan_prog_file (const char *prog_name, enum pass which_pass)
       if (err != 0)
 	{
 	  errno = err;
-	  fatal_perror (errmsg);
+	  /* APPLE LOCAL default to Wformat-security 5764921 */
+	  fatal_perror ("%s", errmsg);
 	}
       else
-	fatal (errmsg);
+	/* APPLE LOCAL default to Wformat-security 5764921 */
+	fatal ("%s", errmsg);
     }
 
   int_handler  = (void (*) (int)) signal (SIGINT,  SIG_IGN);

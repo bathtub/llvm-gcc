@@ -49,8 +49,10 @@ march=
 Target RejectNegative Joined
 Specify the name of the target architecture
 
+; APPLE LOCAL begin 6150882 use thumb2 by default for v7
 marm
-Target RejectNegative InverseMask(THUMB) Undocumented
+Target RejectNegative VarExists Var(thumb_option, 0) Undocumented
+; APPLE LOCAL end 6150882 use thumb2 by default for v7
 
 mbig-endian
 Target Report RejectNegative Mask(BIG_END)
@@ -98,9 +100,23 @@ mlittle-endian
 Target Report RejectNegative InverseMask(BIG_END)
 Assume target CPU is configured as little endian
 
+; APPLE LOCAL begin mlong-branch for arm
+mlong-branch
+Target Mask(LONG_CALLS)
+Alias for -mlong-calls
+; APPLE LOCAL end mlong-branch for arm
+
+; APPLE LOCAL begin mlong-branch for arm
 mlong-calls
-Target Report Mask(LONG_CALLS)
+Target Report Mask(LONG_CALLS) MaskExists
 Generate call insns as indirect calls, if necessary
+; APPLE LOCAL end mlong-branch for arm
+
+; APPLE LOCAL begin mlong-branch for arm
+mlongcall
+Target Mask(LONG_CALLS) MaskExists
+Alias for -mlong-calls
+; APPLE LOCAL end mlong-branch for arm
 
 mpic-register=
 Target RejectNegative Joined Var(arm_pic_register_string)
@@ -126,13 +142,17 @@ mstructure-size-boundary=
 Target RejectNegative Joined Var(structure_size_string)
 Specify the minimum bit alignment of structures
 
+; APPLE LOCAL begin 6150882 use thumb2 by default for v7
 mthumb
-Target Report Mask(THUMB)
+Target Report Var(thumb_option) Init(-1)
 Compile for the Thumb not the ARM
+; APPLE LOCAL end 6150882 use thumb2 by default for v7
 
+; APPLE LOCAL begin ARM interworking
 mthumb-interwork
-Target Report Mask(INTERWORK)
+Target Report Var(interwork_option) Init(-1)
 Support calls between Thumb and ARM instruction sets
+; APPLE LOCAL end ARM interworking
 
 mtp=
 Target RejectNegative Joined Var(target_thread_switch)
@@ -153,3 +173,15 @@ Tune code for the given processor
 mwords-little-endian
 Target Report RejectNegative Mask(LITTLE_WORDS)
 Assume big endian bytes, little endian words
+
+; APPLE LOCAL begin 5946347 ms_struct support
+mms-bitfields
+Target Report Mask(MS_BITFIELD_LAYOUT)
+Use Microsoft structure layout
+; APPLE LOCAL end 5946347 ms_struct support
+; APPLE LOCAL begin v7 support. Merge from Codesourcery
+
+mvectorize-with-neon-quad
+Target Report Mask(NEON_VECTORIZE_QUAD)
+Use Neon quad-word (rather than double-word) registers for vectorization
+; APPLE LOCAL end v7 support. Merge from Codesourcery

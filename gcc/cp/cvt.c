@@ -578,9 +578,14 @@ convert_from_reference (tree val)
 tree
 force_rvalue (tree expr)
 {
-  if (IS_AGGR_TYPE (TREE_TYPE (expr)) && TREE_CODE (expr) != TARGET_EXPR)
+  /* APPLE LOCAL begin radar 6936421 */
+  if (IS_AGGR_TYPE (TREE_TYPE (expr)) && TREE_CODE (expr) != TARGET_EXPR) {
+    if (objc_property_reference_expr (expr))
+      expr = objc_build_property_getter_func_call (expr);
     expr = ocp_convert (TREE_TYPE (expr), expr,
 			CONV_IMPLICIT|CONV_FORCE_TEMP, LOOKUP_NORMAL);
+  }
+  /* APPLE LOCAL end radar 6936421 */
   else
     expr = decay_conversion (expr);
 
@@ -595,6 +600,31 @@ cp_convert (tree type, tree expr)
   return ocp_convert (type, expr, CONV_OLD_CONVERT, LOOKUP_NORMAL);
 }
 
+/* APPLE LOCAL begin mainline */
+/* C++ equivalent of convert_and_check but using cp_convert as the
+   conversion function.
+   
+   Convert EXPR to TYPE, warning about conversion problems with constants.
+   Invoke this function on every expression that is converted implicitly,
+   i.e. because of language rules and not because of an explicit cast.  */
+
+tree
+cp_convert_and_check (tree type, tree expr)
+{
+  tree result;
+
+  if (TREE_TYPE (expr) == type)
+    return expr;
+
+  result = cp_convert (type, expr);
+
+  if (!skip_evaluation && !TREE_OVERFLOW_P (expr) && result != error_mark_node)
+    warnings_for_convert_and_check (type, expr, result);
+
+  return result;
+}
+
+/* APPLE LOCAL end mainline */
 /* Conversion...
 
    FLAGS indicates how we should behave.  */
@@ -615,7 +645,8 @@ ocp_convert (tree type, tree expr, int convtype, int flags)
   if ((invalid_conv_diag
        = targetm.invalid_conversion (TREE_TYPE (expr), type)))
     {
-      error (invalid_conv_diag);
+      /* APPLE LOCAL default to Wformat-security 5764921 */
+      error (invalid_conv_diag, "");
       return error_mark_node;
     }
 
@@ -983,6 +1014,8 @@ convert_to_void (tree expr, const char *implicit)
 	}
       expr = build1 (CONVERT_EXPR, void_type_node, expr);
     }
+  /* APPLE LOCAL Altivec 4869813 */
+  if (! targetm.cast_expr_as_vector_init)
   if (! TREE_SIDE_EFFECTS (expr))
     expr = void_zero_node;
   return expr;

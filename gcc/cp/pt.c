@@ -5288,6 +5288,17 @@ reopen_tinst_level (tree level)
   pop_tinst_level ();
 }
 
+/* APPLE LOCAL begin mainline radar 6194879 */
+/* Returns the TINST_LEVEL which gives the original instantiation
+   context.  */
+
+tree
+outermost_tinst_level (void)
+{
+  return tree_last (current_tinst_level);
+}
+
+/* APPLE LOCAL end mainline radar 6194879 */
 /* DECL is a friend FUNCTION_DECL or TEMPLATE_DECL.  ARGS is the
    vector of template arguments, as for tsubst.
 
@@ -5763,7 +5774,15 @@ instantiate_class_template (tree type)
   if (CLASSTYPE_VISIBILITY_SPECIFIED (pattern))
     {
       CLASSTYPE_VISIBILITY_SPECIFIED (type) = 1;
-      CLASSTYPE_VISIBILITY (type) = CLASSTYPE_VISIBILITY (pattern);
+      /* APPLE LOCAL begin 5812195 */
+      /* CLASSTYPE_VISIBILITY (type) should already be set by the time
+	 we get here, in particular, we should just constrain the
+	 visibility, as we don't reconstrain on template arguments
+	 post this whereas we've already done that by the time we get
+	 here.  */
+      if (CLASSTYPE_VISIBILITY (type) < CLASSTYPE_VISIBILITY (pattern))
+	CLASSTYPE_VISIBILITY (type) = CLASSTYPE_VISIBILITY (pattern);
+      /* APPLE LOCAL end 5812195 */
     }
 
   pbinfo = TYPE_BINFO (pattern);
@@ -7826,6 +7845,11 @@ tsubst (tree t, tree args, tsubst_flags_t complain, tree in_decl)
 					     complain);
       }
 
+      /* APPLE LOCAL begin blocks 6204446 */
+    case BLOCK_POINTER_TYPE:
+      return t;
+      /* APPLE LOCAL end blocks 6204446 */
+
     default:
       sorry ("use of %qs in template",
 	     tree_code_name [(int) TREE_CODE (t)]);
@@ -8584,8 +8608,11 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
       }
 
     case FOR_STMT:
-      stmt = begin_for_stmt ();
-			  RECUR (FOR_INIT_STMT (t));
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      tmp = RECUR (FOR_ATTRIBUTES (t));
+      stmt = begin_for_stmt (tmp);
+      RECUR (FOR_INIT_STMT (t));
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       finish_for_init_stmt (stmt);
       tmp = RECUR (FOR_COND (t));
       finish_for_cond (tmp, stmt);
@@ -8596,7 +8623,10 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
       break;
 
     case WHILE_STMT:
-      stmt = begin_while_stmt ();
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      tmp = RECUR (WHILE_ATTRIBUTES (t));
+      stmt = begin_while_stmt (tmp);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       tmp = RECUR (WHILE_COND (t));
       finish_while_stmt_cond (tmp, stmt);
       RECUR (WHILE_BODY (t));
@@ -8604,7 +8634,10 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
       break;
 
     case DO_STMT:
-      stmt = begin_do_stmt ();
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      tmp = RECUR (DO_ATTRIBUTES (t));
+      stmt = begin_do_stmt (tmp);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       RECUR (DO_BODY (t));
       finish_do_body (stmt);
       tmp = RECUR (DO_COND (t));
@@ -8686,12 +8719,35 @@ tsubst_expr (tree t, tree args, tsubst_flags_t complain, tree in_decl,
 	 RECUR (ASM_STRING (t)),
 	 tsubst_copy_asm_operands (ASM_OUTPUTS (t), args, complain, in_decl),
 	 tsubst_copy_asm_operands (ASM_INPUTS (t), args, complain, in_decl),
-	 tsubst_copy_asm_operands (ASM_CLOBBERS (t), args, complain, in_decl));
+	 /* APPLE LOCAL begin CW asm blocks */
+	 tsubst_copy_asm_operands (ASM_CLOBBERS (t), args, complain, in_decl),
+	 tsubst_copy_asm_operands (ASM_USES (t), args, complain, in_decl));
+	 /* APPLE LOCAL end CW asm blocks */
       {
 	tree asm_expr = tmp;
 	if (TREE_CODE (asm_expr) == CLEANUP_POINT_EXPR)
 	  asm_expr = TREE_OPERAND (asm_expr, 0);
 	ASM_INPUT_P (asm_expr) = ASM_INPUT_P (t);
+	/* APPLE LOCAL begin inline asm labels in templates 6606502 */
+	/* We have to check to see if we have a CW style inline assembly
+	   label, and mark it as defined, if this asm defines it.  */
+	if (TREE_CODE (TREE_OPERAND (asm_expr, 0)) == STRING_CST
+	    && TREE_STRING_LENGTH (TREE_OPERAND (asm_expr, 0)) >= 5
+	    && strncmp (TREE_STRING_POINTER (TREE_OPERAND (asm_expr, 0)),
+			"%l0:", 4))
+	  {
+	    tree inner = TREE_OPERAND (asm_expr, 2);
+	    if (inner && TREE_CODE (inner) == TREE_LIST)
+	      {
+		inner = TREE_VALUE (inner);
+		if (inner && TREE_CODE (inner) == ADDR_EXPR) {
+		  inner = TREE_OPERAND (inner, 0);
+		  if (TREE_CODE (inner) == LABEL_DECL)
+		    DECL_INITIAL (inner) = error_mark_node;
+		}
+	      }
+	  }
+	/* APPLE LOCAL end inline asm labels in templates 6606502 */
       }
       break;
 
@@ -8916,7 +8972,8 @@ tsubst_copy_and_build (tree t,
 				     /*template_arg_p=*/false,
 				     &error_msg);
 	if (error_msg)
-	  error (error_msg);
+	  /* APPLE LOCAL default to Wformat-security 5764921 */
+	  error ("%s", error_msg);
 	if (!function_p && TREE_CODE (decl) == IDENTIFIER_NODE)
 	  decl = unqualified_name_lookup_error (decl);
 	return decl;
@@ -9028,6 +9085,17 @@ tsubst_copy_and_build (tree t,
       if (TREE_CODE (op1) == SCOPE_REF)
 	op1 = tsubst_qualified_id (op1, args, complain, in_decl,
 				   /*done=*/true, /*address_p=*/true);
+      /* APPLE LOCAL begin constant cfstrings - radar 4557092 */
+      /* CFSTRING is represented as an ADDR_EXPR of a CONST_DECL node whose 
+         DECL_INITIAL field holds the CONSTRUCTOR initializer. We cannot 
+	 fold away CONST_DECL part since this results in ADDR_EXPR of 
+	 CONSTRUCTOR node which is wrong and causes gimplifier to assign 
+	 CONSTRUCTOR to a local temporary and function returning address 
+	 of this temporary. */
+      else if (TREE_CODE (op1) == CONST_DECL 
+	       && TREE_CODE (DECL_INITIAL (op1)) == CONSTRUCTOR)
+	;
+      /* APPLE LOCAL end constant cfstrings - radar 4557092 */
       else
 	op1 = tsubst_non_call_postfix_expression (op1, args, complain,
 						  in_decl);
@@ -9104,6 +9172,17 @@ tsubst_copy_and_build (tree t,
 	return cxx_sizeof_or_alignof_type (op1, TREE_CODE (t), true);
       else
 	return cxx_sizeof_or_alignof_expr (op1, TREE_CODE (t));
+
+    /* APPLE LOCAL begin radar 4278774 */
+    case AT_ENCODE_EXPR:
+      {
+	op1 = TREE_OPERAND (t, 0);
+	++skip_evaluation;
+	op1 = RECUR (op1);
+	--skip_evaluation;
+	return objc_build_encode_expr (op1);
+      }
+    /* APPLE LOCAL end radar 4278774 */
 
     case MODOP_EXPR:
       {
@@ -12905,6 +12984,8 @@ value_dependent_expression_p (tree expression)
 
     case SIZEOF_EXPR:
     case ALIGNOF_EXPR:
+    /* APPLE LOCAL radar 5619052 */
+    case AT_ENCODE_EXPR:
       /* A `sizeof' expression is value-dependent if the operand is
 	 type-dependent.  */
       expression = TREE_OPERAND (expression, 0);
@@ -12994,7 +13075,10 @@ type_dependent_expression_p (tree expression)
       || TREE_CODE (expression) == TYPEID_EXPR
       || TREE_CODE (expression) == DELETE_EXPR
       || TREE_CODE (expression) == VEC_DELETE_EXPR
-      || TREE_CODE (expression) == THROW_EXPR)
+      /* APPLE LOCAL begin radar 5619052 */
+      || TREE_CODE (expression) == THROW_EXPR
+      || TREE_CODE (expression) == AT_ENCODE_EXPR)
+      /* APPLE LOCAL end radar 5619052 */
     return false;
 
   /* The types of these expressions depends only on the type to which

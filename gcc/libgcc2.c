@@ -34,6 +34,14 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "coretypes.h"
 #include "tm.h"
 
+/* APPLE LOCAL begin libcc_kext */
+#ifdef LIBCC_KEXT
+/* Make aborts into panics (kernel panics presumably) */
+extern void panic (const char *, ...);
+#define abort() panic("%s:%d: abort in %s", __FILE__, __LINE__, __FUNCTION__)
+#endif
+/* APPLE LOCAL end libcc_kext */
+
 #ifdef HAVE_GAS_HIDDEN
 #define ATTRIBUTE_HIDDEN  __attribute__ ((__visibility__ ("hidden")))
 #else
@@ -492,6 +500,32 @@ __ashrdi3 (DWtype u, word_type b)
 }
 #endif
 
+/* APPLE LOCAL begin mainline bswap */
+#ifdef L_bswapsi2
+SItype
+__bswapsi2 (SItype u)
+{
+  return ((((u) & 0xff000000) >> 24)
+          | (((u) & 0x00ff0000) >>  8)
+          | (((u) & 0x0000ff00) <<  8)
+          | (((u) & 0x000000ff) << 24));
+}
+#endif
+#ifdef L_bswapdi2
+DItype
+__bswapdi2 (DItype u)
+{
+  return ((((u) & 0xff00000000000000ull) >> 56)
+          | (((u) & 0x00ff000000000000ull) >> 40)
+          | (((u) & 0x0000ff0000000000ull) >> 24)
+          | (((u) & 0x000000ff00000000ull) >>  8)
+          | (((u) & 0x00000000ff000000ull) <<  8)
+          | (((u) & 0x0000000000ff0000ull) << 24)
+          | (((u) & 0x000000000000ff00ull) << 40)
+          | (((u) & 0x00000000000000ffull) << 56));
+}
+#endif
+/* APPLE LOCAL end mainline bswap */
 #ifdef L_ffssi2
 #undef int
 int
@@ -1396,11 +1430,9 @@ __floatunditf (UDWtype u)
 #define F_MODE_OK(SIZE) \
   (SIZE < DI_SIZE							\
    && SIZE > (DI_SIZE - SIZE + FSSIZE)					\
-   /* Don't use IBM Extended Double TFmode for TI->SF calculations.	\
-      The conversion from long double to float suffers from double	\
-      rounding, because we convert via double.  In any case, the	\
-      fallback code is faster.  */					\
-   && !IS_IBM_EXTENDED (SIZE))
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */			\
+   && !AVOID_FP_TYPE_CONVERSION(SIZE))
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
 #if defined(L_floatdisf)
 #define FUNC __floatdisf
 #define FSTYPE SFtype
@@ -1491,13 +1523,25 @@ FUNC (DWtype u)
   hi = u >> shift;
 
   /* If we lost any nonzero bits, set the lsb to ensure correct rounding.  */
-  if (u & (((DWtype)1 << shift) - 1))
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */
+  if ((UWtype)u << (W_TYPE_SIZE - shift))
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
     hi |= 1;
 
   /* Convert the one word of data, and rescale.  */
-  FSTYPE f = hi;
-  f *= (UDWtype)1 << shift;
-  return f;
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */
+  FSTYPE f = hi, e;
+  if (shift == W_TYPE_SIZE)
+    e = Wtype_MAXp1_F;
+  /* The following two cases could be merged if we knew that the target
+     supported a native unsigned->float conversion.  More often, we only
+     have a signed conversion, and have to add extra fixup code.  */
+  else if (shift == W_TYPE_SIZE - 1)
+    e = Wtype_MAXp1_F / 2;
+  else
+    e = (Wtype)1 << shift;
+  return f * e;
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
 #endif
 }
 #endif
@@ -1508,11 +1552,9 @@ FUNC (DWtype u)
 #define F_MODE_OK(SIZE) \
   (SIZE < DI_SIZE							\
    && SIZE > (DI_SIZE - SIZE + FSSIZE)					\
-   /* Don't use IBM Extended Double TFmode for TI->SF calculations.	\
-      The conversion from long double to float suffers from double	\
-      rounding, because we convert via double.  In any case, the	\
-      fallback code is faster.  */					\
-   && !IS_IBM_EXTENDED (SIZE))
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */			\
+   && !AVOID_FP_TYPE_CONVERSION(SIZE))
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
 #if defined(L_floatundisf)
 #define FUNC __floatundisf
 #define FSTYPE SFtype
@@ -1596,13 +1638,25 @@ FUNC (UDWtype u)
   hi = u >> shift;
 
   /* If we lost any nonzero bits, set the lsb to ensure correct rounding.  */
-  if (u & (((UDWtype)1 << shift) - 1))
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */
+  if ((UWtype)u << (W_TYPE_SIZE - shift))
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
     hi |= 1;
 
   /* Convert the one word of data, and rescale.  */
-  FSTYPE f = hi;
-  f *= (UDWtype)1 << shift;
-  return f;
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */
+  FSTYPE f = hi, e;
+  if (shift == W_TYPE_SIZE)
+    e = Wtype_MAXp1_F;
+  /* The following two cases could be merged if we knew that the target
+     supported a native unsigned->float conversion.  More often, we only
+     have a signed conversion, and have to add extra fixup code.  */
+  else if (shift == W_TYPE_SIZE - 1)
+    e = Wtype_MAXp1_F / 2;
+  else
+    e = (Wtype)1 << shift;
+  return f * e;
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
 #endif
 }
 #endif
@@ -1970,7 +2024,16 @@ void
 __eprintf (const char *string, const char *expression,
 	   unsigned int line, const char *filename)
 {
+  /* APPLE LOCAL begin sdk support 4527353 */
+#ifdef __APPLE_CC__
+  extern int my_fprintf(FILE * stream, const char * format, ...);
+  extern int my_fprintf(FILE * stream, const char * format, ...) asm("_fprintf");
+
+  my_fprintf (stderr, string, expression, line, filename);
+#else
   fprintf (stderr, string, expression, line, filename);
+#endif
+  /* APPLE LOCAL end sdk support 4527353 */
   fflush (stderr);
   abort ();
 }

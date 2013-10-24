@@ -310,7 +310,8 @@ cgraph_default_inline_p (struct cgraph_node *n, const char **reason)
   if (!DECL_STRUCT_FUNCTION (decl)->cfg)
     {
       if (reason)
-	*reason = N_("function body not available");
+	/* APPLE LOCAL wording 4598393 */
+	*reason = N_("the function body must appear before caller");
       return false;
     }
 
@@ -706,6 +707,31 @@ cgraph_set_inline_failed (struct cgraph_node *node, const char *reason)
       e->inline_failed = reason;
 }
 
+/* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+/* Return TRUE if the given edge represents a CALL from a
+   non-Altivec-using function to another that does.  We must not
+   inline these CALLs, lest we infect a virgin G3-executable function
+   with AltiVec codes (e.g. prolog & epilog).  Only active if
+   -faltivec and not -maltivec.  */
+static bool
+altivec_infection (struct cgraph_edge *edge)
+{
+  if (flag_disable_opts_for_faltivec
+      && edge
+      && edge->caller
+      && !DECL_STRUCT_FUNCTION (edge->caller->decl)->uses_vector
+      && edge->callee
+      && DECL_STRUCT_FUNCTION (edge->callee->decl)
+      && DECL_STRUCT_FUNCTION (edge->callee->decl)->uses_vector)
+    {
+      edge->inline_failed = N_(" -faltivec on, callee has AltiVec(tm), caller doesn't; not inlined.  Use -maltivec to allow.\n");
+      return true;
+    }
+  else
+    return false;
+}
+/* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
+
 /* We use greedy algorithm for inlining of small functions:
    All inline candidates are put into prioritized heap based on estimated
    growth of the overall number of instructions and then update the estimates.
@@ -842,8 +868,11 @@ cgraph_decide_inlining_of_small_functions (void)
       else
 	{
 	  struct cgraph_node *callee;
-	  if (!cgraph_check_inline_limits (edge->caller, edge->callee,
-					   &edge->inline_failed, true))
+	  /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+	  if (altivec_infection (edge)
+	      || !cgraph_check_inline_limits (edge->caller, edge->callee,
+					      &edge->inline_failed, true))
+	  /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
 	    {
 	      if (dump_file)
 		fprintf (dump_file, " Not inlining into %s:%s.\n",
@@ -1042,6 +1071,15 @@ cgraph_decide_inlining (void)
 		    }
 
 		  old_insns = overall_insns;
+		  /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+		  if (altivec_infection (node->callers))
+		    {
+		      if (dump_file)
+			/* APPLE LOCAL default to Wformat-security 5764921 */
+			fprintf (dump_file, "%s", node->callers->inline_failed);
+		      continue;
+		    }
+		  /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
 
 		  if (cgraph_check_inline_limits (node->callers->caller, node,
 					  	  NULL, false))
@@ -1089,6 +1127,11 @@ cgraph_decide_inlining_incrementally (struct cgraph_node *node, bool early)
 
   /* First of all look for always inline functions.  */
   for (e = node->callees; e; e = e->next_callee)
+    /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+    if (altivec_infection (e))
+      continue;
+    else
+    /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
     if (e->callee->local.disregard_inline_limits
 	&& e->inline_failed
         && !cgraph_recursive_inlining_p (node, e->callee, &e->inline_failed)
@@ -1120,6 +1163,10 @@ cgraph_decide_inlining_incrementally (struct cgraph_node *node, bool early)
 	    				 false)
 	  && (DECL_SAVED_TREE (e->callee->decl) || e->callee->inline_decl))
 	{
+	  /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+	  if (altivec_infection (e))
+	    continue;
+	  /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
 	  if (cgraph_default_inline_p (e->callee, &failed_reason))
 	    {
 	      if (dump_file && early)

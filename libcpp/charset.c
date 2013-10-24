@@ -1303,17 +1303,25 @@ convert_escape (cpp_reader *pfile, const uchar *from, const uchar *limit,
    false for failure.  */
 bool
 cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
-		      cpp_string *to, bool wide)
+		      /* APPLE LOCAL pascal strings */
+		      cpp_string *to, bool wide, bool pascal_p)
 {
   struct _cpp_strbuf tbuf;
   const uchar *p, *base, *limit;
   size_t i;
+  /* APPLE LOCAL begin pascal strings */
+  size_t width = CPP_OPTION (pfile, wchar_precision);
+  size_t cwidth = CPP_OPTION (pfile, char_precision);
+  size_t pascal_string_max_length = width_to_mask (wide ? width : cwidth);
+  size_t pascal_string_length_byte_size = ((wide ? width : cwidth)/cwidth);
+  /* APPLE LOCAL end pascal strings */
   struct cset_converter cvt
     = wide ? pfile->wide_cset_desc : pfile->narrow_cset_desc;
 
   tbuf.asize = MAX (OUTBUF_BLOCK_SIZE, from->len);
   tbuf.text = XNEWVEC (uchar, tbuf.asize);
-  tbuf.len = 0;
+  /* APPLE LOCAL pascal strings */
+  tbuf.len = (pascal_p ? pascal_string_length_byte_size : 0);  /* Reserve space for Pascal length byte.  */
 
   for (i = 0; i < count; i++)
     {
@@ -1321,6 +1329,12 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
       if (*p == 'L') p++;
       p++; /* Skip leading quote.  */
       limit = from[i].text + from[i].len - 1; /* Skip trailing quote.  */
+      /* APPLE LOCAL begin pascal strings */
+      /* Handle narrow literals beginning with "\p..." specially, but only
+         if '-fpascal-strings' has been specified.  */
+      if (pascal_p && p[0] == '\\' && p[1] == 'p')
+        p += 2;
+      /* APPLE LOCAL end pascal strings */
 
       for (;;)
 	{
@@ -1340,6 +1354,33 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
 	  p = convert_escape (pfile, p + 1, limit, &tbuf, wide);
 	}
     }
+
+  /* APPLE LOCAL begin pascal strings */
+  /* For Pascal strings, compute the length byte. */
+  if (pascal_p)
+    {
+      if (wide)
+	{
+	  /* Conversion routine uses tbuf.len as the starting point in destination
+	     buffer. However we are adding string lenght at the beginning. Save tbuf.len
+	     and restore it later.  */
+	  size_t saved_tbuf_len = tbuf.len;
+	  unsigned char uclen = (unsigned char) (saved_tbuf_len/pascal_string_length_byte_size - 1);
+	  tbuf.len = 0;
+	  APPLY_CONVERSION (cvt, &uclen, 1, &tbuf);
+	  tbuf.len = saved_tbuf_len;
+	  if (tbuf.len/pascal_string_length_byte_size > pascal_string_max_length)
+	    cpp_error (pfile, CPP_DL_ERROR, "Pascal string is too long");
+	}
+      else
+	{
+	  *tbuf.text = (unsigned char) (tbuf.len - 1);
+	  if (tbuf.len > 256)
+	    cpp_error (pfile, CPP_DL_ERROR, "Pascal string is too long");
+	}
+    }
+  /* APPLE LOCAL end pascal strings */
+
   /* NUL-terminate the 'to' buffer and translate it to a cpp_string
      structure.  */
   emit_numeric_escape (pfile, 0, &tbuf, wide);
@@ -1358,7 +1399,10 @@ cpp_interpret_string (cpp_reader *pfile, const cpp_string *from, size_t count,
    in a string, but do not perform character set conversion.  */
 bool
 cpp_interpret_string_notranslate (cpp_reader *pfile, const cpp_string *from,
-				  size_t count,	cpp_string *to, bool wide)
+				  /* APPLE LOCAL begin pascal strings */
+				  size_t count,	cpp_string *to, bool wide,
+				  bool pascal_p)
+				  /* APPLE LOCAL end pascal strings */
 {
   struct cset_converter save_narrow_cset_desc = pfile->narrow_cset_desc;
   bool retval;
@@ -1366,7 +1410,8 @@ cpp_interpret_string_notranslate (cpp_reader *pfile, const cpp_string *from,
   pfile->narrow_cset_desc.func = convert_no_conversion;
   pfile->narrow_cset_desc.cd = (iconv_t) -1;
 
-  retval = cpp_interpret_string (pfile, from, count, to, wide);
+  /* APPLE LOCAL pascal strings */
+  retval = cpp_interpret_string (pfile, from, count, to, wide, pascal_p);
 
   pfile->narrow_cset_desc = save_narrow_cset_desc;
   return retval;
@@ -1414,7 +1459,14 @@ narrow_str_to_charconst (cpp_reader *pfile, cpp_string str,
       cpp_error (pfile, CPP_DL_WARNING,
 		 "character constant too long for its type");
     }
-  else if (i > 1 && CPP_OPTION (pfile, warn_multichar))
+  /* APPLE LOCAL begin -Wfour-char-constants */
+  else if ((i == 4 && CPP_OPTION (pfile, warn_four_char_constants))
+           || (i > 1 && CPP_OPTION (pfile, warn_multichar)
+               /* APPLE LOCAL begin 3222135 */
+               && (i != 4 || (CPP_PEDANTIC (pfile)
+                              && !CPP_IN_SYSTEM_HEADER (pfile)))))
+               /* APPLE LOCAL end 3222135 */
+    /* APPLE LOCAL end -Wfour-char-constants */
     cpp_error (pfile, CPP_DL_WARNING, "multi-character character constant");
 
   /* Multichar constants are of type int and therefore signed.  */
@@ -1510,7 +1562,8 @@ cpp_interpret_charconst (cpp_reader *pfile, const cpp_token *token,
       cpp_error (pfile, CPP_DL_ERROR, "empty character constant");
       return 0;
     }
-  else if (!cpp_interpret_string (pfile, &token->val.str, 1, &str, wide))
+  /* APPLE LOCAL pascal strings */
+  else if (!cpp_interpret_string (pfile, &token->val.str, 1, &str, wide, false))
     return 0;
 
   if (wide)
@@ -1597,6 +1650,17 @@ _cpp_convert_input (cpp_reader *pfile, const char *input_charset,
   input_cset = init_iconv_desc (pfile, SOURCE_CHARSET, input_charset);
   if (input_cset.func == convert_no_conversion)
     {
+      /* APPLE LOCAL begin UTF-8 BOM 5774975 */
+      /* Eat the UTF-8 BOM.  */
+      if (len >= 3
+	  && input[0] == 0xef
+	  && input[1] == 0xbb
+	  && input[2] == 0xbf)
+	{
+	  memmove (&input[0], &input[3], size-3);
+	  len -= 3;
+	}
+      /* APPLE LOCAL end UTF-8 BOM 5774975 */
       to.text = input;
       to.asize = size;
       to.len = len;
@@ -1628,7 +1692,8 @@ _cpp_convert_input (cpp_reader *pfile, const char *input_charset,
      terminate with another \r, not an \n, so that we do not mistake
      the \r\n sequence for a single DOS line ending and erroneously
      issue the "No newline at end of file" diagnostic.  */
-  if (to.text[to.len - 1] == '\r')
+  /* APPLE LOCAL don't access to.text[-1] radar 6121572 */
+  if (to.len > 0 && to.text[to.len - 1] == '\r')
     to.text[to.len] = '\r';
   else
     to.text[to.len] = '\n';
@@ -1670,3 +1735,29 @@ _cpp_default_encoding (void)
 
   return current_encoding;
 }
+/* APPLE LOCAL begin radar 2996215 */
+/* This routine is used to convert  utf-8 to utf-16 character format. FROM, FLEN
+   are the input character buffer and its length. Upon success, utf-16 characters are
+   returned in TO buffer and size of returned buffer in TO_LEN. Function returns true
+   upon success and false when it fails to do the conversion.
+*/
+
+bool
+cpp_utf8_utf16 (cpp_reader *pfile, const uchar *from, size_t flen, 
+		uchar **to, size_t *to_len)
+{
+  struct cset_converter cvt;
+  struct _cpp_strbuf tbuf;
+ 
+  cvt.cd = CPP_OPTION (pfile, bytes_big_endian) ? (iconv_t)1 : (iconv_t)0;
+  cvt.func = convert_utf8_utf16;
+  tbuf.asize = OUTBUF_BLOCK_SIZE;
+  tbuf.text = xmalloc (tbuf.asize);
+  tbuf.len = 0;
+  if (!APPLY_CONVERSION (cvt, from, flen, &tbuf))
+    return false;
+  *to = tbuf.text;
+  *to_len = tbuf.len;
+  return true;
+}
+/* APPLE LOCAL end radar 2996215 */

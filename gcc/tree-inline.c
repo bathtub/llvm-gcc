@@ -669,6 +669,10 @@ copy_body_r (tree *tp, int *walk_subtrees, void *data)
 	    recompute_tree_invariant_for_addr_expr (*tp);
 	  *walk_subtrees = 0;
 	}
+      /* APPLE LOCAL begin radar 4152603 */
+      if (id->call_location_p && EXPR_P (*tp))
+	SET_EXPR_LOCATION (*tp, id->call_location);
+      /* APPLE LOCAL end radar 4152603 */
     }
 
   /* Keep iterating.  */
@@ -1463,6 +1467,15 @@ inline_forbidden_p (tree fndecl)
   block_stmt_iterator bsi;
   basic_block bb;
   tree ret = NULL_TREE;
+  /* APPLE LOCAL begin CW asm blocks */
+  if (DECL_IASM_ASM_FUNCTION (fndecl)
+      && ! flag_ms_asms)
+    {
+      inline_forbidden_reason
+	= G_("function %q+F can never be inlined because it was declared with asm");
+      return fndecl;
+    }
+  /* APPLE LOCAL end CW asm blocks */
 
   FOR_EACH_BB_FN (bb, DECL_STRUCT_FUNCTION (fndecl))
     for (bsi = bsi_start (bb); !bsi_end_p (bsi); bsi_next (&bsi))
@@ -2002,8 +2015,10 @@ expand_call_inline (basic_block bb, tree stmt, tree *tp, void *data)
 	  /* Avoid warnings during early inline pass. */
 	  && (!flag_unit_at_a_time || cgraph_global_info_ready))
 	{
-	  sorry ("inlining failed in call to %q+F: %s", fn, reason);
-	  sorry ("called from here");
+	  /* APPLE LOCAL begin wording 4598393 */
+	  error ("%<always_inline%> function could not be inlined in call to %q+F: %s", fn, reason);
+	  error ("called from here");
+	  /* APPLE LOCAL end wording 4598393 */
 	}
       else if (warn_inline && DECL_DECLARED_INLINE_P (fn)
 	       && !DECL_IN_SYSTEM_HEADER (fn)
@@ -2026,6 +2041,13 @@ expand_call_inline (basic_block bb, tree stmt, tree *tp, void *data)
 #endif
 
   /* We will be inlining this callee.  */
+  /* APPLE LOCAL begin 4113078 */
+  /* If we inline a vector-containing function into one that didn't,
+     mark the outer function as vector-containing.  */
+  if (DECL_STRUCT_FUNCTION (cg_edge->callee->decl)->uses_vector)
+    DECL_STRUCT_FUNCTION (cg_edge->caller->decl)->uses_vector = 1;
+  /* APPLE LOCAL end 4113078 */
+
   id->eh_region = lookup_stmt_eh_region (stmt);
 
   /* Split the block holding the CALL_EXPR.  */
@@ -2072,6 +2094,14 @@ expand_call_inline (basic_block bb, tree stmt, tree *tp, void *data)
   st = id->decl_map;
   id->decl_map = splay_tree_new (splay_tree_compare_pointers,
 				 NULL, NULL);
+
+  /* APPLE LOCAL begin radar 4152603 */
+  if (lookup_attribute ("nodebug", DECL_ATTRIBUTES (fn)) != NULL)
+    {
+      id->call_location_p = true;
+      id->call_location = input_location;
+    }
+  /* APPLE LOCAL end radar 4152603 */
 
   /* Initialize the parameters.  */
   args = TREE_OPERAND (t, 1);

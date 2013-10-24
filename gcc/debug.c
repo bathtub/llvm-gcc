@@ -48,6 +48,8 @@ const struct gcc_debug_hooks do_nothing_debug_hooks =
   debug_nothing_rtx,		         /* label */
   debug_nothing_int,		         /* handle_pch */
   debug_nothing_rtx,		         /* var_location */
+  /* APPLE LOCAL opt diary */
+  debug_nothing_od_msg_loc,		 /* od message */
   debug_nothing_void,                    /* switch_text_section */
   0                                      /* start_end_main_source_file */
 };
@@ -109,3 +111,10 @@ debug_nothing_tree_int (tree decl ATTRIBUTE_UNUSED,
 			int local ATTRIBUTE_UNUSED)
 {
 }
+/* APPLE LOCAL begin opt diary */
+void
+debug_nothing_od_msg_loc (enum debug_od_msg m ATTRIBUTE_UNUSED,
+			  expanded_location l ATTRIBUTE_UNUSED)
+{
+}
+/* APPLE LOCAL end opt diary */

@@ -368,6 +368,12 @@ case "${target}" in
   *-*-chorusos)
     noconfigdirs="$noconfigdirs target-newlib target-libgloss ${libgcj}"
     ;;
+  # APPLE LOCAL begin ARM darwin target
+  arm-*-darwin*)
+    noconfigdirs="$noconfigdirs target-libgomp target-libobjc"
+    noconfigdirs="$noconfigdirs target-libstdc++-v3 target-libssp"
+    ;;
+  # APPLE LOCAL end ARM darwin target
   powerpc-*-darwin* | i[[3456789]]86-*-darwin*)
     noconfigdirs="$noconfigdirs bfd binutils ld gas opcodes gdb gprof"
     noconfigdirs="$noconfigdirs sim target-rda"
@@ -959,6 +965,18 @@ case "${host}" in
   powerpc-*-darwin*)
     host_makefile_frag="config/mh-ppc-darwin"
     ;;
+  # APPLE LOCAL begin dynamic-no-pic
+  x86_64-*-darwin*)
+    host_makefile_frag="config/mh-x86-darwin"
+    ;;
+  i[[3456789]]86-*-darwin*)
+    host_makefile_frag="config/mh-x86-darwin"
+    # gcc can default to x86_64 code generation, avoid that
+    if test "${build}" = "${host}"; then
+      CC="${CC-gcc} -m32"
+    fi
+    ;;
+  # APPLE LOCAL end dynamic-no-pic
   powerpc-*-aix*)
     host_makefile_frag="config/mh-ppc-aix"
     ;;
@@ -1478,7 +1496,8 @@ AC_ARG_WITH([build-sysroot],
   [  --with-build-sysroot=sysroot
                           use sysroot as the system root during the build],
   [if test x"$withval" != x ; then
-     SYSROOT_CFLAGS_FOR_TARGET="--sysroot=$withval"
+     # APPLE LOCAL 7852964 Use -isysroot instead of --sysroot.
+     SYSROOT_CFLAGS_FOR_TARGET="-isysroot $withval"
    fi],
   [SYSROOT_CFLAGS_FOR_TARGET=])
 AC_SUBST(SYSROOT_CFLAGS_FOR_TARGET)

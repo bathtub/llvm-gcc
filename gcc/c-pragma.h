@@ -97,7 +97,12 @@ extern enum cpp_ttype pragma_lex (tree *);
 /* This is not actually available to pragma parsers.  It's merely a
    convenient location to declare this function for c-lex, after
    having enum cpp_ttype declared.  */
-extern enum cpp_ttype c_lex_with_flags (tree *, location_t *, unsigned char *);
+/* APPLE LOCAL begin AltiVec */
+extern const struct cpp_token *c_lex_peek (int);
+extern void c_lex_prepend (const struct cpp_token *, int);
+/* APPLE LOCAL end AltiVec */
+/* APPLE LOCAL CW asm blocks C++ comments 6338079 */
+extern enum cpp_ttype c_lex_with_flags (tree *, location_t *, unsigned char *, int);
 
 /* If 1, then lex strings into the execution character set.
    If 0, lex strings into the host character set.

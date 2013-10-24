@@ -39,6 +39,18 @@
   return REGNO (op) < FIRST_PSEUDO_REGISTER;
 })
 
+;; APPLE LOCAL begin v7 support. Merge from mainline
+;; A low register.
+(define_predicate "low_register_operand"
+  (and (match_code "reg")
+       (match_test "REGNO (op) <= LAST_LO_REGNUM")))
+
+;; A low register or const_int.
+(define_predicate "low_reg_or_int_operand"
+  (ior (match_code "const_int")
+       (match_operand 0 "low_register_operand")))
+;; APPLE LOCAL end v7 support. Merge from mainline
+
 ;; Any core register, or any pseudo.  */ 
 (define_predicate "arm_general_register_operand"
   (match_code "reg,subreg")
@@ -50,6 +62,19 @@
 	  && (REGNO (op) <= LAST_ARM_REGNUM
 	      || REGNO (op) >= FIRST_PSEUDO_REGISTER));
 })
+
+;; APPLE LOCAL begin ARM add this peephole
+;; Any Thumb low register.
+(define_predicate "thumb_low_register_operand"
+  (match_code "reg,subreg")
+{
+  if (GET_CODE (op) == SUBREG)
+    op = SUBREG_REG (op);
+
+  return (GET_CODE (op) == REG
+	  && REGNO (op) <= LAST_LO_REGNUM);
+})
+;; APPLE LOCAL end ARM add this peephole
 
 (define_predicate "f_register_operand"
   (match_code "reg,subreg")
@@ -73,6 +98,16 @@
   (and (match_code "const_int")
        (match_test "const_ok_for_arm (INTVAL (op))")))
 
+;; APPLE LOCAL begin 5831562 long long constants
+(define_predicate "arm_immediate64_operand"
+  (and (match_code "const_int,const_double")
+       (match_test "const64_ok_for_arm_immediate (op)")))
+
+(define_predicate "arm_add_immediate64_operand"
+  (and (match_code "const_int,const_double")
+       (match_test "const64_ok_for_arm_add (op)")))
+;; APPLE LOCAL end 5831562 long long constants
+
 (define_predicate "arm_neg_immediate_operand"
   (and (match_code "const_int")
        (match_test "const_ok_for_arm (-INTVAL (op))")))
@@ -85,6 +120,16 @@
 (define_predicate "arm_rhs_operand"
   (ior (match_operand 0 "s_register_operand")
        (match_operand 0 "arm_immediate_operand")))
+
+;; APPLE LOCAL begin 5831562 long long constants
+(define_predicate "arm_rhs64_operand"
+  (ior (match_operand 0 "s_register_operand")
+       (match_operand 0 "arm_immediate64_operand")))
+
+(define_predicate "arm_add64_operand"
+  (ior (match_operand 0 "s_register_operand")
+       (match_operand 0 "arm_add_immediate64_operand")))
+;; APPLE LOCAL end 5831562 long long constants
 
 (define_predicate "arm_rhsm_operand"
   (ior (match_operand 0 "arm_rhs_operand")
@@ -125,6 +170,16 @@
 			 || (GET_CODE (op) == REG
 			     && REGNO (op) >= FIRST_PSEUDO_REGISTER)))")))
 
+;; APPLE LOCAL begin 6160917
+;; Allow any mem reference through here.  By doing this, instead of just
+;; ignoring unhandled cases in SECONDARY_*_RELOAD_CLASS macros we will
+;; get an assertion failure in neon_reload_{in,out}.
+;; We don't use memory_operand because it fails for out-of-range
+;; indexed addressing.
+(define_predicate "neon_reload_mem_operand"
+  (match_code "mem"))
+;; APPLE LOCAL end 6160917
+
 ;; True for valid operands for the rhs of an floating point insns.
 ;;   Allows regs or certain consts on FPA, just regs for everything else.
 (define_predicate "arm_float_rhs_operand"
@@ -159,6 +214,14 @@
   (and (match_code "plus,minus,ior,xor,and")
        (match_test "mode == GET_MODE (op)")))
 
+;; APPLE LOCAL begin ARM 4382996 improve assignments of NE
+;; True for binary operators that can set the condition codes as a side effect,
+;; and that don't have early clobber semantics.
+(define_special_predicate "binary_cc_noclobber_operator"
+  (and (match_code "plus,minus,ior,xor,and,ashift,ashiftrt,lshiftrt")
+       (match_test "mode == GET_MODE (op)")))
+;; APPLE LOCAL end ARM 4382996 improve assignments of NE
+
 ;; True for logical binary operators.
 (define_special_predicate "logical_binary_operator"
   (and (match_code "ior,xor,and")
@@ -173,6 +236,12 @@
 				   && ((unsigned HOST_WIDE_INT) INTVAL (XEXP (op, 1))) < 32")))
 	    (match_code "ashift,ashiftrt,lshiftrt,rotatert"))
        (match_test "mode == GET_MODE (op)")))
+
+;; APPLE LOCAL begin v7 support. Merge from mainline
+;; True for operators that have 16-bit thumb variants.  */
+(define_special_predicate "thumb_16bit_operator"
+  (match_code "plus,minus,and,ior,xor"))
+;; APPLE LOCAL end v7 support. Merge from mainline
 
 ;; True for EQ & NE
 (define_special_predicate "equality_operator"
@@ -399,13 +468,15 @@
 ;; Thumb predicates
 ;;
 
-(define_predicate "thumb_cmp_operand"
+;; APPLE LOCAL v7 support. Merge from mainline
+(define_predicate "thumb1_cmp_operand"
   (ior (and (match_code "reg,subreg")
 	    (match_operand 0 "s_register_operand"))
        (and (match_code "const_int")
 	    (match_test "((unsigned HOST_WIDE_INT) INTVAL (op)) < 256"))))
 
-(define_predicate "thumb_cmpneg_operand"
+;; APPLE LOCAL v7 support. Merge from mainline
+(define_predicate "thumb1_cmpneg_operand"
   (and (match_code "const_int")
        (match_test "INTVAL (op) < 0 && INTVAL (op) > -256")))
 
@@ -455,4 +526,64 @@
   (and (match_code "const_int")
        (match_test "((unsigned HOST_WIDE_INT) INTVAL (op)) < 64")))
 
+;; APPLE LOCAL begin v7 support. Merge from Codesourcery
+
+;; Neon predicates
+
+(define_predicate "const_multiple_of_8_operand"
+  (match_code "const_int")
+{
+  unsigned HOST_WIDE_INT val = INTVAL (op);
+  return (val & 7) == 0;
+})
+
+(define_predicate "imm_for_neon_mov_operand"
+  (match_code "const_vector")
+{
+  return neon_immediate_valid_for_move (op, mode, NULL, NULL);
+})
+
+(define_predicate "imm_for_neon_logic_operand"
+  (match_code "const_vector")
+{
+  return neon_immediate_valid_for_logic (op, mode, 0, NULL, NULL);
+})
+
+(define_predicate "imm_for_neon_inv_logic_operand"
+  (match_code "const_vector")
+{
+  return neon_immediate_valid_for_logic (op, mode, 1, NULL, NULL);
+})
+
+(define_predicate "neon_logic_op2"
+  (ior (match_operand 0 "imm_for_neon_logic_operand")
+       (match_operand 0 "s_register_operand")))
+
+(define_predicate "neon_inv_logic_op2"
+  (ior (match_operand 0 "imm_for_neon_inv_logic_operand")
+       (match_operand 0 "s_register_operand")))
+
+;; TODO: We could check lane numbers more precisely based on the mode.
+(define_predicate "neon_lane_number"
+  (and (match_code "const_int")
+       (match_test "INTVAL (op) >= 0 && INTVAL (op) <= 7")))
+
+
+
+;; APPLE LOCAL end v7 support. Merge from Codesourcery
+;; APPLE LOCAL begin ARM pic support
+;; Allow local symbols and stub references
+(define_predicate "arm_branch_target"
+  (match_code "reg,symbol_ref")
+{
+#if TARGET_MACHO
+  return GET_CODE (op) == REG
+         || ! (flag_pic || MACHO_DYNAMIC_NO_PIC_P)
+         || machopic_data_defined_p (op)
+         || machopic_lookup_stub_or_non_lazy_ptr (XSTR (op, 0));
+#else
+  return 1;
+#endif
+})
+;; APPLE LOCAL end ARM pic support
 

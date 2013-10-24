@@ -83,7 +83,7 @@ done
 # Entries of the form <objfile>:<func>:<wordsize> indicate that libgcc2.c
 # should be compiled with L<func> defined and with LIBGCC2_UNITS_PER_WORD
 # set to <wordsize>.  <objfile> is the name of the associated object file
-
+# APPLE LOCAL begin mainline bswap
 lib2funcs='_muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3
 	_cmpdi2 _ucmpdi2 _clear_cache
 	_enable_execute_stack _trampoline __main _absvsi2 _absvdi2 _addvsi3
@@ -91,7 +91,8 @@ lib2funcs='_muldi3 _negdi2 _lshrdi3 _ashldi3 _ashrdi3
 	_ffssi2 _ffsdi2 _clz _clzsi2 _clzdi2 _ctzsi2 _ctzdi2 _popcount_tab
 	_popcountsi2 _popcountdi2 _paritysi2 _paritydi2 _powisf2 _powidf2
 	_powixf2 _powitf2 _mulsc3 _muldc3 _mulxc3 _multc3 _divsc3 _divdc3
-	_divxc3 _divtc3'
+	_divxc3 _divtc3 _bswapsi2 _bswapdi2'
+# APPLE LOCAL end mainline bswap
 
 if [ "$LIB2_SIDITI_CONV_FUNCS" ]; then
   for func in $swfloatfuncs; do
@@ -115,8 +116,10 @@ fi
 
 # Build lines.
 
-gcc_compile='$(GCC_FOR_TARGET) $(LIBGCC2_CFLAGS) $(INCLUDES)'
-gcc_s_compile="$gcc_compile -DSHARED"
+# APPLE LOCAL gcov 5573505
+gcc_compile='$(GCC_FOR_TARGET) $(LIBGCC2_STATIC_CFLAGS) $(LIBGCC2_CFLAGS) $(INCLUDES)'
+# APPLE LOCAL gcov 5573505
+gcc_s_compile='$(GCC_FOR_TARGET) $(LIBGCC2_CFLAGS) $(INCLUDES)'" -DSHARED"
 make_compile='$(MAKE) GCC_FOR_TARGET="$(GCC_FOR_TARGET)" \
 	  AR_FOR_TARGET="$(AR_FOR_TARGET)" \
 	  AR_CREATE_FOR_TARGET="$(AR_CREATE_FOR_TARGET)" \
@@ -346,13 +349,15 @@ for ml in $MULTILIBS; do
       out="libgcc/${dir}/${name}${objext}"
       outS="libgcc/${dir}/${name}_s${objext}"
 
+# APPLE LOCAL begin libcc_kext move options to start of line for overriding --bowdidge
       echo $outS: $libgcc2_c_dep
-      echo "	$gcc_s_compile" $flags -DL$name \
-        -fexceptions -fnon-call-exceptions -c '$(srcdir)/libgcc2.c' -o $outS
+      echo "	$gcc_s_compile" -fexceptions -fnon-call-exceptions $flags -DL$name \
+        -c '$(srcdir)/libgcc2.c' -o $outS
 
       echo $out: $libgcc2_c_dep
-      echo "	$gcc_compile" $flags -DL$name '$(vis_hide)' \
-        -fexceptions -fnon-call-exceptions -c '$(srcdir)/libgcc2.c' -o $out
+      echo "	$gcc_compile" -fexceptions -fnon-call-exceptions $flags -DL$name '$(vis_hide)' \
+        -c '$(srcdir)/libgcc2.c' -o $out
+# APPLE LOCAL end libcc_kext move options to start of line for overriding --bowdidge
 
       echo $libgcc_a: $out
       echo $libgcc_s_so: $outS
@@ -739,6 +744,8 @@ for ml in $MULTILIBS; do
     echo extra$suffix: stmp-dirs
     echo "	$make_compile" \\
     echo '	  LIBGCC2_CFLAGS="$(LIBGCC2_CFLAGS)' $flags '" ' \\
+    # APPLE LOCAL gcov 5573505
+    echo '	  LIBGCC2_STATIC_CFLAGS="$(LIBGCC2_STATIC_CFLAGS)" ' \\
     echo '	  MULTILIB_CFLAGS="'$flags'"' T=$t $extra
     echo "all: extra$suffix"
 
@@ -819,7 +826,8 @@ EOF
   fi
 
   # Shared libraries.
-  if [ "$libgcc_s_so" ]; then
+  # APPLE LOCAL libcc_kext
+  if [ "$libgcc_s_so" -a  "$dir" != "static" -a "$dir" != "kext" -a "$dir" != "kext64" ]; then
     echo ""
     echo "$libgcc_s_so: stmp-dirs $libunwind_so"
     echo "	$SHLIB_LINK" \
@@ -899,10 +907,14 @@ for ml in $MULTILIBS; do
     if [ "$os_multilib_dir" != . ]; then
       shlib_slibdir_qual="/$os_multilib_dir"
     fi
+  # APPLE LOCAL libcc_kext
+  if [ "$dir" != "static" -a "$dir" != "kext" -a "$dir" != "kext64" ]; then
     echo "	$SHLIB_INSTALL" \
       | sed -e "s%@multilib_dir@%$dir%g" \
 	    -e "s%@shlib_base_name@%libgcc_s%g" \
 	    -e "s%@shlib_slibdir_qual@%$shlib_slibdir_qual%g"
+  # APPLE LOCAL libcc_kext
+  fi
     if [ "$LIBUNWIND" ]; then
       echo "	$SHLIBUNWIND_INSTALL" \
 	| sed -e "s%@multilib_dir@%$dir%g" \

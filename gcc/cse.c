@@ -1533,6 +1533,16 @@ insert (rtx x, struct table_elt *classp, unsigned int hash, enum machine_mode mo
   elt->mode = mode;
   elt->is_const = (CONSTANT_P (x) || fixed_base_plus_p (x));
 
+/* APPLE LOCAL begin ARM propagate stack addresses better */
+#ifdef TARGET_ARM
+  /* Adjust cost of SP+const addresses lower; generally, we want to propagate the addition
+     rather than use a register if these are equally cheap.  This attempts to compensate
+     for forcing the cost of a reg to 0. */
+  if (fixed_base_plus_p (x))
+    elt->cost -= 2 * COSTS_N_INSNS (1);
+#endif
+/* APPLE LOCAL end ARM propagate stack addresses better */
+
   if (table[hash])
     table[hash]->prev_same_hash = elt;
   table[hash] = elt;
@@ -2927,6 +2937,8 @@ find_best_addr (rtx insn, rtx *loc, enum machine_mode mode)
 	  int best_addr_cost = address_cost (*loc, mode);
 	  int best_rtx_cost = (elt->cost + 1) >> 1;
 	  int exp_cost;
+	  /* APPLE LOCAL ARM propagate stack addresses better */
+	  bool best_fixed_base_plus_p = fixed_base_plus_p (elt->exp);
 	  struct table_elt *best_elt = elt;
 
 	  found_better = 0;
@@ -2937,11 +2949,25 @@ find_best_addr (rtx insn, rtx *loc, enum machine_mode mode)
 		     || exp_equiv_p (p->exp, p->exp, 1, false))
 		    && ((exp_cost = address_cost (p->exp, mode)) < best_addr_cost
 			|| (exp_cost == best_addr_cost
-			    && ((p->cost + 1) >> 1) > best_rtx_cost)))
+/* APPLE LOCAL begin ARM propagate stack addresses better */
+#ifdef TARGET_ARM
+			    /* Prefer a stack address if possible.  Thus, prefer a new
+			       stack address to an old non-stack address, and do not replace
+			       an old stack address with a new non-stack address. */
+			    && ((!best_fixed_base_plus_p && fixed_base_plus_p (p->exp))
+				|| (!(best_fixed_base_plus_p && !fixed_base_plus_p (p->exp))
+				    && ((p->cost + 1) >> 1) > best_rtx_cost))
+#else
+			    && ((p->cost + 1) >> 1) > best_rtx_cost
+#endif
+		    )))
+/* APPLE LOCAL end ARM propagate stack addresses better */
 		  {
 		    found_better = 1;
 		    best_addr_cost = exp_cost;
 		    best_rtx_cost = (p->cost + 1) >> 1;
+		    /* APPLE LOCAL ARM propagate stack addresses better */
+		    best_fixed_base_plus_p = fixed_base_plus_p (p->exp);
 		    best_elt = p;
 		  }
 	      }
@@ -4139,6 +4165,8 @@ fold_rtx (rtx x, rtx insn)
 				  && rtx_equal_p (ent->comparison_const,
 						  const_arg1))
 			      || (REG_P (folded_arg1)
+				  /* APPLE LOCAL ARM 4587904 */
+				  && (REGNO_QTY_VALID_P (REGNO (folded_arg1)))
 				  && (REG_QTY (REGNO (folded_arg1)) == ent->comparison_qty))))
 			return (comparison_dominates_p (ent->comparison_code, code)
 				? true_rtx : false_rtx);
@@ -4955,6 +4983,14 @@ cse_insn (rtx insn, rtx libcall_insn)
 	      else if (SET_DEST (y) == pc_rtx
 		       && GET_CODE (SET_SRC (y)) == LABEL_REF)
 		;
+              /* APPLE LOCAL begin radar 5596043, mainline candidate */
+              /* Ignore the asm operand of an inline assembly instruction
+                 when finding all the SETs and invalidate its target. */
+              else if (GET_CODE (SET_SRC (y)) == ASM_OPERANDS)
+                {		
+	            invalidate (XEXP (y, 0), VOIDmode);
+                }
+              /* APPLE LOCAL end radar 5596043, mainline candidate */
 	      else
 		sets[n_sets++].rtl = y;
 	    }
@@ -5074,6 +5110,9 @@ cse_insn (rtx insn, rtx libcall_insn)
       rtx src_eqv_here;
       rtx src_const = 0;
       rtx src_related = 0;
+      /* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */
+      rtx zero_sign_extended_src = NULL_RTX;
+      /* APPLE LOCAL end cse of ZERO/SIGN EXTEND */
       struct table_elt *src_const_elt = 0;
       int src_cost = MAX_COST;
       int src_eqv_cost = MAX_COST;
@@ -5207,7 +5246,35 @@ cse_insn (rtx insn, rtx libcall_insn)
          REG_NOTE.  */
 
       if (!sets[i].src_volatile)
+      /* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */
+      {
 	elt = lookup (src, sets[i].src_hash, mode);
+	if (!elt 
+	    && (GET_CODE(src) == ZERO_EXTEND || GET_CODE(src) == SIGN_EXTEND) 
+	    && GET_CODE (XEXP (src, 0)) == MEM)
+	{
+	  unsigned mem_hash;
+	  rtx nsrc = XEXP (src, 0);
+	  enum machine_mode nmode = GET_MODE(nsrc);
+          do_not_record = 0;
+          hash_arg_in_memory = 0;
+	  mem_hash = HASH (nsrc, nmode);
+	  elt = lookup (nsrc, mem_hash, nmode);
+	  if (elt)
+	  {
+	    sets[i].src = nsrc;
+	    sets[i].src_hash = mem_hash;
+	    sets[i].src_volatile = do_not_record;
+	    sets[i].src_in_memory = hash_arg_in_memory;
+	    zero_sign_extended_src = src;
+	    src = nsrc;
+	    mode = GET_MODE (src) == VOIDmode ? GET_MODE (dest) : GET_MODE (src);
+	    sets[i].mode = mode;
+	    src_folded = fold_rtx (src, insn);
+	  }
+	}
+      }
+      /* APPLE LOCAL end cse of ZERO/SIGN EXTEND */
 
       sets[i].src_elt = elt;
 
@@ -5236,6 +5303,26 @@ cse_insn (rtx insn, rtx libcall_insn)
 	for (p = elt->first_same_value; p; p = p->next_same_value)
 	  if (p->is_const)
 	    {
+	      /* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */
+	      /* If we're looking at a MEM under a SIGN/ZERO_EXTEND,
+		 constants match only if the high bits match.  */
+	      if (zero_sign_extended_src)
+		{
+		  rtx truncated_const, trial;
+		  truncated_const = gen_rtx_TRUNCATE (
+		    GET_MODE (XEXP (zero_sign_extended_src, 0)), 
+		    copy_rtx (p->exp));
+		  if (GET_CODE (zero_sign_extended_src) == ZERO_EXTEND)
+		    trial = gen_rtx_ZERO_EXTEND (
+			GET_MODE (zero_sign_extended_src), truncated_const);
+		  else
+		    trial = gen_rtx_SIGN_EXTEND (
+			GET_MODE (zero_sign_extended_src), truncated_const);
+		  trial = fold_rtx (trial, NULL_RTX);
+		  if (!rtx_equal_p (trial, p->exp))
+		    continue;
+		}
+	      /* APPLE LOCAL end cse of ZERO/SIGN EXTEND */
 	      src_const = p->exp;
 	      src_const_elt = elt;
 	      break;
@@ -5611,6 +5698,26 @@ cse_insn (rtx insn, rtx libcall_insn)
 		   && preferable (src_related_cost, src_related_regcost,
 				  src_elt_cost, src_elt_regcost) <= 0)
 	    trial = copy_rtx (src_related), src_related_cost = MAX_COST;
+	  /* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */
+	  else if (zero_sign_extended_src)
+	    {
+	      rtx truncated_const;
+	      if (elt->is_const)
+	        truncated_const = gen_rtx_TRUNCATE (
+		  GET_MODE (XEXP (zero_sign_extended_src, 0)),
+		  copy_rtx (elt->exp));
+	      else
+	        truncated_const= copy_rtx (elt->exp);
+	      trial = GET_CODE(zero_sign_extended_src) == ZERO_EXTEND 
+		      ? gen_rtx_ZERO_EXTEND (GET_MODE(zero_sign_extended_src),
+					     truncated_const)
+		      : gen_rtx_SIGN_EXTEND (GET_MODE(zero_sign_extended_src),
+					     truncated_const);
+	      trial = fold_rtx (trial, NULL_RTX);
+	      elt = elt->next_same_value;
+	      src_elt_cost = MAX_COST;
+	    }
+	  /* APPLE LOCAL end cse of ZERO/SIGN EXTEND */
 	  else
 	    {
 	      trial = copy_rtx (elt->exp);
@@ -5707,6 +5814,11 @@ cse_insn (rtx insn, rtx libcall_insn)
 	}
 
       src = SET_SRC (sets[i].rtl);
+      /* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */
+      if (zero_sign_extended_src
+	  && (GET_CODE (src) == GET_CODE (zero_sign_extended_src)))
+        src = XEXP (src, 0);
+      /* APPLE LOCAL end cse of ZERO/SIGN EXTEND */
 
       /* In general, it is good to have a SET with SET_SRC == SET_DEST.
 	 However, there is an important exception:  If both are registers
@@ -5783,7 +5895,11 @@ cse_insn (rtx insn, rtx libcall_insn)
 	  && ! (GET_CODE (src_const) == CONST
 		&& GET_CODE (XEXP (src_const, 0)) == MINUS
 		&& GET_CODE (XEXP (XEXP (src_const, 0), 0)) == LABEL_REF
-		&& GET_CODE (XEXP (XEXP (src_const, 0), 1)) == LABEL_REF))
+		/* APPLE LOCAL begin cse of ZERO/SIGN EXTEND */	    
+		&& (GET_CODE (XEXP (XEXP (src_const, 0), 1)) == LABEL_REF
+		    || rtx_equal_p ((XEXP (XEXP (src_const, 0), 1)), 
+				     const0_rtx))))
+		/* APPLE LOCAL end */
 	{
 	  /* We only want a REG_EQUAL note if src_const != src.  */
 	  if (! rtx_equal_p (src, src_const))

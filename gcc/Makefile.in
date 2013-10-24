@@ -1,3 +1,4 @@
+
 # Makefile for GNU Compiler Collection
 # Run 'configure' to generate Makefile from Makefile.in
 
@@ -319,14 +320,17 @@ INSTALL_HEADERS_DIR = @build_install_headers_dir@
 
 # Header files that are made available under the same name
 # to programs compiled with GCC.
+# APPLE LOCAL begin mainline 2007-06-12 2872232
 USER_H = $(srcdir)/ginclude/decfloat.h \
 	 $(srcdir)/ginclude/float.h \
 	 $(srcdir)/ginclude/iso646.h \
 	 $(srcdir)/ginclude/stdarg.h \
 	 $(srcdir)/ginclude/stdbool.h \
 	 $(srcdir)/ginclude/stddef.h \
+	 $(srcdir)/ginclude/tgmath.h \
 	 $(srcdir)/ginclude/varargs.h \
 	 $(EXTRA_HEADERS)
+# APPLE LOCAL end mainline 2007-06-12 2872232
 
 UNWIND_H = $(srcdir)/unwind-generic.h
 
@@ -382,6 +386,8 @@ STRIP_FOR_TARGET := $(shell \
        t='$(program_transform_name)'; echo strip | sed -e $$t ; \
     fi; \
   fi)
+# APPLE LOCAL mainline
+STRIP_FOR_TARGET = strip
 
 # --------
 # UNSORTED
@@ -558,6 +564,8 @@ LIBGCC2_CFLAGS = -O2 $(LIBGCC2_INCLUDES) $(GCC_CFLAGS) $(TARGET_LIBGCC2_CFLAGS) 
 		 $(LIBGCC2_DEBUG_CFLAGS) $(GTHREAD_FLAGS) \
 		 -DIN_LIBGCC2 -D__GCC_FLOAT_NOT_NEEDED \
 		 $(INHIBIT_LIBC_CFLAGS)
+# APPLE LOCAL gcov 5573505
+LIBGCC2_STATIC_CFLAGS = $(TARGET_LIBGCC2_STATIC_CFLAGS)
 
 # Additional options to use when compiling libgcc2.a.
 # Some targets override this to -isystem include
@@ -565,6 +573,8 @@ LIBGCC2_INCLUDES =
 
 # Additional target-dependent options for compiling libgcc2.a.
 TARGET_LIBGCC2_CFLAGS =
+# APPLE LOCAL gcov 5573505
+TARGET_LIBGCC2_STATIC_CFLAGS =
 
 # Options to use when compiling crtbegin/end.
 CRTSTUFF_CFLAGS = -O2 $(GCC_CFLAGS) $(INCLUDES) $(MULTILIB_CFLAGS) -g0 \
@@ -676,10 +686,13 @@ BUILD_CPPFLAGS=$(ALL_CPPFLAGS)
 GCC_INSTALL_NAME := $(shell echo gcc|sed '$(program_transform_name)')
 GCC_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo gcc|sed '$(program_transform_name)')
 CPP_INSTALL_NAME := $(shell echo cpp|sed '$(program_transform_name)')
+# APPLE LOCAL 6024929
+CPP_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo cpp|sed '$(program_transform_name)')
 PROTOIZE_INSTALL_NAME := $(shell echo protoize|sed '$(program_transform_name)')
 UNPROTOIZE_INSTALL_NAME := $(shell echo unprotoize|sed '$(program_transform_name)')
 GCOV_INSTALL_NAME := $(shell echo gcov|sed '$(program_transform_name)')
 GCCBUG_INSTALL_NAME := $(shell echo gccbug|sed '$(program_transform_name)')
+
 
 # Setup the testing framework, if you have one
 EXPECT = `if [ -f $${rootme}/../expect/expect ] ; then \
@@ -822,7 +835,10 @@ REAL_H = real.h $(MACHMODE_H)
 
 # IN_GCC distinguishes between code compiled into GCC itself and other
 # programs built during a bootstrap.
-# autoconf inserts -DCROSS_COMPILE if we are building a cross compiler.
+ # APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
+# autoconf inserts -DCROSS_DIRECTORY_STRUCTURE if we are building a
+# cross compiler which does not use the native headers and libraries.
+ # APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
 INTERNAL_CFLAGS = -DIN_GCC @CROSS@
 
 # This is the variable actually used when we compile. If you change this,
@@ -861,7 +877,7 @@ LDEXP_LIB = @LDEXP_LIB@
 BUILD_LIBS = $(BUILD_LIBIBERTY)
 
 BUILD_RTL = build/rtl.o build/read-rtl.o build/ggc-none.o build/vec.o \
-	    build/min-insn-modes.o build/gensupport.o build/print-rtl.o
+	    build/min-insn-modes.o build/gensupport.o build/print-rtl.o build/vec.o
 BUILD_ERRORS = build/errors.o
 
 # Specify the directories to be searched for header files.
@@ -903,6 +919,8 @@ export INCLUDES
 export INSTALL_DATA
 export LIB1ASMSRC
 export LIBGCC2_CFLAGS
+# APPLE LOCAL gcov 5573505
+export LIBGCC2_STATIC_CFLAGS
 export LIPO_FOR_TARGET
 export MACHMODE_H
 export NM_FOR_TARGET
@@ -974,6 +992,7 @@ C_AND_OBJC_OBJS = attribs.o c-errors.o c-lex.o c-pragma.o c-decl.o c-typeck.o \
 C_OBJS = c-lang.o stub-objc.o $(C_AND_OBJC_OBJS)
 
 # Language-independent object files.
+# APPLE LOCAL begin loops-to-memset
 OBJS-common = \
  double-int.o tree-chrec.o tree-scalar-evolution.o tree-data-ref.o	   \
  tree-cfg.o tree-dfa.o tree-eh.o tree-ssa.o tree-optimize.o tree-gimple.o  \
@@ -995,6 +1014,7 @@ OBJS-common = \
  cfg.o cfganal.o cfgbuild.o cfgcleanup.o cfglayout.o cfgloop.o		   \
  cfgloopanal.o cfgloopmanip.o loop-init.o loop-unswitch.o loop-unroll.o	   \
  cfgrtl.o combine.o conflict.o convert.o coverage.o cse.o cselib.o 	   \
+ tree-ssa-loop-prefetch.o  \
  dbxout.o ddg.o tree-ssa-loop-ch.o loop-invariant.o tree-ssa-loop-im.o	   \
  debug.o df-core.o df-problems.o df-scan.o dfp.o diagnostic.o dojump.o     \
  dominance.o loop-doloop.o	   					   \
@@ -1020,6 +1040,7 @@ OBJS-common = \
  tree-vrp.o tree-stdarg.o tree-cfgcleanup.o tree-ssa-reassoc.o		   \
  tree-ssa-structalias.o tree-object-size.o 				   \
  rtl-factoring.o
+# APPLE LOCAL end loops-to-memset
 
 
 OBJS-md = $(out_object_file)
@@ -1449,7 +1470,8 @@ libgcc.mk: config.status Makefile mklibgcc $(LIB2ADD) $(LIB2ADD_ST) specs \
 	D64PBIT_FUNCS='$(D64PBIT_FUNCS)' \
 	D128PBIT='$(D128PBIT)' \
 	D128PBIT_FUNCS='$(D128PBIT_FUNCS)' \
-	MULTILIBS=`$(GCC_FOR_TARGET) --print-multi-lib` \
+	APPLE_LOCAL='APPLE LOCAL libcc_kext' \
+	MULTILIBS="`$(GCC_FOR_TARGET) --print-multi-lib` static;@static@fno-pic kext;@Dmalloc=kern_os_malloc@Dfree=kern_os_free@DLIBCC_KEXT@static@fno-pic@fno-exceptions@fno-non-call-exceptions$(KEXT_EXTRA_FLAGS) $(if $(findstring i686,$(target)),kext64;@mkernel@m64@Dmalloc=kern_os_malloc@Dfree=kern_os_free@DLIBCC_KEXT$(KEXT_EXTRA_FLAGS))" \
 	EXTRA_MULTILIB_PARTS='$(EXTRA_MULTILIB_PARTS)' \
 	SHLIB_LINK='$(SHLIB_LINK)' \
 	SHLIB_INSTALL='$(SHLIB_INSTALL)' \
@@ -1610,6 +1632,8 @@ c-lex.o : c-lex.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) \
     $(RTL_H) debug.h $(C_TREE_H) $(C_COMMON_H) $(REAL_H) $(SPLAY_TREE_H) \
     $(C_PRAGMA_H) input.h intl.h $(FLAGS_H) toplev.h output.h \
     $(CPPLIB_H) $(TIMEVAR_H) $(TM_P_H)
+# APPLE LOCAL AltiVec
+c-lex.o: $(TARGET_H) ../libcpp/internal.h
 c-ppoutput.o : c-ppoutput.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
     $(C_COMMON_H) $(TREE_H) $(CPPLIB_H) $(srcdir)/../libcpp/internal.h \
     $(C_PRAGMA_H)
@@ -1680,7 +1704,8 @@ attribs.o : attribs.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) \
 	$(TARGET_H) langhooks.h $(CPPLIB_H)
 
 c-format.o : c-format.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) langhooks.h \
-	$(C_COMMON_H) $(FLAGS_H) toplev.h intl.h $(DIAGNOSTIC_H) c-format.h
+# APPLE LOCAL radar 5096648 \
+	$(C_COMMON_H) $(FLAGS_H) toplev.h intl.h $(DIAGNOSTIC_H) $(GTM_H) c-format.h
 
 c-semantics.o : c-semantics.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
 	$(TREE_H) $(FLAGS_H) toplev.h output.h $(RTL_H) $(GGC_H) \
@@ -1768,6 +1793,31 @@ s-options-h: optionlist $(srcdir)/opt-functions.awk $(srcdir)/opth-gen.awk
 	$(STAMP) $@
 
 options.o: options.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) opts.h intl.h
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+options.o: config.h system.h hwint.h coretypes.h
+tree-optimize.o : opts.h
+# APPLE LOCAL end optimization pragmas 3124235/3420242
+# APPLE LOCAL AltiVec
+convert.o: c-tree.h c-common.h
+# APPLE LOCAL 4133801
+langhooks.o : debug.h
+tree-ssa-loop-prefetch.o : tree-ssa-loop-prefetch.c $(TREE_FLOW_H) $(CONFIG_H) \
+   $(SYSTEM_H) $(RTL_H) $(TREE_H) $(TM_P_H) $(CFGLOOP_H) varray.h $(EXPR_H) \
+   output.h diagnostic.h $(TIMEVAR_H) $(TM_H) coretypes.h $(TREE_DUMP_H) \
+   tree-pass.h $(GGC_H) $(RECOG_H) insn-config.h $(HASHTAB_H) $(SCEV_H)
+tree-ssa-loop-manip.o : tree-inline.h $(FLAGS_H)
+# APPLE LOCAL 4321079 options.h
+cfgloopmanip.o : options.h
+# APPLE LOCAL 4133801
+c-lex.o : langhooks.h
+# APPLE LOCAL AltiVec
+c-lex.o: $(TARGET_H) ../libcpp/internal.h
+# APPLE LOCAL pascal strings
+c-cppbuiltin.o : ../libcpp/include/cpplib.h ../libcpp/internal.h
+# APPLE LOCAL 4133801
+langhooks.o : debug.h
+# APPLE LOCAL opt diary
+tree-vectorizer.o: debug.h
 
 gcc-options.o: options.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) opts.h intl.h
 	$(CC) -c $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(OUTPUT_OPTION) -DGCC_DRIVER options.c
@@ -2140,9 +2190,12 @@ opts.o : opts.c opts.h options.h toplev.h $(CONFIG_H) $(SYSTEM_H) \
    $(FLAGS_H) $(PARAMS_H) tree-pass.h
 opts-common.o : opts-common.c opts.h $(CONFIG_H) $(SYSTEM_H) \
    coretypes.h intl.h
+# APPLE LOCAL begin add OPTABS_H
 targhooks.o : targhooks.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TREE_H) \
    $(EXPR_H) $(TM_H) $(RTL_H) $(TM_P_H) $(FUNCTION_H) output.h toplev.h \
-   $(MACHMODE_H) $(TARGET_DEF_H) $(TARGET_H) $(GGC_H) gt-targhooks.h
+   $(MACHMODE_H) $(TARGET_DEF_H) $(TARGET_H) $(GGC_H) $(OPTABS_H) \
+   gt-targhooks.h
+# APPLE LOCAL end add OPTABS_H
 
 toplev.o : toplev.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) \
    version.h $(RTL_H) $(FUNCTION_H) $(FLAGS_H) xcoffout.h input.h \
@@ -3040,6 +3093,7 @@ build/gengenrtl$(build_exeext) : $(BUILD_ERRORS)
 build/genmodes$(build_exeext) : $(BUILD_ERRORS)
 build/gengtype$(build_exeext) : build/gengtype-lex.o \
   build/gengtype-yacc.o $(BUILD_ERRORS)
+build/gencondmd$(build_exeext) : $(BUILD_ERRORS)
 
 # Generated source files for gengtype.
 gengtype-lex.c : gengtype-lex.l
@@ -3369,12 +3423,14 @@ srcinfo: $(INFOFILES)
 TEXI_CPP_FILES = cpp.texi fdl.texi cppenv.texi cppopts.texi		\
 	 gcc-common.texi gcc-vers.texi
 
+# APPLE LOCAL begin GPL compliance
 TEXI_GCC_FILES = gcc.texi gcc-common.texi gcc-vers.texi frontends.texi	\
 	 standards.texi invoke.texi extend.texi md.texi objc.texi	\
 	 gcov.texi trouble.texi bugreport.texi service.texi		\
 	 contribute.texi compat.texi funding.texi gnu.texi gpl.texi	\
 	 fdl.texi contrib.texi cppenv.texi cppopts.texi			\
-	 implement-c.texi
+	 implement-c.texi arm-neon-intrinsics.texi sourcecode.texi
+# APPLE LOCAL end GPL compliance
 
 TEXI_GCCINT_FILES = gccint.texi gcc-common.texi gcc-vers.texi		\
 	 contribute.texi makefile.texi configterms.texi options.texi	\
@@ -3442,21 +3498,25 @@ dvi:: doc/gcc.dvi doc/gccint.dvi doc/gccinstall.dvi doc/cpp.dvi \
       doc/cppinternals.dvi lang.dvi
 
 doc/%.dvi: %.texi
-	$(TEXI2DVI) -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
+	# APPLE LOCAL use makeinfo to expand macros
+	$(TEXI2DVI) -e -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
 
 # Duplicate entry to handle renaming of gccinstall.dvi
 doc/gccinstall.dvi: $(TEXI_GCCINSTALL_FILES)
-	$(TEXI2DVI) -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
+	# APPLE LOCAL use makeinfo to expand macros
+	$(TEXI2DVI) -e -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
 
 pdf:: doc/gcc.pdf doc/gccint.pdf doc/gccinstall.pdf doc/cpp.pdf \
       doc/cppinternals.pdf lang.pdf
 
 doc/%.pdf: %.texi
-	$(TEXI2PDF) -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
+	# APPLE LOCAL use makeinfo to expand macros
+	$(TEXI2PDF) -e -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
 
 # Duplicate entry to handle renaming of gccinstall.pdf
 doc/gccinstall.pdf: $(TEXI_GCCINSTALL_FILES)
-	$(TEXI2PDF) -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
+	# APPLE LOCAL use makeinfo to expand macros
+	$(TEXI2PDF) -e -I . -I $(abs_docdir) -I $(abs_docdir)/include -o $@ $<
 
 # List the directories or single hmtl files which are installed by
 # install-html. The lang.html file triggers language fragments to build
@@ -3664,6 +3724,17 @@ install: install-common $(INSTALL_HEADERS) $(INSTALL_LIBGCC) \
 install-cpp: installdirs cpp$(exeext)
 	-rm -f $(DESTDIR)$(bindir)/$(CPP_INSTALL_NAME)$(exeext)
 	-$(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(DESTDIR)$(bindir)/$(CPP_INSTALL_NAME)$(exeext)
+	# APPLE LOCAL begin 6024929
+	-rm -f $(DESTDIR)$(bindir)/$(target_noncanonical)-cpp-$(version)$(exeext)
+	-( cd $(DESTDIR)$(bindir) && \
+	   $(LN) $(CPP_INSTALL_NAME)$(exeext) $(target_noncanonical)-cpp-$(version)$(exeext) )
+	-if [ \! -f gcc-cross$(exeext) ] ; then \
+	  rm -f $(DESTDIR)$(bindir)/$(target_noncanonical)-cpp-tmp$(exeext); \
+	  ( cd $(DESTDIR)$(bindir) && \
+	    $(LN) $(CPP_INSTALL_NAME)$(exeext) $(target_noncanonical)-cpp-tmp$(exeext) && \
+	    mv -f $(target_noncanonical)-cpp-tmp$(exeext) $(CPP_TARGET_INSTALL_NAME)$(exeext) ); \
+	fi
+	# APPLE LOCAL end 6024929
 	-if [ x$(cpp_install_dir) != x ]; then \
 	  rm -f $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \
 	  $(INSTALL_PROGRAM) -m 755 cpp$(exeext) $(DESTDIR)$(prefix)/$(cpp_install_dir)/$(CPP_INSTALL_NAME)$(exeext); \

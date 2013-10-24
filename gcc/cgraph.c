@@ -97,6 +97,8 @@ The varpool data structure:
 #include "varray.h"
 #include "output.h"
 #include "intl.h"
+/* APPLE LOCAL Selective inlining of functions that use Altivec 3837835 */
+#include "function.h"
 #include "tree-gimple.h"
 #include "tree-dump.h"
 
@@ -388,7 +390,8 @@ cgraph_create_edge (struct cgraph_node *caller, struct cgraph_node *callee,
   gcc_assert (get_call_expr_in (call_stmt));
 
   if (!DECL_SAVED_TREE (callee->decl))
-    edge->inline_failed = N_("function body not available");
+    /* APPLE LOCAL wording 4598393 */
+    edge->inline_failed = N_("the function body must appear before caller");
   else if (callee->local.redefined_extern_inline)
     edge->inline_failed = N_("redefined extern inline functions are not "
 			     "considered for inlining");
@@ -740,6 +743,10 @@ dump_cgraph_node (FILE *f, struct cgraph_node *node)
     fprintf (f, " redefined_extern_inline");
   if (TREE_ASM_WRITTEN (node->decl))
     fprintf (f, " asm_written");
+  /* APPLE LOCAL begin Selective inlining of functions that use Altivec 3837835 */
+  if (DECL_STRUCT_FUNCTION (node->decl) && DECL_STRUCT_FUNCTION (node->decl)->uses_vector)
+    fprintf (f, " uses_vector");
+  /* APPLE LOCAL end Selective inlining of functions that use Altivec 3837835 */
 
   fprintf (f, "\n  called by: ");
   for (edge = node->callers; edge; edge = edge->next_caller)

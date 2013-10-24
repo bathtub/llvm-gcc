@@ -7528,6 +7528,159 @@ test -z "$INSTALL_PROGRAM" && INSTALL_PROGRAM='${INSTALL}'
 test -z "$INSTALL_DATA" && INSTALL_DATA='${INSTALL} -m 644'
 
 
+# APPLE LOCAL begin Mach time
+
+for ac_header in mach/mach_time.h
+do
+as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
+if eval "test \"\${$as_ac_Header+set}\" = set"; then
+  echo "$as_me:$LINENO: checking for $ac_header" >&5
+echo $ECHO_N "checking for $ac_header... $ECHO_C" >&6
+if eval "test \"\${$as_ac_Header+set}\" = set"; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+fi
+echo "$as_me:$LINENO: result: `eval echo '${'$as_ac_Header'}'`" >&5
+echo "${ECHO_T}`eval echo '${'$as_ac_Header'}'`" >&6
+else
+  # Is the header compilable?
+echo "$as_me:$LINENO: checking $ac_header usability" >&5
+echo $ECHO_N "checking $ac_header usability... $ECHO_C" >&6
+cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+$ac_includes_default
+#include <$ac_header>
+_ACEOF
+rm -f conftest.$ac_objext
+if { (eval echo "$as_me:$LINENO: \"$ac_compile\"") >&5
+  (eval $ac_compile) 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } &&
+	 { ac_try='test -z "$ac_c_werror_flag"
+			 || test ! -s conftest.err'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; } &&
+	 { ac_try='test -s conftest.$ac_objext'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; }; then
+  ac_header_compiler=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+ac_header_compiler=no
+fi
+rm -f conftest.err conftest.$ac_objext conftest.$ac_ext
+echo "$as_me:$LINENO: result: $ac_header_compiler" >&5
+echo "${ECHO_T}$ac_header_compiler" >&6
+
+# Is the header present?
+echo "$as_me:$LINENO: checking $ac_header presence" >&5
+echo $ECHO_N "checking $ac_header presence... $ECHO_C" >&6
+cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+#include <$ac_header>
+_ACEOF
+if { (eval echo "$as_me:$LINENO: \"$ac_cpp conftest.$ac_ext\"") >&5
+  (eval $ac_cpp conftest.$ac_ext) 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } >/dev/null; then
+  if test -s conftest.err; then
+    ac_cpp_err=$ac_c_preproc_warn_flag
+    ac_cpp_err=$ac_cpp_err$ac_c_werror_flag
+  else
+    ac_cpp_err=
+  fi
+else
+  ac_cpp_err=yes
+fi
+if test -z "$ac_cpp_err"; then
+  ac_header_preproc=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+  ac_header_preproc=no
+fi
+rm -f conftest.err conftest.$ac_ext
+echo "$as_me:$LINENO: result: $ac_header_preproc" >&5
+echo "${ECHO_T}$ac_header_preproc" >&6
+
+# So?  What about this header?
+case $ac_header_compiler:$ac_header_preproc:$ac_c_preproc_warn_flag in
+  yes:no: )
+    { echo "$as_me:$LINENO: WARNING: $ac_header: accepted by the compiler, rejected by the preprocessor!" >&5
+echo "$as_me: WARNING: $ac_header: accepted by the compiler, rejected by the preprocessor!" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header: proceeding with the compiler's result" >&5
+echo "$as_me: WARNING: $ac_header: proceeding with the compiler's result" >&2;}
+    ac_header_preproc=yes
+    ;;
+  no:yes:* )
+    { echo "$as_me:$LINENO: WARNING: $ac_header: present but cannot be compiled" >&5
+echo "$as_me: WARNING: $ac_header: present but cannot be compiled" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header:     check for missing prerequisite headers?" >&5
+echo "$as_me: WARNING: $ac_header:     check for missing prerequisite headers?" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header: see the Autoconf documentation" >&5
+echo "$as_me: WARNING: $ac_header: see the Autoconf documentation" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header:     section \"Present But Cannot Be Compiled\"" >&5
+echo "$as_me: WARNING: $ac_header:     section \"Present But Cannot Be Compiled\"" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header: proceeding with the preprocessor's result" >&5
+echo "$as_me: WARNING: $ac_header: proceeding with the preprocessor's result" >&2;}
+    { echo "$as_me:$LINENO: WARNING: $ac_header: in the future, the compiler will take precedence" >&5
+echo "$as_me: WARNING: $ac_header: in the future, the compiler will take precedence" >&2;}
+    (
+      cat <<\_ASBOX
+## ------------------------------------------ ##
+## Report this to the AC_PACKAGE_NAME lists.  ##
+## ------------------------------------------ ##
+_ASBOX
+    ) |
+      sed "s/^/$as_me: WARNING:     /" >&2
+    ;;
+esac
+echo "$as_me:$LINENO: checking for $ac_header" >&5
+echo $ECHO_N "checking for $ac_header... $ECHO_C" >&6
+if eval "test \"\${$as_ac_Header+set}\" = set"; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  eval "$as_ac_Header=\$ac_header_preproc"
+fi
+echo "$as_me:$LINENO: result: `eval echo '${'$as_ac_Header'}'`" >&5
+echo "${ECHO_T}`eval echo '${'$as_ac_Header'}'`" >&6
+
+fi
+if test `eval echo '${'$as_ac_Header'}'` = yes; then
+  cat >>confdefs.h <<_ACEOF
+#define `echo "HAVE_$ac_header" | $as_tr_cpp` 1
+_ACEOF
+
+fi
+
+done
+
+# APPLE LOCAL end Mach time
+
 # See if cmp has --ignore-initial.
 echo "$as_me:$LINENO: checking for cmp's capabilities" >&5
 echo $ECHO_N "checking for cmp's capabilities... $ECHO_C" >&6
@@ -7651,7 +7804,7 @@ if test "${gcc_cv_prog_makeinfo_modern+set}" = set; then
 else
     ac_prog_version=`$MAKEINFO --version 2>&1 |
                    sed -n 's/^.*GNU texinfo.* \([0-9][0-9.]*\).*$/\1/p'`
-  echo "configure:7654: version of makeinfo is $ac_prog_version" >&5
+  echo "configure:7807: version of makeinfo is $ac_prog_version" >&5
   case $ac_prog_version in
     '')     gcc_cv_prog_makeinfo_modern=no;;
     4.[4-9]*)
@@ -13151,7 +13304,10 @@ for f in $build_xm_file; do
   esac
 done
 
-# Define macro CROSS_COMPILE in compilation if this is a cross-compiler.
+ # APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
+# Define macro CROSS_DIRECTORY_STRUCTURE in compilation if this is a
+# cross-compiler which does not use the native headers and libraries.
+ # APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
 # Also use all.cross instead of all.internal and adjust SYSTEM_HEADER_DIR.
 CROSS=
 ALL=all.internal
@@ -13168,7 +13324,9 @@ fi
 
 if test x$host != x$target
 then
-	CROSS="-DCROSS_COMPILE"
+ # APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
+	CROSS="-DCROSS_DIRECTORY_STRUCTURE"
+ # APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
 	ALL=all.cross
 	SYSTEM_HEADER_DIR=$build_system_header_dir
 	case "$host","$target" in
@@ -13719,6 +13877,45 @@ cat >>confdefs.h <<\_ACEOF
 _ACEOF
 
 fi
+
+# APPLE LOCAL begin mainline x86_64 literal16
+echo "$as_me:$LINENO: checking assembler for .literal16" >&5
+echo $ECHO_N "checking assembler for .literal16... $ECHO_C" >&6
+if test "${gcc_cv_as_literal16+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  gcc_cv_as_literal16=no
+    if test $in_tree_gas = yes; then
+    if test $gcc_cv_gas_vers -ge `expr \( \( 2 \* 1000 \) + 8 \) \* 1000 + 0`
+  then gcc_cv_as_literal16=yes
+fi
+  elif test x$gcc_cv_as != x; then
+    echo '.literal16' > conftest.s
+    if { ac_try='$gcc_cv_as  -o conftest.o conftest.s >&5'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; }
+    then
+	gcc_cv_as_literal16=yes
+    else
+      echo "configure: failed program was" >&5
+      cat conftest.s >&5
+    fi
+    rm -f conftest.o conftest.s
+  fi
+fi
+echo "$as_me:$LINENO: result: $gcc_cv_as_literal16" >&5
+echo "${ECHO_T}$gcc_cv_as_literal16" >&6
+if test $gcc_cv_as_literal16 = yes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define HAVE_GAS_LITERAL16 1
+_ACEOF
+
+fi
+# APPLE LOCAL end mainline x86_64 literal16
 
 echo "$as_me:$LINENO: checking assembler for working .subsection -1" >&5
 echo $ECHO_N "checking assembler for working .subsection -1... $ECHO_C" >&6
@@ -16000,46 +16197,151 @@ _ACEOF
 
 fi
 
+# APPLE LOCAL begin mainline
 # Test for stack protector support in target C library.
-case "$target" in
-  *-*-linux*)
-    echo "$as_me:$LINENO: checking __stack_chk_fail in target GNU C library" >&5
-echo $ECHO_N "checking __stack_chk_fail in target GNU C library... $ECHO_C" >&6
+echo "$as_me:$LINENO: checking __stack_chk_fail in target C library" >&5
+echo $ECHO_N "checking __stack_chk_fail in target C library... $ECHO_C" >&6
 if test "${gcc_cv_libc_provides_ssp+set}" = set; then
   echo $ECHO_N "(cached) $ECHO_C" >&6
 else
   gcc_cv_libc_provides_ssp=no
+    case "$target" in
+       *-*-linux*)
       if test x$host != x$target || test "x$TARGET_SYSTEM_ROOT" != x; then
-	if test "x$with_sysroot" = x; then
-	  glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-include"
-	elif test "x$with_sysroot" = xyes; then
-	  glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-root/usr/include"
-	else
-	  glibc_header_dir="${with_sysroot}/usr/include"
-	fi
+        if test "x$with_sysroot" = x; then
+          glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-include"
+        elif test "x$with_sysroot" = xyes; then
+          glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-root/usr/include"
+        else
+          glibc_header_dir="${with_sysroot}/usr/include"
+        fi
       else
-	glibc_header_dir=/usr/include
+        glibc_header_dir=/usr/include
       fi
       # glibc 2.4 and later provides __stack_chk_fail and
       # either __stack_chk_guard, or TLS access to stack guard canary.
       if test -f $glibc_header_dir/features.h \
-	 && $EGREP '^[ 	]*#[ 	]*define[ 	]+__GNU_LIBRARY__[ 	]+([1-9][0-9]|[6-9])' \
-	    $glibc_header_dir/features.h > /dev/null; then
-	if $EGREP '^[ 	]*#[ 	]*define[ 	]+__GLIBC__[ 	]+([1-9][0-9]|[3-9])' \
-	   $glibc_header_dir/features.h > /dev/null; then
-	  gcc_cv_libc_provides_ssp=yes
-	elif $EGREP '^[ 	]*#[ 	]*define[ 	]+__GLIBC__[ 	]+2' \
-	     $glibc_header_dir/features.h > /dev/null \
-	     && $EGREP '^[ 	]*#[ 	]*define[ 	]+__GLIBC_MINOR__[ 	]+([1-9][0-9]|[4-9])' \
-	     $glibc_header_dir/features.h > /dev/null; then
-	  gcc_cv_libc_provides_ssp=yes
-	fi
-      fi
+         && $EGREP '^[       ]*#[         ]*define[       ]+__GNU_LIBRARY__[      ]+([
+1-9]0-9|6-9)' \
+            $glibc_header_dir/features.h > /dev/null; then
+        if $EGREP '^[        ]*#[         ]*define[       ]+__GLIBC__[    ]+([1-9][0-9
+]|3-9)' \
+           $glibc_header_dir/features.h > /dev/null; then
+          gcc_cv_libc_provides_ssp=yes
+        elif $EGREP '^[      ]*#[         ]*define[       ]+__GLIBC__[    ]+2' \
+             $glibc_header_dir/features.h > /dev/null \
+             && $EGREP '^[   ]*#[         ]*define[       ]+__GLIBC_MINOR__[      ]+([
+1-9]0-9|4-9)' \
+             $glibc_header_dir/features.h > /dev/null; then
+          gcc_cv_libc_provides_ssp=yes
+        fi
+        fi
+        ;;
+       *-*-darwin*)
+         echo "$as_me:$LINENO: checking for __stack_chk_fail" >&5
+echo $ECHO_N "checking for __stack_chk_fail... $ECHO_C" >&6
+if test "${ac_cv_func___stack_chk_fail+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  cat >conftest.$ac_ext <<_ACEOF
+/* confdefs.h.  */
+_ACEOF
+cat confdefs.h >>conftest.$ac_ext
+cat >>conftest.$ac_ext <<_ACEOF
+/* end confdefs.h.  */
+/* Define __stack_chk_fail to an innocuous variant, in case <limits.h> declares __stack_chk_fail.
+   For example, HP-UX 11i <limits.h> declares gettimeofday.  */
+#define __stack_chk_fail innocuous___stack_chk_fail
+
+/* System header to define __stub macros and hopefully few prototypes,
+    which can conflict with char __stack_chk_fail (); below.
+    Prefer <limits.h> to <assert.h> if __STDC__ is defined, since
+    <limits.h> exists even on freestanding compilers.  */
+
+#ifdef __STDC__
+# include <limits.h>
+#else
+# include <assert.h>
+#endif
+
+#undef __stack_chk_fail
+
+/* Override any gcc2 internal prototype to avoid an error.  */
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+/* We use char because int might match the return type of a gcc2
+   builtin and then its argument prototype would still apply.  */
+char __stack_chk_fail ();
+/* The GNU C library defines this for functions which it implements
+    to always fail with ENOSYS.  Some functions are actually named
+    something starting with __ and the normal name is an alias.  */
+#if defined (__stub___stack_chk_fail) || defined (__stub_____stack_chk_fail)
+choke me
+#else
+char (*f) () = __stack_chk_fail;
+#endif
+#ifdef __cplusplus
+}
+#endif
+
+int
+main ()
+{
+return f != __stack_chk_fail;
+  ;
+  return 0;
+}
+_ACEOF
+rm -f conftest.$ac_objext conftest$ac_exeext
+if { (eval echo "$as_me:$LINENO: \"$ac_link\"") >&5
+  (eval $ac_link) 2>conftest.er1
+  ac_status=$?
+  grep -v '^ *+' conftest.er1 >conftest.err
+  rm -f conftest.er1
+  cat conftest.err >&5
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); } &&
+	 { ac_try='test -z "$ac_c_werror_flag"
+			 || test ! -s conftest.err'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; } &&
+	 { ac_try='test -s conftest$ac_exeext'
+  { (eval echo "$as_me:$LINENO: \"$ac_try\"") >&5
+  (eval $ac_try) 2>&5
+  ac_status=$?
+  echo "$as_me:$LINENO: \$? = $ac_status" >&5
+  (exit $ac_status); }; }; then
+  ac_cv_func___stack_chk_fail=yes
+else
+  echo "$as_me: failed program was:" >&5
+sed 's/^/| /' conftest.$ac_ext >&5
+
+ac_cv_func___stack_chk_fail=no
+fi
+rm -f conftest.err conftest.$ac_objext \
+      conftest$ac_exeext conftest.$ac_ext
+fi
+echo "$as_me:$LINENO: result: $ac_cv_func___stack_chk_fail" >&5
+echo "${ECHO_T}$ac_cv_func___stack_chk_fail" >&6
+if test $ac_cv_func___stack_chk_fail = yes; then
+  gcc_cv_libc_provides_ssp=yes
+else
+  echo "no __stack_chk_fail on this target"
+fi
+
+        ;;
+  *) gcc_cv_libc_provides_ssp=no ;;
+    esac
 fi
 echo "$as_me:$LINENO: result: $gcc_cv_libc_provides_ssp" >&5
-echo "${ECHO_T}$gcc_cv_libc_provides_ssp" >&6 ;;
-  *) gcc_cv_libc_provides_ssp=no ;;
-esac
+echo "${ECHO_T}$gcc_cv_libc_provides_ssp" >&6
+
+# APPLE LOCAL end mainline
 if test x$gcc_cv_libc_provides_ssp = xyes; then
 
 cat >>confdefs.h <<\_ACEOF

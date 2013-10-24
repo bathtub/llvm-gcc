@@ -867,6 +867,17 @@ extern const char * const reg_note_name[];
 						 0, VAR_LOCATION))
 #define NOTE_VAR_LOCATION_LOC(INSN)	(XCEXP (XCEXP (INSN, 4, NOTE),  \
 						1, VAR_LOCATION))
+/* APPLE LOCAL begin track initialization status 4964532  */
+#define NOTE_VAR_LOCATION_STATUS(INSN)  (XCINT (XCEXP (INSN, 4, NOTE), \
+						2, VAR_LOCATION))
+
+enum var_init_status
+{
+  STATUS_UNKNOWN,
+  STATUS_UNINITIALIZED,
+  STATUS_INITIALIZED
+};
+/* APPLE LOCAL end track initialization status 4964532  */
 
 /* Codes that appear in the NOTE_LINE_NUMBER field for kinds of notes
    that are not line numbers.  These codes are all negative.
@@ -903,6 +914,15 @@ extern const char * const note_insn_name[NOTE_INSN_MAX - NOTE_INSN_BIAS];
    of LABEL_REFs that point at it, so unused labels can be deleted.  */
 #define LABEL_NUSES(RTX) XCINT (RTX, 4, CODE_LABEL)
 
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* The alignment of the label, as the log-base-2 of the alignment in bytes.  */
+#define LABEL_ALIGN_LOG(RTX) (XCUINT (RTX, 8, CODE_LABEL) & 0xFF)
+/* The maximum number of bytes to skip to achieve that alignment.  */
+#define LABEL_MAX_SKIP(RTX) (XCUINT (RTX, 8, CODE_LABEL) >> 8)
+#define SET_LABEL_ALIGN(RTX, ALIGN, MAX_SKIP) \
+  (XCUINT (RTX, 8, CODE_LABEL) = (ALIGN) | ((MAX_SKIP) << 8))
+
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 /* Labels carry a two-bit field composed of the ->jump and ->call
    bits.  This field indicates whether the label is an alternate
    entry point, and if so, what kind.  */
@@ -1522,6 +1542,10 @@ extern rtx simplify_subtraction (rtx);
 
 /* In function.c  */
 extern rtx assign_stack_local (enum machine_mode, HOST_WIDE_INT, int);
+/* APPLE LOCAL begin next declaration */
+extern rtx assign_stack_local_with_alias (enum machine_mode, 
+					  HOST_WIDE_INT, int);
+/* APPLE LOCAL end next declaration */
 extern rtx assign_stack_temp (enum machine_mode, HOST_WIDE_INT, int);
 extern rtx assign_stack_temp_for_type (enum machine_mode,
 				       HOST_WIDE_INT, int, tree);
@@ -2226,6 +2250,8 @@ extern int read_rtx_lineno;
 extern void clear_reg_alias_info (rtx);
 extern rtx canon_rtx (rtx);
 extern int true_dependence (rtx, enum machine_mode, rtx, int (*)(rtx, int));
+/* APPLE LOCAL nop on true-dependence. */
+extern int must_true_dependence (rtx, rtx);
 extern rtx get_addr (rtx);
 extern int canon_true_dependence (rtx, enum machine_mode, rtx, rtx,
 				  int (*)(rtx, int));
@@ -2240,6 +2266,8 @@ extern rtx find_base_term (rtx);
 extern rtx gen_hard_reg_clobber (enum machine_mode, unsigned int);
 extern rtx get_reg_known_value (unsigned int);
 extern bool get_reg_known_equiv_p (unsigned int);
+/* APPLE LOCAL 5695218 */
+extern rtx replace_regs (rtx, rtx *, unsigned int, int);
 
 #ifdef STACK_REGS
 extern int stack_regs_mentioned (rtx insn);

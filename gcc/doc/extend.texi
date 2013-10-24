@@ -56,8 +56,15 @@ extensions, accepted by GCC in C89 mode and in C++.
 * C++ Comments::        C++ comments are recognized.
 * Dollar Signs::        Dollar sign is allowed in identifiers.
 * Character Escapes::   @samp{\e} stands for the character @key{ESC}.
+@c APPLE LOCAL begin pascal strings
+* Pascal Strings::      Constructing string literals with a Pascal-style 
+                         length byte.
+@c APPLE LOCAL end pascal strings
 * Variable Attributes::	Specifying attributes of variables.
 * Type Attributes::	Specifying attributes of types.
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+* Label Attributes::	Specifying attributes of labels and statements.
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 * Alignment::           Inquiring about the alignment of a type or variable.
 * Inline::              Defining inline functions (as fast as macros).
 * Extended Asm::        Assembler instructions with C expressions as operands.
@@ -65,6 +72,8 @@ extensions, accepted by GCC in C89 mode and in C++.
 * Constraints::         Constraints for asm operands
 * Asm Labels::          Specifying the assembler name to use for a C symbol.
 * Explicit Reg Vars::   Defining variables residing in specified registers.
+@c APPLE LOCAL CW asm blocks
+* Asm Blocks and Functions:: Block and functions of assembly code.
 * Alternate Keywords::  @code{__const__}, @code{__asm__}, etc., for header files.
 * Incomplete Enums::    @code{enum foo;}, with details to follow.
 * Function Names::	Printable strings which are the name of the current
@@ -81,6 +90,8 @@ extensions, accepted by GCC in C89 mode and in C++.
 * Pragmas::             Pragmas accepted by GCC.
 * Unnamed Fields::      Unnamed struct/union fields within structs/unions.
 * Thread-Local::        Per-thread variables.
+@c APPLE LOCAL blocks 7205047 5811887
+* Blocks::              Anonymous functions (closures).
 @end menu
 
 @node Statement Exprs
@@ -374,9 +385,14 @@ allows the data to be read-only.
 @cindex thunks
 
 A @dfn{nested function} is a function defined inside another function.
-(Nested functions are not supported for GNU C++.)  The nested function's
-name is local to the block where it is defined.  For example, here we
-define a nested function named @code{square}, and call it twice:
+@c APPLE LOCAL begin nested functions 4357979
+Nested functions are not supported for GNU C++ and are disable by
+default on Darwin.  The @option{-fnested-functions} and
+@option{-fno-nested-functions} options can be used to enable and
+disable nested function suppport.  The nested function's name is local
+to the block where it is defined.  For example, here we define a
+nested function named @code{square}, and call it twice:
+@c APPLE LOCAL end nested functions 4357979
 
 @smallexample
 @group
@@ -1576,7 +1592,13 @@ The keyword @code{__attribute__} allows you to specify special
 attributes when making a declaration.  This keyword is followed by an
 attribute specification inside double parentheses.  The following
 attributes are currently defined for functions on all targets:
+@c APPLE LOCAL mainline aligned functions 5933878
+@code{aligned},
 @code{noreturn}, @code{returns_twice}, @code{noinline}, @code{always_inline},
+@c APPLE LOCAL nodebug
+@code{nodebug},
+@c APPLE LOCAL regparmandstackparm
+@code{regparmandstackparm},
 @code{flatten}, @code{pure}, @code{const}, @code{nothrow}, @code{sentinel},
 @code{format}, @code{format_arg}, @code{no_instrument_function},
 @code{section}, @code{constructor}, @code{destructor}, @code{used},
@@ -1585,8 +1607,11 @@ attributes are currently defined for functions on all targets:
 @code{gnu_inline} and @code{externally_visible}.  Several other
 attributes are defined for functions on particular target systems.  Other
 attributes, including @code{section} are supported for variables declarations
-(@pxref{Variable Attributes}) and for types (@pxref{Type Attributes}).
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+(@pxref{Variable Attributes}), for types (@pxref{Type Attributes}),
+and labels (@pxref{Label Attributes}).
 
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 You may also specify attributes with @samp{__} preceding and following
 each keyword.  This allows you to use them in header files without
 being concerned about a possible macro of the same name.  For example,
@@ -1613,6 +1638,29 @@ mangled name for the target must be used.  It is an error if @samp{__f}
 is not defined in the same translation unit.
 
 Not all target machines support this attribute.
+
+@c APPLE LOCAL begin mainline aligned functions 5933878
+@item aligned (@var{alignment})
+@cindex @code{aligned} attribute
+This attribute specifies a minimum alignment for the function,
+measured in bytes.
+
+You cannot use this attribute to decrease the alignment of a function,
+only to increase it.  However, when you explicitly specify a function
+alignment this will override the effect of the
+@option{-falign-functions} (@pxref{Optimize Options}) option for this
+function.
+
+Note that the effectiveness of @code{aligned} attributes may be
+limited by inherent limitations in your linker.  On many systems, the
+linker is only able to arrange for functions to be aligned up to a
+certain maximum alignment.  (For some linkers, the maximum supported
+alignment may be very very small.)  See your linker documentation for
+further information.
+
+The @code{aligned} attribute can also be used for variables and fields
+(@pxref{Variable Attributes}.)
+@c APPLE LOCAL end mainline aligned functions 5933878
 
 @item always_inline
 @cindex @code{always_inline} function attribute
@@ -1655,10 +1703,21 @@ preprocessor macros @code{__GNUC_GNU_INLINE__} or
 Function is As Fast As a Macro}.
 
 Note that since the first version of GCC to support C99 inline semantics
-is 4.3, earlier versions of GCC which accept this attribute effectively
+/* APPLE LOCAL extern inline */
+is 4.3 (4.2 for Apple's gcc), earlier versions of GCC which accept this attribute effectively
 assume that it is always present, whether or not it is given explicitly.
-In versions prior to 4.3, the only effect of explicitly including it is
+/* APPLE LOCAL extern inline */
+In versions prior to 4.3 (4.2 for Apple's gcc), the only effect of explicitly including it is
 to disable warnings about using inline functions in C99 mode.
+
+@c APPLE LOCAL begin nodebug
+@item nodebug
+@cindex @code{nodebug} function attribute
+This attribute prevents debug information to be generated for the function.
+This is to avoid stepping into the function which is of no interest to the
+user how it is implemented. An example is the x86 vector intrinsics.
+This is temporary and will be removed in some future version of the compiler.
+@c APPLE LOCAL end nodebug
 
 @cindex @code{flatten} function attribute
 @item flatten
@@ -2013,6 +2072,8 @@ When used together with @code{interrupt_handler}, @code{exception_handler}
 or @code{nmi_handler}, code will be generated to load the stack pointer
 from the USP register in the function prologue.
 
+@c APPLE LOCAL prune man page
+@ignore
 @item long_call/short_call
 @cindex indirect calls on ARM
 This attribute specifies how a particular function is called on
@@ -2023,6 +2084,8 @@ away from the call site and require a different (more expensive)
 calling sequence.   The @code{short_call} attribute always places
 the offset to the function from the call site into the @samp{BL}
 instruction directly.
+@c APPLE LOCAL prune man page
+@end ignore
 
 @item longcall/shortcall
 @cindex functions called via pointer on the RS/6000 and PowerPC
@@ -2037,6 +2100,8 @@ PowerPC, the @code{#pragma longcall} setting.
 @xref{RS/6000 and PowerPC Options}, for more information on whether long
 calls are necessary.
 
+@c APPLE LOCAL prune man page
+@ignore
 @item long_call
 @cindex indirect calls on MIPS
 This attribute specifies how a particular function is called on MIPS@.
@@ -2044,6 +2109,8 @@ The attribute overrides the @option{-mlong-calls} (@pxref{MIPS Options})
 command line switch.  This attribute causes the compiler to always call
 the function by first loading its address into a register, and then using
 the contents of that register.
+@c APPLE LOCAL prune man page
+@end ignore
 
 @item malloc
 @cindex @code{malloc} attribute
@@ -2354,6 +2421,50 @@ function is a signal handler.  The compiler will generate function
 entry and exit sequences suitable for use in a signal handler when this
 attribute is present.  Interrupts will be disabled inside the function.
 
+@c APPLE LOCAL begin regparmandstackparm
+@item regparmandstackparm
+
+This is an X86_32-specific attribute.
+
+Two entry points will be created for this function.  One will have the
+traditional calling convention, and the other will have a mangled name
+and a register-based calling convention.
+
+The register-based calling convention will pass up to four float or
+double values in XMM registers, and up to two integral values in
+integer registers.  Long double values are still passed on the stack,
+and functions returning long double will still use the x87 stacktop.
+
+Other modules linked with this function may use either entry point.
+If a calling module has seen an extern declaration with the
+@code{regparmandstackparm} attribute, it will call the register-based
+entry point; otherwise, it will use the traditional entry point in the
+usual way.
+
+When taking the address of a @code{regparmandstackparm} function, the
+address of the traditional entry point will be used.  Calls through
+function pointers always use the traditional calling convention.
+
+The mangled name is currently created by appending ``$3SSE'' to the
+original function name (before any C++ name-mangling), but users
+should not rely upon this.
+
+The current implementation associates the original function body with
+the register-based entry point.  The traditional entry point will load
+some registers from the stack and call the register-based entry point.
+This means the traditional entry point will be slightly less efficient
+than a function without the @code{regparmandstackparm} attribute, and the
+generated code will be slightly larger.  Depending upon sizes and
+optimization levels, the inliner may inline the register-based body
+into the traditional entry point; nothing is done to preclude this.
+If the function was declared @code{static}, optimization may discard
+the original entry point entirely.
+
+@smallexample
+extern double __attribute__ ((regparmandstackparm)) my_cos (double d);
+@end smallexample
+@c APPLE LOCAL end regparmandstackparm
+
 @item sp_switch
 Use this attribute on the SH to indicate an @code{interrupt_handler}
 function should switch to an alternate stack.  It expects a string
@@ -2619,10 +2730,14 @@ declarations only, but not on nested declarators.
 
 @xref{Function Attributes}, for details of the semantics of attributes
 applying to functions.  @xref{Variable Attributes}, for details of the
-semantics of attributes applying to variables.  @xref{Type Attributes},
-for details of the semantics of attributes applying to structure, union
-and enumerated types.
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+semantics of attributes applying to variables.  @xref{Type
+Attributes}, for details of the semantics of attributes applying to
+structure, union and enumerated types.  @xref{Label Attributes}, for
+details of the semantics of attributes applying to labels and
+statements.
 
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 An @dfn{attribute specifier} is of the form
 @code{__attribute__ ((@var{attribute-list}))}.  An @dfn{attribute list}
 is a possibly empty comma-separated sequence of @dfn{attributes}, where
@@ -2659,19 +2774,18 @@ with the list being a single string constant.
 An @dfn{attribute specifier list} is a sequence of one or more attribute
 specifiers, not separated by any other tokens.
 
-In GNU C, an attribute specifier list may appear after the colon following a
-label, other than a @code{case} or @code{default} label.  The only
-attribute it makes sense to use after a label is @code{unused}.  This
-feature is intended for code generated by programs which contains labels
-that may be unused but which is compiled with @option{-Wall}.  It would
-not normally be appropriate to use in it human-written code, though it
-could be useful in cases where the code that jumps to the label is
-contained within an @code{#ifdef} conditional.  GNU C++ does not permit
-such placement of attribute lists, as it is permissible for a
-declaration, which could begin with an attribute list, to be labelled in
-C++.  Declarations cannot be labelled in C90 or C99, so the ambiguity
-does not arise there.
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+In GNU C, an attribute specifier list may appear after the colon
+following a label, other than a @code{case} or @code{default} label.
+GNU C++ does not permit such placement of attribute lists, as it is
+permissible for a declaration, which could begin with an attribute
+list, to be labelled in C++.  Declarations cannot be labelled in C90
+or C99, so the ambiguity does not arise there.
 
+In GNU C an attribute specifier list may also appear after the keyword
+@code{while} in a while loop, after @code{do} and after @code{for}.
+
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 An attribute specifier list may appear as part of a @code{struct},
 @code{union} or @code{enum} specifier.  It may go either immediately
 after the @code{struct}, @code{union} or @code{enum} keyword, or after
@@ -2929,6 +3043,62 @@ machines, typically because the target assembler does not allow them.
 You can use the sequence @samp{\e} in a string or character constant to
 stand for the ASCII character @key{ESC}.
 
+@c APPLE LOCAL begin pascal strings
+@node Pascal Strings
+@section Constructing String Literals with a Pascal-style Length Byte
+@cindex Pascal length byte
+@cindex Pascal strings
+
+Specifying the @w{@option{-fpascal-strings}} option will cause the
+compiler to recognize and construct Pascal-style string literals.  This
+functionality is disabled by default; furthermore, its use in new code
+is discouraged.
+
+Pascal string literals take the form @samp{"\pstring"}.  The special
+escape sequence @samp{\p} denotes the Pascal length byte for the string,
+and will be replaced at compile time with the number of characters that
+follow.  The @samp{\p} may only appear at the beginning of a string
+literal, and may @emph{not} appear in wide string literals or as an
+integral constant.
+
+As is the case with C string literals, Pascal string literals are
+terminated with a NUL character; this character is @emph{not} counted
+when computing the value of the length byte.  The maximum @samp{unsigned
+char} value that can be stored in the length byte is also the maximum
+permissible length for the Pascal literal itself.  On most target
+platforms, this value is 255 (excluding both the length byte and the
+terminating NUL).
+
+Pascal-style literals are treated by the compiler as being of type
+@samp{const unsigned char []} in C++ and @samp{unsigned char []} (or
+@samp{const unsigned char []}, if the @w{@option{-Wwrite-strings}}
+option is given) in C.  Pascal string literals may be used as static
+initializers for @samp{char} arrays (whose elements need not be
+@samp{unsigned} or @samp{const}).  They may also be converted to
+@samp{const unsigned char *} and, in the C language to @samp{const char
+*} of any signedness (In C, if the @w{@option{-Wwrite-strings}} is not
+given, then @samp{const} may be omitted as well).  For example:
+
+@example
+const unsigned char a[] = "\pHello";
+char b[] = "\pGoodbye";
+const unsigned char *c = "\pHello";
+const signed char *d = "\pHello";    /* error in C++ */
+char *e = "\pHi";  /* error in C++; warning in C with -Wwrite-strings */
+unsigned char *f = "\pHello";      /* error in C++ */
+@end example
+
+@noindent
+In all other respects, Pascal-style string literals behave the same as
+ordinary string literals.  For example, if a program attempts to modify
+the conents of a Pascal-style string literal at run-time, the behaviour
+is undefined, unless the @w{@option{-fwritable-strings}} option is used.
+
+Pascal-style literals are useful for calling external routines that
+expect Pascal strings as arguments, as is true with some Apple MacOS
+Toolbox calls.
+@c APPLE LOCAL end pascal strings
+
 @node Alignment
 @section Inquiring on Alignment of Types or Variables
 @cindex alignment
@@ -2975,10 +3145,12 @@ by an attribute specification inside double parentheses.  Some
 attributes are currently defined generically for variables.
 Other attributes are defined for variables on particular target
 systems.  Other attributes are available for functions
-(@pxref{Function Attributes}) and for types (@pxref{Type Attributes}).
-Other front ends might define more attributes
-(@pxref{C++ Extensions,,Extensions to the C++ Language}).
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+(@pxref{Function Attributes}), types (@pxref{Type Attributes}) and 
+labels (@pxref{Label Attributes}).  Other front ends might define
+more attributes (@pxref{C++ Extensions,,Extensions to the C++ Language}).
 
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 You may also specify attributes with @samp{__} preceding and following
 each keyword.  This allows you to use them in header files without
 being concerned about a possible macro of the same name.  For example,
@@ -3044,6 +3216,11 @@ be very very small.)  If your linker is only able to align variables
 up to a maximum of 8 byte alignment, then specifying @code{aligned(16)}
 in an @code{__attribute__} will still only provide you with 8 byte
 alignment.  See your linker documentation for further information.
+
+@c APPLE LOCAL begin aligned functions 5933878
+The @code{aligned} attribute can also be used for functions
+(@pxref{Function Attributes}.)
+@c APPLE LOCAL end aligned functions 5933878
 
 @item cleanup (@var{cleanup_function})
 @cindex @code{cleanup} attribute
@@ -3298,150 +3475,15 @@ Medium and large model objects may live anywhere in the 32-bit address space
 addresses).
 @end table
 
-@anchor{i386 Variable Attributes}
-@subsection i386 Variable Attributes
-
-Two attributes are currently defined for i386 configurations:
-@code{ms_struct} and @code{gcc_struct}
-
-@table @code
-@item ms_struct
-@itemx gcc_struct
-@cindex @code{ms_struct} attribute
-@cindex @code{gcc_struct} attribute
-
-If @code{packed} is used on a structure, or if bit-fields are used
-it may be that the Microsoft ABI packs them differently
-than GCC would normally pack them.  Particularly when moving packed
-data between functions compiled with GCC and the native Microsoft compiler
-(either via function call or as data in a file), it may be necessary to access
-either format.
-
-Currently @option{-m[no-]ms-bitfields} is provided for the Microsoft Windows X86
-compilers to match the native Microsoft compiler.
-
-The Microsoft structure layout algorithm is fairly simple with the exception
-of the bitfield packing:
-
-The padding and alignment of members of structures and whether a bit field
-can straddle a storage-unit boundary
-
-@enumerate
-@item Structure members are stored sequentially in the order in which they are
-declared: the first member has the lowest memory address and the last member
-the highest.
-
-@item Every data object has an alignment-requirement. The alignment-requirement
-for all data except structures, unions, and arrays is either the size of the
-object or the current packing size (specified with either the aligned attribute
-or the pack pragma), whichever is less. For structures,  unions, and arrays,
-the alignment-requirement is the largest alignment-requirement of its members.
-Every object is allocated an offset so that:
-
-offset %  alignment-requirement == 0
-
-@item Adjacent bit fields are packed into the same 1-, 2-, or 4-byte allocation
-unit if the integral types are the same size and if the next bit field fits
-into the current allocation unit without crossing the boundary imposed by the
-common alignment requirements of the bit fields.
-@end enumerate
-
-Handling of zero-length bitfields:
-
-MSVC interprets zero-length bitfields in the following ways:
-
-@enumerate
-@item If a zero-length bitfield is inserted between two bitfields that would
-normally be coalesced, the bitfields will not be coalesced.
-
-For example:
-
-@smallexample
-struct
- @{
-   unsigned long bf_1 : 12;
-   unsigned long : 0;
-   unsigned long bf_2 : 12;
- @} t1;
-@end smallexample
-
-The size of @code{t1} would be 8 bytes with the zero-length bitfield.  If the
-zero-length bitfield were removed, @code{t1}'s size would be 4 bytes.
-
-@item If a zero-length bitfield is inserted after a bitfield, @code{foo}, and the
-alignment of the zero-length bitfield is greater than the member that follows it,
-@code{bar}, @code{bar} will be aligned as the type of the zero-length bitfield.
-
-For example:
-
-@smallexample
-struct
- @{
-   char foo : 4;
-   short : 0;
-   char bar;
- @} t2;
-
-struct
- @{
-   char foo : 4;
-   short : 0;
-   double bar;
- @} t3;
-@end smallexample
-
-For @code{t2}, @code{bar} will be placed at offset 2, rather than offset 1.
-Accordingly, the size of @code{t2} will be 4.  For @code{t3}, the zero-length
-bitfield will not affect the alignment of @code{bar} or, as a result, the size
-of the structure.
-
-Taking this into account, it is important to note the following:
-
-@enumerate
-@item If a zero-length bitfield follows a normal bitfield, the type of the
-zero-length bitfield may affect the alignment of the structure as whole. For
-example, @code{t2} has a size of 4 bytes, since the zero-length bitfield follows a
-normal bitfield, and is of type short.
-
-@item Even if a zero-length bitfield is not followed by a normal bitfield, it may
-still affect the alignment of the structure:
-
-@smallexample
-struct
- @{
-   char foo : 6;
-   long : 0;
- @} t4;
-@end smallexample
-
-Here, @code{t4} will take up 4 bytes.
-@end enumerate
-
-@item Zero-length bitfields following non-bitfield members are ignored:
-
-@smallexample
-struct
- @{
-   char foo;
-   long : 0;
-   char bar;
- @} t5;
-@end smallexample
-
-Here, @code{t5} will take up 2 bytes.
-@end enumerate
-@end table
-
+@c APPLE LOCAL begin 5946347 ms_struct support
+@anchor{PowerPC Variable Attributes}
 @subsection PowerPC Variable Attributes
 
-Three attributes currently are defined for PowerPC configurations:
-@code{altivec}, @code{ms_struct} and @code{gcc_struct}.
+One is defined for PowerPC configurations: @code{altivec}.
 
-For full documentation of the struct attributes please see the
-documentation in the @xref{i386 Variable Attributes}, section.
-
-For documentation of @code{altivec} attribute please see the
+For documentation of the @code{altivec} attribute please see the
 documentation in the @xref{PowerPC Type Attributes}, section.
+@c APPLE LOCAL end 5946347 ms_struct support
 
 @subsection Xstormy16 Variable Attributes
 
@@ -3472,9 +3514,11 @@ inside double parentheses.  Seven attributes are currently defined for
 types: @code{aligned}, @code{packed}, @code{transparent_union},
 @code{unused}, @code{deprecated}, @code{visibility}, and
 @code{may_alias}.  Other attributes are defined for functions
-(@pxref{Function Attributes}) and for variables (@pxref{Variable
-Attributes}).
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+(@pxref{Function Attributes}), variables (@pxref{Variable
+Attributes}), and labels (@pxref{Label Attributes}).
 
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 You may also specify any one of these attributes with @samp{__}
 preceding and following its keyword.  This allows you to use these
 attributes in header files without being concerned about a possible
@@ -3749,7 +3793,171 @@ and caught in another, the class must have default visibility.
 Otherwise the two shared objects will be unable to use the same
 typeinfo node and exception handling will break.
 
+@c APPLE LOCAL begin weak types 5954418
+@item weak
+In C++, attribute weak can be applied to a class to ensure that all
+non-hidden instances of the type are treated as the same type across
+shared library boundaries on platforms (such as darwin and arm aapcs)
+that can emit vtables and the type info meta data as non-comdat
+symbols.  This is useful when the class has a key method and the
+translation unit that contains the key method is used in more than one
+shared library or in a shared library and the application.  Doing this
+results in more expensive startup times.  This attribute is inherited
+by subclasses, so it is only necessary to mark a base type.  The
+typical use would be to mark any types used for throwing across shared
+library boundaries or those used in dynamic_cast operations across a
+shared library boundary.
+@c APPLE LOCAL end weak types 5954418
+
+@c APPLE LOCAL begin 5946347 ms_struct support
+@end table
+
+To specify multiple attributes, separate them by commas within the
+double parentheses: for example, @samp{__attribute__ ((aligned (16),
+packed))}.
+
+@anchor{i386 Type Attributes}
+@subsection i386 Type Attributes
+
+Two attributes are currently defined for i386 configurations:
+@code{ms_struct} and @code{gcc_struct}
+
+@table @code
+@item ms_struct
+@itemx gcc_struct
+@cindex @code{ms_struct} attribute
+@cindex @code{gcc_struct} attribute
+
+If @code{packed} is used on a structure, or if bit-fields are used
+it may be that the Microsoft ABI packs them differently
+than GCC would normally pack them.  Particularly when moving packed
+data between functions compiled with GCC and the native Microsoft compiler
+(either via function call or as data in a file), it may be necessary to access
+either format.
+
+Currently @option{-m[no-]ms-bitfields} is provided for the Microsoft Windows X86
+compilers to match the native Microsoft compiler.
+
+The Microsoft structure layout algorithm is fairly simple with the exception
+of the bitfield packing:
+
+The padding and alignment of members of structures and whether a bit field
+can straddle a storage-unit boundary
+
+@enumerate
+@item Structure members are stored sequentially in the order in which they are
+declared: the first member has the lowest memory address and the last member
+the highest.
+
+@item Every data object has an alignment-requirement. The alignment-requirement
+for all data except structures, unions, and arrays is either the size of the
+object or the current packing size (specified with either the aligned attribute
+or the pack pragma), whichever is less. For structures,  unions, and arrays,
+the alignment-requirement is the largest alignment-requirement of its members.
+Every object is allocated an offset so that:
+
+offset %  alignment-requirement == 0
+
+@item Adjacent bit fields are packed into the same 1-, 2-, or 4-byte allocation
+unit if the integral types are the same size and if the next bit field fits
+into the current allocation unit without crossing the boundary imposed by the
+common alignment requirements of the bit fields.
+@end enumerate
+
+Handling of zero-length bitfields:
+
+MSVC interprets zero-length bitfields in the following ways:
+
+@enumerate
+@item If a zero-length bitfield is inserted between two bitfields that would
+normally be coalesced, the bitfields will not be coalesced.
+
+For example:
+
+@smallexample
+struct
+ @{
+   unsigned long bf_1 : 12;
+   unsigned long : 0;
+   unsigned long bf_2 : 12;
+ @} t1;
+@end smallexample
+
+The size of @code{t1} would be 8 bytes with the zero-length bitfield.  If the
+zero-length bitfield were removed, @code{t1}'s size would be 4 bytes.
+
+@item If a zero-length bitfield is inserted after a bitfield, @code{foo}, and the
+alignment of the zero-length bitfield is greater than the member that follows it,
+@code{bar}, @code{bar} will be aligned as the type of the zero-length bitfield.
+
+For example:
+
+@smallexample
+struct
+ @{
+   char foo : 4;
+   short : 0;
+   char bar;
+ @} t2;
+
+struct
+ @{
+   char foo : 4;
+   short : 0;
+   double bar;
+ @} t3;
+@end smallexample
+
+For @code{t2}, @code{bar} will be placed at offset 2, rather than offset 1.
+Accordingly, the size of @code{t2} will be 4.  For @code{t3}, the zero-length
+bitfield will not affect the alignment of @code{bar} or, as a result, the size
+of the structure.
+
+Taking this into account, it is important to note the following:
+
+@enumerate
+@item If a zero-length bitfield follows a normal bitfield, the type of the
+zero-length bitfield may affect the alignment of the structure as whole. For
+example, @code{t2} has a size of 4 bytes, since the zero-length bitfield follows a
+normal bitfield, and is of type short.
+
+@item Even if a zero-length bitfield is not followed by a normal bitfield, it may
+still affect the alignment of the structure:
+
+@smallexample
+struct
+ @{
+   char foo : 6;
+   long : 0;
+ @} t4;
+@end smallexample
+
+Here, @code{t4} will take up 4 bytes.
+@end enumerate
+
+@item Zero-length bitfields following non-bitfield members are ignored:
+
+@smallexample
+struct
+ @{
+   char foo;
+   long : 0;
+   char bar;
+ @} t5;
+@end smallexample
+
+Here, @code{t5} will take up 2 bytes.
+@end enumerate
+@end table
+
+@anchor{ARM Type Attributes}
 @subsection ARM Type Attributes
+
+Two attributes currently are defined for ARM configurations:
+@code{ms_struct} and @code{gcc_struct}.
+
+For full documentation of the struct attributes please see the
+documentation in the @xref{i386 Type Attributes}, section.
 
 On those ARM targets that support @code{dllimport} (such as Symbian
 OS), you can use the @code{notshared} attribute to indicate that the
@@ -3771,32 +3979,7 @@ In this code, @code{C::C} is exported from the current DLL, but the
 virtual table for @code{C} is not exported.  (You can use
 @code{__attribute__} instead of @code{__declspec} if you prefer, but
 most Symbian OS code uses @code{__declspec}.)
-
-@anchor{i386 Type Attributes}
-@subsection i386 Type Attributes
-
-Two attributes are currently defined for i386 configurations:
-@code{ms_struct} and @code{gcc_struct}
-
-@item ms_struct
-@itemx gcc_struct
-@cindex @code{ms_struct}
-@cindex @code{gcc_struct}
-
-If @code{packed} is used on a structure, or if bit-fields are used
-it may be that the Microsoft ABI packs them differently
-than GCC would normally pack them.  Particularly when moving packed
-data between functions compiled with GCC and the native Microsoft compiler
-(either via function call or as data in a file), it may be necessary to access
-either format.
-
-Currently @option{-m[no-]ms-bitfields} is provided for the Microsoft Windows X86
-compilers to match the native Microsoft compiler.
-@end table
-
-To specify multiple attributes, separate them by commas within the
-double parentheses: for example, @samp{__attribute__ ((aligned (16),
-packed))}.
+@c APPLE LOCAL end 5946347 ms_struct support
 
 @anchor{PowerPC Type Attributes}
 @subsection PowerPC Type Attributes
@@ -3822,6 +4005,67 @@ __attribute__((altivec(bool__))) unsigned
 These attributes mainly are intended to support the @code{__vector},
 @code{__pixel}, and @code{__bool} AltiVec keywords.
 
+@c APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+@node Label Attributes
+@section Specifying Attributes of Labels and Statements
+@cindex attribute of labels
+@cindex label attributes
+@cindex attribute of statements
+@cindex statement attributes
+
+The keyword @code{__attribute__} allows you to specify special
+attributes of labels and statements.
+
+Some attributes are currently defined generically for variables.
+Other attributes are defined for variables on particular target
+systems.  Other attributes are available for functions
+(@pxref{Function Attributes}), types (@pxref{Type Attributes}) and
+variables (@pxref{Variable Attributes}).
+
+You may also specify attributes with @samp{__} preceding and following
+each keyword.  This allows you to use them in header files without
+being concerned about a possible macro of the same name.  For example,
+you may use @code{__aligned__} instead of @code{aligned}.
+
+@xref{Attribute Syntax}, for details of the exact syntax for using
+attributes.
+
+@table @code
+@cindex @code{aligned} attribute
+@item aligned (@var{alignment})
+This attribute specifies a minimum alignment for the label,
+measured in bytes.  For example, the declaration:
+
+@smallexample
+  some_label: __attribute__((aligned(16)))
+@end smallexample
+
+@noindent
+requests the compiler to align the label, inserting @code{nop}s as necessary,
+to a 16-byte boundary.
+
+The alignment is only a request.  The compiler will usually be able to
+honour it but sometimes the label will be eliminated by the compiler,
+in which case its alignment will be eliminated too.
+
+When applied to loops, the @code{aligned} attribute causes the loop to
+be aligned.
+
+@item unused
+When attached to a label this attribute means that the label might not
+be used.  GCC will not produce a warning for the label, even if the
+label doesn't seem to be referenced.  This feature is intended for
+code generated by programs which contains labels that may be unused
+but which is compiled with @option{-Wall}.  It would not normally be
+appropriate to use in it human-written code, though it could be useful
+in cases where the code that jumps to the label is contained within an
+@code{#ifdef} conditional.
+
+This attribute can only be applied to labels, not statements, because
+there is no warning if a statement is removed.
+@end table
+
+@c APPLE LOCAL end for-fsf-4_4 3274130 5295549
 @node Inline
 @section An Inline Function is As Fast As a Macro
 @cindex inline functions
@@ -3829,33 +4073,56 @@ These attributes mainly are intended to support the @code{__vector},
 @cindex open coding
 @cindex macros, inline alternative
 
-By declaring a function @code{inline}, you can direct GCC to
+@c APPLE LOCAL begin mainline 4.3 2006-10-31 4134307
+By declaring a function inline, you can direct GCC to make
+calls to that function faster.  One way GCC can achieve this is to
 integrate that function's code into the code for its callers.  This
 makes execution faster by eliminating the function-call overhead; in
-addition, if any of the actual argument values are constant, their known
-values may permit simplifications at compile time so that not all of the
-inline function's code needs to be included.  The effect on code size is
-less predictable; object code may be larger or smaller with function
-inlining, depending on the particular case.  Inlining of functions is an
-optimization and it really ``works'' only in optimizing compilation.  If
-you don't use @option{-O}, no function is really inline.
+addition, if any of the actual argument values are constant, their
+known values may permit simplifications at compile time so that not
+all of the inline function's code needs to be included.  The effect on
+code size is less predictable; object code may be larger or smaller
+with function inlining, depending on the particular case.  You can
+also direct GCC to try to integrate all ``simple enough'' functions
+into their callers with the option @option{-finline-functions}.
 
-Inline functions are included in the ISO C99 standard, but there are
-currently substantial differences between what GCC implements and what
-the ISO C99 standard requires.  GCC will fully support C99 inline
-functions in version 4.3.  The traditional GCC handling of inline
-functions will still be available with @option{-std=gnu89},
+GCC implements three different semantics of declaring a function
+inline.  One is available with @option{-std=gnu89} or
 @option{-fgnu89-inline} or when @code{gnu_inline} attribute is present
-on all inline declarations.  The preprocessor macros
+on all inline declarations, another when @option{-std=c99} or
+@option{-std=gnu99} (without @option{-fgnu89-inline}), and the third
+is used when compiling C++.
+
+@c APPLE LOCAL begin Ians 4.2 wording for extern inline
+The preprocessor macros
 @code{__GNUC_GNU_INLINE__} and @code{__GNUC_STDC_INLINE__} may be used
 to determine the handling of @code{inline} during a particular
 compilation (@pxref{Common Predefined Macros,,,cpp,The C
 Preprocessor}).
+@c APPLE LOCAL end Ians 4.2 wording for extern inline
 
 To declare a function inline, use the @code{inline} keyword in its
 declaration, like this:
 
 @smallexample
+static inline int
+inc (int *a)
+@{
+  (*a)++;
+@}
+@end smallexample
+
+If you are writing a header file to be included in ISO C89 programs, write
+@code{__inline__} instead of @code{inline}.  @xref{Alternate Keywords}.
+
+The three types of inlining behave similarly in two important cases:
+when the @code{inline} keyword is used on a @code{static} function,
+like the example above, and when a function is first declared without
+using the @code{inline} keyword and then is defined with
+@code{inline}, like this:
+
+@smallexample
+extern int inc (int *a);
 inline int
 inc (int *a)
 @{
@@ -3863,32 +4130,8 @@ inc (int *a)
 @}
 @end smallexample
 
-(If you are writing a header file to be included in ISO C programs, write
-@code{__inline__} instead of @code{inline}.  @xref{Alternate Keywords}.)
-You can also make all ``simple enough'' functions inline with the option
-@option{-finline-functions}.
-
-@opindex Winline
-Note that certain usages in a function definition can make it unsuitable
-for inline substitution.  Among these usages are: use of varargs, use of
-alloca, use of variable sized data types (@pxref{Variable Length}),
-use of computed goto (@pxref{Labels as Values}), use of nonlocal goto,
-and nested functions (@pxref{Nested Functions}).  Using @option{-Winline}
-will warn when a function marked @code{inline} could not be substituted,
-and will give the reason for the failure.
-
-Note that in C and Objective-C, unlike C++, the @code{inline} keyword
-does not affect the linkage of the function.
-
-@cindex automatic @code{inline} for C++ member fns
-@cindex @code{inline} automatic for C++ member fns
-@cindex member fns, automatically @code{inline}
-@cindex C++ member fns, automatically @code{inline}
-@opindex fno-default-inline
-GCC automatically inlines member functions defined within the class
-body of C++ programs even if they are not explicitly declared
-@code{inline}.  (You can override this with @option{-fno-default-inline};
-@pxref{C++ Dialect Options,,Options Controlling C++ Dialect}.)
+In both of these common cases, the program behaves the same as if you
+had not used the @code{inline} keyword, except for its speed.
 
 @cindex inline functions, omission of
 @opindex fkeep-inline-functions
@@ -3903,6 +4146,36 @@ neither can recursive calls within the definition).  If there is a
 nonintegrated call, then the function is compiled to assembler code as
 usual.  The function must also be compiled as usual if the program
 refers to its address, because that can't be inlined.
+
+@opindex Winline
+Note that certain usages in a function definition can make it unsuitable
+for inline substitution.  Among these usages are: use of varargs, use of
+alloca, use of variable sized data types (@pxref{Variable Length}),
+use of computed goto (@pxref{Labels as Values}), use of nonlocal goto,
+and nested functions (@pxref{Nested Functions}).  Using @option{-Winline}
+will warn when a function marked @code{inline} could not be substituted,
+and will give the reason for the failure.
+
+@cindex automatic @code{inline} for C++ member fns
+@cindex @code{inline} automatic for C++ member fns
+@cindex member fns, automatically @code{inline}
+@cindex C++ member fns, automatically @code{inline}
+@opindex fno-default-inline
+As required by ISO C++, GCC considers member functions defined within
+the body of a class to be marked inline even if they are
+not explicitly declared with the @code{inline} keyword.  You can
+override this with @option{-fno-default-inline}; @pxref{C++ Dialect
+Options,,Options Controlling C++ Dialect}.
+
+GCC does not inline any functions when not optimizing unless you specify
+the @samp{always_inline} attribute for the function, like this:
+
+@smallexample
+/* @r{Prototype.}  */
+inline void foo (const char) __attribute__((always_inline));
+@end smallexample
+
+The remainder of this section is specific to GNU C89 inlining.
 
 @cindex non-static inline function
 When an inline function is not @code{static}, then the compiler must assume
@@ -3925,16 +4198,7 @@ definition (lacking @code{inline} and @code{extern}) in a library file.
 The definition in the header file will cause most calls to the function
 to be inlined.  If any uses of the function remain, they will refer to
 the single copy in the library.
-
-Since GCC 4.3 will implement ISO C99 semantics for
-inline functions, it is simplest to use @code{static inline} only
-to guarantee compatibility.  (The
-existing semantics will remain available when @option{-std=gnu89} is
-specified, but eventually the default will be @option{-std=gnu99};
-that will implement the C99 semantics, though it does not do so in
-versions of GCC before 4.3.  After the default changes, the existing
-semantics will still be available via the @option{-fgnu89-inline}
-option or the @code{gnu_inline} function attribute.)
+@c APPLE LOCAL end mainline 4.3 2006-10-31 4134307
 
 GCC does not inline any functions when not optimizing unless you specify
 the @samp{always_inline} attribute for the function, like this:
@@ -4672,6 +4936,101 @@ register int *p2 asm ("r1") = @dots{};
 @end smallexample
 In those cases, a solution is to use a temporary variable for
 each arbitrary expression.   @xref{Example of asm with clobbered asm reg}.
+
+@c APPLE LOCAL begin CW asm blocks
+@node Asm Blocks and Functions
+@section Blocks and Functions of Assembly Language
+
+(This feature is APPLE ONLY.)
+
+In addition to writing single statements in assembly, you can also
+define blocks and entire functions to use a mixed assembly and C
+syntax.  The syntax follows that used in Metrowerks' CodeWarrior on
+PowerPC and Microsoft Visual Studio on x86.  This extension must be
+explicitly enabled with the @option{-fasm-blocks} option.
+
+The block syntax consists of @code{asm} followed by braces, with the
+assembly instructions on separate lines.  (However, @code{';'} may be
+used to put several instructions on one line in CW-style, and
+@code{asm} in either style.)  You write labels with either a preceding
+@code{'@@'} or a trailing @code{':'} (or both, if you prefer); labels
+are always local to the asm blocks of the function.  Comments and
+lexical rules are as for standard C/C++.
+
+@verbatim
+int foo (int arg) {
+  register int bar;
+  asm {
+    li bar, 42
+    add bar, arg, bar ; nop ; ; nop
+  }
+  return bar;
+}
+@end verbatim
+
+The function syntax uses @code{asm} as a keyword in the function
+definition.  In this form, C declarations may appear at the beginning
+of the function body, in order to declare variables that you want to
+use in the body, but may not be used after the first assembly opcode
+or label (even in C99 or C++).
+
+@verbatim
+asm int baz (int arg1) {
+    register int loc1, loc2;
+    @123
+    li loc1,4 * 89
+    nand. r5,arg1,loc1
+    ble- cr0, @123
+    otherlab: nop
+    mr r3,r5
+}
+@end verbatim
+
+Note that the compiler just passes the instructions through to the
+assembler with only necessary changes, such as a substitution of
+globally unique labels.  Assembly syntax errors will therefore be
+reported by the assembler.
+
+Also note that the use of literal registers (such as r3) in functions
+may not work properly with functions that are being inlined.
+
+The following PowerPC instructions are assumed to affect memory: @code{l...}
+except @code{la}, @code{li} and @code{lis} (all memory loads),
+@code{st...} (all memory stores), @code{sc}, @code{td...},
+@code{trap}, @code{tw...}.  All other instructions are assumed to not
+affect memory.
+
+The following PowerPC instructions take a memory operand (address operand) as
+their second operand, all other instructions are assumed to not:
+
+@code{la}, @code{lbzu}, @code{ld}, @code{ldu}, @code{lfd},
+@code{lfdu}, @code{lfs}, @code{lfsu}, @code{lha}, @code{lhau},
+@code{lhz}, @code{lhzu}, @code{lmw}, @code{lwa}, @code{lwz},
+@code{lwzu}, @code{stb}, @code{stbu}, @code{std}, @code{stdu},
+@code{stfd}, @code{stfdu}, @code{stfs}, @code{stfsu}, @code{sth},
+@code{sthu}, @code{stmw}, @code{stw}, @code{stwu}.
+
+Arguments that require substitution beyond vector registers, floating
+point registers, general registers are not supported; an example
+would be trying to use the compiler to allocate condition code
+registers instead of just writting a specific condition code register.
+
+On x86, the following instructions are not yet implemented by the assembler:
+
+@code{bound r m}, 
+@code{cmovpe r rm}, 
+@code{cmovpo r rm}, 
+@code{cmovz r rm}, 
+@code{ins m d}, 
+@code{lods m}, 
+@code{movs m m}
+@code{scas m}, 
+@code{stos m}, and
+@code{xlat m}.
+
+Note, the letters after the instructions are the usual x86 contraint
+letters for the operands.
+@c APPLE LOCAL end CW asm blocks
 
 @node Alternate Keywords
 @section Alternate Keywords
@@ -6155,7 +6514,18 @@ are @code{float}.
 Similar to @code{__builtin_powi}, except the argument and return types
 are @code{long double}.
 @end deftypefn
+@c APPLE LOCAL begin mainline
+@deftypefn {Built-in Function} int32_t __builtin_bswap32 (int32_t x)
+Returns @var{x} with the order of the bytes reversed; for example,
+@code{0xaabbccdd} becomes @code{0xddccbbaa}.  Byte here always means
+exactly 8 bits.
+@end deftypefn
 
+@deftypefn {Built-in Function} int64_t __builtin_bswap64 (int64_t x)
+Similar to @code{__builtin_bswap32}, except the argument and return types
+are 64-bit.
+@end deftypefn
+@c APPLE LOCAL end mainline
 
 @node Target Builtins
 @section Built-in Functions Specific to Particular Target Machines
@@ -6164,9 +6534,11 @@ On some target machines, GCC supports many built-in functions specific
 to those machines.  Generally these generate calls to specific machine
 instructions, but allow the compiler to schedule those calls.
 
+@c APPLE LOCAL begin ARM NEON support. Merge from Codesourcery
 @menu
 * Alpha Built-in Functions::
 * ARM Built-in Functions::
+* ARM NEON Intrinsics::
 * Blackfin Built-in Functions::
 * FR-V Built-in Functions::
 * X86 Built-in Functions::
@@ -6175,6 +6547,7 @@ instructions, but allow the compiler to schedule those calls.
 * PowerPC AltiVec Built-in Functions::
 * SPARC VIS Built-in Functions::
 @end menu
+@c APPLE LOCAL end ARM NEON support. Merge from Codesourcery
 
 @node Alpha Built-in Functions
 @subsection Alpha Built-in Functions
@@ -6404,6 +6777,16 @@ v2si __builtin_arm_wunpckilw (v2si, v2si)
 long long __builtin_arm_wxor (long long, long long)
 long long __builtin_arm_wzero ()
 @end smallexample
+
+@c APPLE LOCAL begin ARM NEON support
+@node ARM NEON Intrinsics
+@subsection ARM NEON Intrinsics
+
+These built-in intrinsics for the ARM Advanced SIMD extension are available
+when the @option{-mfpu=neon} switch is used:
+
+@include arm-neon-intrinsics.texi
+@c APPLE LOCAL end ARM NEON support. Merge from Codesourcery.
 
 @node Blackfin Built-in Functions
 @subsection Blackfin Built-in Functions
@@ -6863,7 +7246,8 @@ The following machine modes are available for use with MMX built-in functions
 (@pxref{Vector Extensions}): @code{V2SI} for a vector of two 32-bit integers,
 @code{V4HI} for a vector of four 16-bit integers, and @code{V8QI} for a
 vector of eight 8-bit integers.  Some of the built-in functions operate on
-MMX registers as a whole 64-bit entity, these use @code{DI} as their mode.
+@c APPLE LOCAL begin 4656532 use V1DI for _m64
+MMX registers as a whole 64-bit entity, these use @code{V1DI} as their mode.
 
 If 3Dnow extensions are enabled, @code{V2SF} is used as a mode for a vector
 of two 32-bit floating point values.
@@ -6881,9 +7265,15 @@ All of them generate the machine instruction that is part of the name.
 v8qi __builtin_ia32_paddb (v8qi, v8qi)
 v4hi __builtin_ia32_paddw (v4hi, v4hi)
 v2si __builtin_ia32_paddd (v2si, v2si)
+@c APPLE LOCAL begin radar 4395773
+v1di __builtin_ia32_paddq (v1di, v1di)
+@c APPLE LOCAL end radar 4395773
 v8qi __builtin_ia32_psubb (v8qi, v8qi)
 v4hi __builtin_ia32_psubw (v4hi, v4hi)
 v2si __builtin_ia32_psubd (v2si, v2si)
+@c APPLE LOCAL begin radar 4395773
+v1di __builtin_ia32_psubq (v1di, v1di)
+@c APPLE LOCAL end radar 4395773
 v8qi __builtin_ia32_paddsb (v8qi, v8qi)
 v4hi __builtin_ia32_paddsw (v4hi, v4hi)
 v8qi __builtin_ia32_psubsb (v8qi, v8qi)
@@ -6894,10 +7284,10 @@ v8qi __builtin_ia32_psubusb (v8qi, v8qi)
 v4hi __builtin_ia32_psubusw (v4hi, v4hi)
 v4hi __builtin_ia32_pmullw (v4hi, v4hi)
 v4hi __builtin_ia32_pmulhw (v4hi, v4hi)
-di __builtin_ia32_pand (di, di)
-di __builtin_ia32_pandn (di,di)
-di __builtin_ia32_por (di, di)
-di __builtin_ia32_pxor (di, di)
+v1di __builtin_ia32_pand (v1di, v1di)
+v1di __builtin_ia32_pandn (v1di,v1di)
+v1di __builtin_ia32_por (v1di, v1di)
+v1di __builtin_ia32_pxor (v1di, v1di)
 v8qi __builtin_ia32_pcmpeqb (v8qi, v8qi)
 v4hi __builtin_ia32_pcmpeqw (v4hi, v4hi)
 v2si __builtin_ia32_pcmpeqd (v2si, v2si)
@@ -6913,6 +7303,33 @@ v2si __builtin_ia32_punpckldq (v2si, v2si)
 v8qi __builtin_ia32_packsswb (v4hi, v4hi)
 v4hi __builtin_ia32_packssdw (v2si, v2si)
 v8qi __builtin_ia32_packuswb (v4hi, v4hi)
+@c APPLE LOCAL begin radar 4395773
+void __builtin_ia32_emms (void)
+v4hi __builtin_ia32_psllw (v4hi, v1di)
+v4hi __builtin_ia32_psllwi (v4hi, int)
+v2si __builtin_ia32_pslld (v2si, v1di)
+v2si __builtin_ia32_pslldi (v2si, int)
+v1di __builtin_ia32_psllq (v1di, v1di)
+@c APPLE LOCAL radar 4684674
+v1di __builtin_ia32_psllqi (v1di, int)
+v4hi __builtin_ia32_psrlw (v4hi, v1di)
+v4hi __builtin_ia32_psrlwi (v4hi, int)
+v2si __builtin_ia32_psrld (v2si, v1di)
+v2si __builtin_ia32_psrldi (v2si, int)
+v1di __builtin_ia32_psrlq (v1di, v1di)
+@c APPLE LOCAL radar 4684674
+v1di __builtin_ia32_psrlqi (v1di, int)
+v4hi __builtin_ia32_psraw (v4hi, v1di)
+v4hi __builtin_ia32_psrawi (v4hi, int)
+v2si __builtin_ia32_psrad (v2si, v1di)
+v2si __builtin_ia32_psradi (v2si, int)
+v4hi __builtin_ia32_pshufw (v4hi, int)
+v2si __builtin_ia32_pmaddwd (v4hi, v4hi)
+v2si __builtin_ia32_vec_init_v2si (int, int)
+v4hi __builtin_ia32_vec_init_v4hi (short, short, short, short)
+v8qi __builtin_ia32_vec_init_v8qi (char, char, char, char, char, char, char, char)
+int __builtin_ia32_vec_ext_v2si (v2si, int)
+@c APPLE LOCAL end radar 4395773
 @end smallexample
 
 The following built-in functions are made available either with
@@ -6933,8 +7350,12 @@ int __builtin_ia32_pextrw (v4hi, int)
 v4hi __builtin_ia32_pinsrw (v4hi, int, int)
 int __builtin_ia32_pmovmskb (v8qi)
 void __builtin_ia32_maskmovq (v8qi, v8qi, char *)
-void __builtin_ia32_movntq (di *, di)
+void __builtin_ia32_movntq (v1di *, v1di)
 void __builtin_ia32_sfence (void)
+@c APPLE LOCAL begin radar 4395773
+int __builtin_ia32_vec_ext_v4hi (v4hi, int)
+v4hi __builtin_ia32_vec_set_v4hi (v4hi, int, int)
+@c APPLE LOCAL end radar 4395773
 @end smallexample
 
 The following built-in functions are available when @option{-msse} is used.
@@ -7009,6 +7430,16 @@ v4sf __builtin_ia32_sqrtss (v4sf)
 v4sf __builtin_ia32_shufps (v4sf, v4sf, int)
 void __builtin_ia32_movntps (float *, v4sf)
 int __builtin_ia32_movmskps (v4sf)
+@c APPLE LOCAL begin radar 4395773
+void __builtin_ia32_ldmxcsr (unsigned)
+unsigned __builtin_ia32_stmxcsr (void)
+v2df __builtin_ia32_vec_ext_v2df (v2df, int)
+v2di __builtin_ia32_vec_ext_v2di (v2di, int)
+v4sf __builtin_ia32_vec_ext_v4sf (v4sf, int)
+v4si __builtin_ia32_vec_ext_v4si (v4si, int)
+v8hi __builtin_ia32_vec_set_v8hi (v8hi, int, int)
+unsigned int __builtin_ia32_vec_ext_v8hi (v8hi, int)
+@c APPLE LOCAL end radar 4395773
 @end smallexample
 
 The following built-in functions are available when @option{-msse} is used.
@@ -7220,6 +7651,54 @@ The following built-in functions are available when @option{-msse3} is used.
 Generates the @code{movddup} machine instruction as a load from memory.
 @end table
 
+@c APPLE LOCAL begin mainline
+The following built-in functions are available when @option{-mssse3} is used.
+All of them generate the machine instruction that is part of the name
+with MMX registers.
+
+@smallexample
+v2si __builtin_ia32_phaddd (v2si, v2si)
+v4hi __builtin_ia32_phaddw (v4hi, v4hi)
+v4hi __builtin_ia32_phaddsw (v4hi, v4hi)
+v2si __builtin_ia32_phsubd (v2si, v2si)
+v4hi __builtin_ia32_phsubw (v4hi, v4hi)
+v4hi __builtin_ia32_phsubsw (v4hi, v4hi)
+v8qi __builtin_ia32_pmaddubsw (v8qi, v8qi)
+v4hi __builtin_ia32_pmulhrsw (v4hi, v4hi)
+v8qi __builtin_ia32_pshufb (v8qi, v8qi)
+v8qi __builtin_ia32_psignb (v8qi, v8qi)
+v2si __builtin_ia32_psignd (v2si, v2si)
+v4hi __builtin_ia32_psignw (v4hi, v4hi)
+v1di __builtin_ia32_palignr (v1di, v1di, int)
+v8qi __builtin_ia32_pabsb (v8qi)
+v2si __builtin_ia32_pabsd (v2si)
+v4hi __builtin_ia32_pabsw (v4hi)
+@end smallexample
+@c APPLE LOCAL end 4656532 use V1DI for _m64
+
+The following built-in functions are available when @option{-mssse3} is used.
+All of them generate the machine instruction that is part of the name
+with SSE registers.
+
+@smallexample
+v4si __builtin_ia32_phaddd128 (v4si, v4si)
+v8hi __builtin_ia32_phaddw128 (v8hi, v8hi)
+v8hi __builtin_ia32_phaddsw128 (v8hi, v8hi)
+v4si __builtin_ia32_phsubd128 (v4si, v4si)
+v8hi __builtin_ia32_phsubw128 (v8hi, v8hi)
+v8hi __builtin_ia32_phsubsw128 (v8hi, v8hi)
+v16qi __builtin_ia32_pmaddubsw128 (v16qi, v16qi)
+v8hi __builtin_ia32_pmulhrsw128 (v8hi, v8hi)
+v16qi __builtin_ia32_pshufb128 (v16qi, v16qi)
+v16qi __builtin_ia32_psignb128 (v16qi, v16qi)
+v4si __builtin_ia32_psignd128 (v4si, v4si)
+v8hi __builtin_ia32_psignw128 (v8hi, v8hi)
+v2di __builtin_ia32_palignr (v2di, v2di, int)
+v16qi __builtin_ia32_pabsb128 (v16qi)
+v4si __builtin_ia32_pabsd128 (v4si)
+v8hi __builtin_ia32_pabsw128 (v8hi)
+@end smallexample
+@c APPLE LOCAL end mainline
 The following built-in functions are available when @option{-m3dnow} is used.
 All of them generate the machine instruction that is part of the name.
 
@@ -8625,7 +9104,11 @@ vector unsigned short vec_vmuloub (vector unsigned char,
                                    vector unsigned char);
 
 vector float vec_nmsub (vector float, vector float, vector float);
+@c APPLE LOCAL begin fixhtml --mrs
+@end smallexample
 
+@smallexample
+@c APPLE LOCAL end fixhtml --mrs
 vector float vec_nor (vector float, vector float);
 vector signed int vec_nor (vector signed int, vector signed int);
 vector unsigned int vec_nor (vector unsigned int, vector unsigned int);
@@ -9833,6 +10316,17 @@ This pragma sets the alignment of fields in structures.  The values of
 properly; to restore the previous setting, use @code{reset} for the
 @var{alignment}.
 
+@c APPLE LOCAL begin radar 4827197
+The @code{power} setting, when compiling for the Intel target, does not
+fully emulate the alignments on native PowerPC targets.  When the first
+field within a struct is of type @code{double}, this causes the struct
+to be 8-byte aligned on PowerPC target, but only 4-byte aligned on
+Intel target.  When such a struct is nested within another aggregate,
+differing layouts on the two targets can occur.  In such a case, a dummy
+field @code{char : 0;} can be inserted before the @code{double} to achieve
+the same layout on both targets.
+@c APPLE LOCAL end radar 4827197
+
 @item segment @var{tokens}@dots{}
 @cindex pragma, segment
 This pragma is accepted, but has no effect.
@@ -9843,7 +10337,33 @@ This pragma declares variables to be possibly unused.  GCC will not
 produce warnings for the listed variables.  The effect is similar to
 that of the @code{unused} attribute, except that this pragma may appear
 anywhere within the variables' scopes.
+
+@c APPLE LOCAL begin optimization pragmas 3124235/3420242
+@item optimization_level @{ 0 | 1 | 2 | 3 | reset @}
+@item optimize_for_size @{ on | off | reset @}
+@item GCC optimization_level @{ 0 | 1 | 2 | 3 | reset @}
+@item GCC optimize_for_size @{ on | off | reset @}
+@cindex pragma, optimization_level
+(These pragmas are APPLE ONLY.)
+
+These pragmas set the current optimization level, similar but not identical
+to -O0 through -O3, or -Os, on the command line.  These pragmas form a
+stack; the "reset" argument pops the stack, restoring the optimization level
+to what it was before the previous optimization pragma.  The optimization
+level in effect at the beginning of each function definition is applied to
+that function.  Currently, the pragmas will not affect optimizations whose
+implementation is based on whole-file analysis; this notably includes
+inlining and strict aliasing.  Also, the feature currently doesn't apply
+to functions whose body is within a class definition (that is, such
+functions are compiled with the command line options).
+
+The versions without "GCC" have the same syntax and similar effect as 
+CodeWarrior pragmas (although since the optimizations performed by
+the compilers are not identical, the effect of the options won't be
+either).  These may be convenient for existing code.  The versions
+with "GCC" are recommended for new code.
 @end table
+@c APPLE LOCAL end optimization pragmas 3124235/3420242
 
 @node Solaris Pragmas
 @subsection Solaris Pragmas
@@ -9944,13 +10464,16 @@ way of knowing that that happened.)
 @node Structure-Packing Pragmas
 @subsection Structure-Packing Pragmas
 
+@c APPLE LOCAL begin radar 4679943
 For compatibility with Win32, GCC supports a set of @code{#pragma}
 directives which change the maximum alignment of members of structures
 (other than zero-width bitfields), unions, and classes subsequently
 defined.  The @var{n} value below always is required to be a small power
-of two and specifies the new alignment in bytes.
+of two and specifies the new maximum alignment in bytes.
 
 @enumerate
+@c APPLE LOCAL prune man page
+@ignore
 @item @code{#pragma pack(@var{n})} simply sets the new alignment.
 @item @code{#pragma pack()} sets the alignment to the one that was in
 effect when compilation started (see also command line option
@@ -9963,7 +10486,20 @@ Note that @code{#pragma pack([@var{n}])} does not influence this internal
 stack; thus it is possible to have @code{#pragma pack(push)} followed by
 multiple @code{#pragma pack(@var{n})} instances and finalized by a single
 @code{#pragma pack(pop)}.
+@c APPLE LOCAL prune man page
+@end ignore
+
+@item @code{#pragma pack(@var{n})} pushes the current maximum alignment setting
+onto an internal stack and then sets the new maximum alignment. (APPLE ONLY)
+@item @code{#pragma pack()} acts like a @code{#pragma pack(pop)} directive.
+(APPLE ONLY)
+@item @code{#pragma pack(push[,@var{n}])} pushes the current maximum alignment
+setting onto an internal stack and then optionally sets the new maximum
+alignment.
+@item @code{#pragma pack(pop)} restores the maximum alignment setting to the
+one saved at the top of the internal stack (and removes that stack entry).
 @end enumerate
+@c APPLE LOCAL end radar 4679943
 
 Some targets, e.g. i386 and powerpc, support the @code{ms_struct}
 @code{#pragma} which lays out a structure as the documented
@@ -10372,6 +10908,18 @@ Add after paragraph 6
 Non-@code{static} members shall not be @code{__thread}.
 @end quotation
 @end itemize
+
+@c APPLE LOCAL begin blocks 7205047 5811887
+@node Blocks
+@section Blocks
+@cindex Blocks
+@cindex __block
+
+Blocks is a language feature that allows one to create anonymous
+functions.  The feature is also known as lambdas or closures in other
+languages.  The feature is controlled by @option{-fblocks}.
+See @uref{http://developer.apple.com/mac/library/documentation/Cocoa/Conceptual/Blocks/Articles/00_Introduction.html} for additional details.
+@c APPLE LOCAL end blocks 7205047 5811887
 
 @node C++ Extensions
 @chapter Extensions to the C++ Language
@@ -11027,9 +11575,11 @@ future version.
 
 The G++ minimum and maximum operators (@samp{<?} and @samp{>?}) and
 their compound forms (@samp{<?=}) and @samp{>?=}) have been deprecated
-and will be removed in a future version.  Code using these operators
-should be modified to use @code{std::min} and @code{std::max} instead.
+@c APPLE LOCAL begin for-fsf-4_4 5482863
+and are now removed from G++.  Code using these operators should be
+modified to use @code{std::min} and @code{std::max} instead.
 
+@c APPLE LOCAL end for-fsf-4_4 5482863
 The named return value extension has been deprecated, and is now
 removed from G++.
 

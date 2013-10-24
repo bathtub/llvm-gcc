@@ -270,6 +270,15 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #define VEC_quick_push(T,V,O)	\
 	(VEC_OP(T,base,quick_push)(VEC_BASE(V),O VEC_CHECK_INFO))
 
+/* APPLE LOCAL begin reverse bitfields */
+/* Swap two objects
+   void VEC_T_swap (VEC(T) *v, unsigned ix1, unsigned ix2);
+
+   Switch the values stored at indexes ix1 and ix2.  */
+#define VEC_swap(T,V,I1,I2)	\
+	(VEC_OP(T,base,swap)(VEC_BASE(V),I1,I2 VEC_CHECK_INFO))
+/* APPLE LOCAL end reverse bitfields */
+
 /* Push object with reallocation
    T *VEC_T_A_safe_push (VEC(T,A) *&v, T obj); // Integer
    T *VEC_T_A_safe_push (VEC(T,A) *&v, T obj); // Pointer
@@ -588,6 +597,20 @@ static inline T *VEC_OP (T,base,quick_push)				  \
   return slot_;								  \
 }									  \
 									  \
+/* APPLE LOCAL begin reverse bitfields */				  \
+static inline void VEC_OP (T,base,swap)					  \
+     (VEC(T,base) *vec_, unsigned ix1_, unsigned ix2_ VEC_CHECK_DECL)	  \
+{									  \
+  T tmp_;								  \
+									  \
+  VEC_ASSERT (ix1_ < vec_->num, "swap", T, base);			  \
+  VEC_ASSERT (ix2_ < vec_->num, "swap", T, base);			  \
+  tmp_ = vec_->vec[ix1_];						  \
+  vec_->vec[ix1_] = vec_->vec[ix2_];					  \
+  vec_->vec[ix2_] = tmp_;						  \
+}									  \
+									  \
+/* APPLE LOCAL end reverse bitfields */					  \
 static inline T VEC_OP (T,base,pop) (VEC(T,base) *vec_ VEC_CHECK_DECL)	  \
 {									  \
   T obj_;								  \
@@ -874,6 +897,20 @@ static inline T *VEC_OP (T,base,quick_push)				  \
   return slot_;								  \
 }									  \
 									  \
+/* APPLE LOCAL begin reverse bitfields */				  \
+static inline void VEC_OP (T,base,swap)					  \
+     (VEC(T,base) *vec_, unsigned ix1_, unsigned ix2_ VEC_CHECK_DECL)	  \
+{									  \
+  T tmp_;								  \
+									  \
+  VEC_ASSERT (ix1_ < vec_->num, "swap", T, base);			  \
+  VEC_ASSERT (ix2_ < vec_->num, "swap", T, base);			  \
+  tmp_ = vec_->vec[ix1_];						  \
+  vec_->vec[ix1_] = vec_->vec[ix2_];					  \
+  vec_->vec[ix2_] = tmp_;						  \
+}									  \
+									  \
+/* APPLE LOCAL end reverse bitfields */					  \
 static inline void VEC_OP (T,base,pop) (VEC(T,base) *vec_ VEC_CHECK_DECL) \
 {									  \
   VEC_ASSERT (vec_->num, "pop", T, base);				  \

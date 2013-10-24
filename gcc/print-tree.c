@@ -302,6 +302,10 @@ print_node (FILE *file, const char *prefix, tree node, int indent)
     fputs (" static", file);
   if (TREE_DEPRECATED (node))
     fputs (" deprecated", file);
+  /* APPLE LOCAL begin "unavailable" attribute (Radar 2809697) */
+  if (TREE_UNAVAILABLE (node))
+    fputs (" unavailable", file);
+  /* APPLE LOCAL end "unavailable" attribute (Radar 2809697) */
   if (TREE_VISITED (node))
     fputs (" visited", file);
   if (TREE_LANG_FLAG_0 (node))
@@ -349,7 +353,14 @@ print_node (FILE *file, const char *prefix, tree node, int indent)
 	  && TREE_CODE (node) != FUNCTION_DECL
 	  && DECL_REGISTER (node))
 	fputs (" regdecl", file);
-
+      /* APPLE LOCAL begin CW asm blocks */
+      if (DECL_IASM_ASM_FUNCTION (node))
+        fputs (" asm-function", file);
+      if (DECL_IASM_NORETURN (node))
+        fputs (" asm-noreturn", file);
+      if (DECL_IASM_FRAME_SIZE (node) != (unsigned int)-2)
+        fprintf (file, " asm-frame-size %d", DECL_IASM_FRAME_SIZE (node));
+      /* APPLE LOCAL end CW asm blocks */
       if (TREE_CODE (node) == TYPE_DECL && TYPE_DECL_SUPPRESS_DEBUG (node))
 	fputs (" suppress-debug", file);
 
@@ -439,17 +450,17 @@ print_node (FILE *file, const char *prefix, tree node, int indent)
 	      || DECL_INLINE (node) || DECL_BUILT_IN (node))
 	    indent_to (file, indent + 3);
 	  
-	  if (TREE_CODE (node) != FUNCTION_DECL)
-	    {
-	      if (DECL_USER_ALIGN (node))
-		fprintf (file, " user");
-	      
-	      fprintf (file, " align %d", DECL_ALIGN (node));
-	      if (TREE_CODE (node) == FIELD_DECL)
-		fprintf (file, " offset_align " HOST_WIDE_INT_PRINT_UNSIGNED,
-			 DECL_OFFSET_ALIGN (node));
-	    }
-	  else if (DECL_BUILT_IN (node))
+	  /* APPLE LOCAL begin mainline aligned functions 5933878 */
+	  if (DECL_USER_ALIGN (node))
+	    fprintf (file, " user");
+
+	  fprintf (file, " align %d", DECL_ALIGN (node));
+	  if (TREE_CODE (node) == FIELD_DECL)
+	    fprintf (file, " offset_align " HOST_WIDE_INT_PRINT_UNSIGNED,
+		     DECL_OFFSET_ALIGN (node));
+
+	  if (TREE_CODE (node) == FUNCTION_DECL && DECL_BUILT_IN (node))
+	  /* APPLE LOCAL end mainline aligned functions 5933878 */
 	    {
 	      if (DECL_BUILT_IN_CLASS (node) == BUILT_IN_MD)
 		fprintf (file, " built-in BUILT_IN_MD %d", DECL_FUNCTION_CODE (node));

@@ -68,6 +68,15 @@ maltivec
 Target Report Mask(ALTIVEC)
 Use AltiVec instructions
 
+; APPLE LOCAL begin AltiVec
+mpim-altivec
+Target Report Var(rs6000_altivec_pim)
+Enable use of Motorola AltiVec PIM operations and predicates
+
+mmask-pim-altivec
+Target Undocumented Mask(PIM_ALTIVEC)
+; APPLE LOCAL end AltiVec
+
 mmulhw
 Target Report Mask(MULHW)
 Use 4xx half-word multiply instructions
@@ -217,6 +226,12 @@ Target RejectNegative Joined
 mlongcall
 Target Report Var(rs6000_default_long_calls)
 Avoid all range limits on call instructions
+
+; APPLE LOCAL begin long-branch
+mlong-branch
+Target Report Var(rs6000_default_long_calls)
+Deprecated option.  Use -mlongcall instead
+; APPLE LOCAL end long-branch
 
 mwarn-altivec-long
 Target Var(rs6000_warn_altivec_long) Init(1)

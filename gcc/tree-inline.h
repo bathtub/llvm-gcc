@@ -63,6 +63,12 @@ typedef struct copy_body_data
      get eh region number of the duplicate in the function we inline into.  */
   int eh_region_offset;
 
+  /* APPLE LOCAL begin radar 4152603 */
+  /* Set location of each copied statement to call_location. */
+  bool call_location_p;
+  location_t call_location;
+  /* APPLE LOCAL end radar 4152603 */
+
   /* We use the same mechanism do all sorts of different things.  Rather
      than enumerating the different cases, we categorize the behavior
      in the various situations.  */

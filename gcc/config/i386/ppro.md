@@ -761,4 +761,3 @@
 			      (and (eq_attr "memory" "both")
 				   (eq_attr "type" "alu,alu1,negnot,incdec,icmp,test,setcc,icmov,push,pop,fxch,sseiadd,sseishft,sseimul,mmx,mmxadd,mmxcmp")))
 			 "decoder0,p2+(p0|p1),p4+p3")
-

@@ -24,11 +24,16 @@ extern enum machine_mode default_cc_modes_compatible (enum machine_mode,
 						      enum machine_mode);
 
 extern bool default_return_in_memory (tree, tree);
+/* APPLE LOCAL radar 4781080 */
+extern bool default_objc_fpreturn_msgcall (tree, bool);
 
 extern rtx default_expand_builtin_saveregs (void);
 extern void default_setup_incoming_varargs (CUMULATIVE_ARGS *, enum machine_mode, tree, int *, int);
 extern rtx default_builtin_setjmp_frame_value (void);
 extern bool default_pretend_outgoing_varargs_named (CUMULATIVE_ARGS *);
+/* APPLE LOCAL begin Altivec */
+extern bool default_skip_vec_args (tree, int, int*);
+/* APPLE LOCAL end Altivec */
 
 extern enum machine_mode default_eh_return_filter_mode (void);
 extern unsigned HOST_WIDE_INT default_shift_truncation_mask
@@ -56,6 +61,8 @@ extern bool default_decimal_float_supported_p (void);
 extern const char * default_invalid_within_doloop (rtx);
 
 extern bool default_narrow_bitfield (void);
+/* APPLE LOCAL mainline 4.2 5569774 */
+extern bool default_builtin_vector_alignment_reachable (tree, bool);
 
 /* These are here, and not in hooks.[ch], because not all users of
    hooks.h include tm.h, and thus we don't have CUMULATIVE_ARGS.  */

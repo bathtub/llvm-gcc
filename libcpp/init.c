@@ -81,17 +81,15 @@ struct lang_flags
 static const struct lang_flags lang_defaults[] =
 { /*              c99 c++ xnum xid std  //   digr  */
   /* GNUC89 */  { 0,  0,  1,   0,  0,   1,   1     },
-  /* GNUC99 */  { 1,  0,  1,   0,  0,   1,   1     },
+  /* APPLE LOCAL begin 4927549 */
+  /* GNUC99 */  { 1,  0,  1,   1,  0,   1,   1     },
   /* STDC89 */  { 0,  0,  0,   0,  1,   0,   0     },
   /* STDC94 */  { 0,  0,  0,   0,  1,   0,   1     },
-  /* STDC99 */  { 1,  0,  1,   0,  1,   1,   1     },
-  /* GNUCXX */  { 0,  1,  1,   0,  0,   1,   1     },
-  /* CXX98  */  { 0,  1,  1,   0,  1,   1,   1     },
+  /* STDC99 */  { 1,  0,  1,   1,  1,   1,   1     },
+  /* GNUCXX */  { 0,  1,  1,   1,  0,   1,   1     },
+  /* CXX98  */  { 0,  1,  1,   1,  1,   1,   1     },
   /* ASM    */  { 0,  0,  1,   0,  0,   1,   0     }
-  /* xid should be 1 for GNUC99, STDC99, GNUCXX and CXX98 when no
-     longer experimental (when all uses of identifiers in the compiler
-     have been audited for correct handling of extended
-     identifiers).  */
+  /* APPLE LOCAL end 4927549 */
 };
 
 /* Sets internal flags correctly for a given language.  */
@@ -146,6 +144,19 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   pfile = XCNEW (cpp_reader);
 
   cpp_set_lang (pfile, lang);
+  /* APPLE LOCAL begin -Wextra-tokens 2001-08-01 --sts */
+  /* Suppress warnings about extra tokens after #endif etc.  */
+  CPP_OPTION (pfile, warn_extra_tokens) = 0;
+  /* APPLE LOCAL end -Wextra-tokens 2001-08-01 --sts */
+  /* APPLE LOCAL begin -Wnewline-eof 2001-08-23 --sts */
+  /* Suppress warnings about missing newlines at ends of files.  */
+  CPP_OPTION (pfile, warn_newline_at_eof) = 0;
+  /* APPLE LOCAL end -Wnewline-eof 2001-08-23 --sts */
+  /* APPLE LOCAL begin -Wfour-char-constants  */
+  CPP_OPTION (pfile, warn_four_char_constants) = 1;
+  /* APPLE LOCAL end -Wfour-char-constants  */
+  /* APPLE LOCAL pascal strings */
+  CPP_OPTION (pfile, pascal_strings) = 0;
   CPP_OPTION (pfile, warn_multichar) = 1;
   CPP_OPTION (pfile, discard_comments) = 1;
   CPP_OPTION (pfile, discard_comments_in_macro_exp) = 1;
@@ -153,8 +164,12 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   CPP_OPTION (pfile, tabstop) = 8;
   CPP_OPTION (pfile, operator_names) = 1;
   CPP_OPTION (pfile, warn_trigraphs) = 2;
-  CPP_OPTION (pfile, warn_endif_labels) = 1;
-  CPP_OPTION (pfile, warn_deprecated) = 1;
+  /* APPLE LOCAL begin -Wextra-tokens */
+  /* Suppress warnings about extra tokens after #endif etc.  */
+  CPP_OPTION (pfile, warn_endif_labels) = 0;
+  /* APPLE LOCAL end -Wextra-tokens */
+  /* APPLE LOCAL suppress useful warnings */
+  CPP_OPTION (pfile, warn_deprecated) = 0;
   CPP_OPTION (pfile, warn_long_long) = !CPP_OPTION (pfile, c99);
   CPP_OPTION (pfile, dollars_in_ident) = 1;
   CPP_OPTION (pfile, warn_dollars) = 1;
@@ -200,6 +215,13 @@ cpp_create_reader (enum c_lang lang, hash_table *table,
   _cpp_init_tokenrun (&pfile->base_run, 250);
   pfile->cur_run = &pfile->base_run;
   pfile->cur_token = pfile->base_run.base;
+  /* APPLE LOCAL begin 4137741 */
+
+  /* Initialize buffer for pending CPP_EINCL tokens.  */
+  _cpp_init_tokenrun (&pfile->base_eincl, 250);
+  pfile->cur_eincl = &pfile->base_eincl;
+  pfile->beg_eincl = pfile->end_eincl = pfile->base_eincl.base;
+  /* APPLE LOCAL end 4137741 */
 
   /* Initialize the base context.  */
   pfile->context = &pfile->base_context;
@@ -473,8 +495,14 @@ cpp_read_main_file (cpp_reader *pfile, const char *fname)
       deps_add_default_target (pfile->deps, fname);
     }
 
+  /* APPLE LOCAL begin predictive compilation */
+  pfile->is_main_file = CPP_OPTION (pfile, predictive_compilation);
+  /* APPLE LOCAL end predictive compilation */
   pfile->main_file
     = _cpp_find_file (pfile, fname, &pfile->no_search_path, false, 0);
+  /* APPLE LOCAL begin predictive compilation */
+  pfile->is_main_file = false;
+  /* APPLE LOCAL end predictive compilation */
   if (_cpp_find_failed (pfile->main_file))
     return NULL;
 

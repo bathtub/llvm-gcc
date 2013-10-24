@@ -46,13 +46,23 @@ objc: cc1obj$(exeext)
 # Use maximal warnings for this front end.
 objc-warn = $(STRICT_WARN)
 
+# APPLE LOCAL begin order files  --ilr
+ifeq ($(ORDER_FILES),yes)
+CC1OBJ_ORDER_FLAGS = `if [ -f $(srcdir)/../order-files/cc1obj.order ]; then \
+		        echo -sectorder __TEXT __text $(srcdir)/../order-files/cc1obj.order -e start ; fi`
+else
+CC1OBJ_ORDER_FLAGS =
+endif
+# APPLE LOCAL end order files  --ilr
+
 # Language-specific object files for Objective C.
 OBJC_OBJS = objc/objc-lang.o objc/objc-act.o
 
+# APPLE LOCAL begin order files  --ilr
 cc1obj-dummy$(exeext): $(OBJC_OBJS) $(C_AND_OBJC_OBJS) dummy-checksum.o $(BACKEND) $(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
 	      $(OBJC_OBJS) $(C_AND_OBJC_OBJS) dummy-checksum.o \
-	      $(BACKEND) $(LIBS)
+	      $(BACKEND) $(LIBS) $(CC1OBJ_ORDER_FLAGS)
 
 cc1obj-checksum.c : cc1obj-dummy$(exeext) build/genchecksum$(build_exeext)
 	build/genchecksum$(build_exeext) cc1obj-dummy$(exeext) > $@
@@ -62,7 +72,10 @@ cc1obj-checksum.o : cc1obj-checksum.c
 cc1obj$(exeext): $(OBJC_OBJS) $(C_AND_OBJC_OBJS) cc1obj-checksum.o $(BACKEND) $(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
 	      $(OBJC_OBJS) $(C_AND_OBJC_OBJS) cc1obj-checksum.o \
-	      $(BACKEND) $(LIBS)
+	      $(BACKEND) $(LIBS) $(CC1OBJ_ORDER_FLAGS)
+# APPLE LOCAL end order files  --ilr
+# APPLE LOCAL optimization pragmas 3124235/3420242
+objc/objc-act.o : opts.h
 
 # Objective C language specific files.
 

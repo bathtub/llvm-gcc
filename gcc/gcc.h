@@ -38,6 +38,8 @@ struct spec_function
    || (CHAR) == 'e' || (CHAR) == 'T' || (CHAR) == 'u' \
    || (CHAR) == 'I' || (CHAR) == 'm' || (CHAR) == 'x' \
    || (CHAR) == 'L' || (CHAR) == 'A' || (CHAR) == 'V' \
+   /* APPLE LOCAL frameworks */ \
+   || (CHAR) == 'F' \
    || (CHAR) == 'B' || (CHAR) == 'b')
 
 /* This defines which multi-letter switches take arguments.  */
@@ -50,6 +52,8 @@ struct spec_function
   || !strcmp (STR, "iwithprefix") || !strcmp (STR, "iwithprefixbefore") \
   || !strcmp (STR, "iquote") || !strcmp (STR, "isystem") \
   || !strcmp (STR, "isysroot") \
+  /* APPLE LOCAL ARM iwithsysroot 4917039 */ \
+  || !strcmp (STR, "iwithsysroot") \
   || !strcmp (STR, "-param") || !strcmp (STR, "specs") \
   || !strcmp (STR, "MF") || !strcmp (STR, "MT") || !strcmp (STR, "MQ"))
 

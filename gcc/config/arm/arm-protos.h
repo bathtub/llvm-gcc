@@ -24,6 +24,19 @@
 #ifndef GCC_ARM_PROTOS_H
 #define GCC_ARM_PROTOS_H
 
+/* APPLE LOCAL ARM darwin optimization defaults */
+extern void optimization_options (int, int);
+/* APPLE LOCAL begin ARM compact switch tables */
+extern void arm_adjust_insn_length (rtx, int *);
+extern void register_switch8_libfunc (void);
+extern void register_switchu8_libfunc (void);
+extern void register_switch16_libfunc (void);
+extern void register_switch32_libfunc (void);
+extern int count_thumb_unexpanded_prologue (void);
+extern int arm_label_align (rtx);
+/* APPLE LOCAL end ARM compact switch tables */
+/* APPLE LOCAL ARM prefer SP to FP */
+extern HOST_WIDE_INT arm_local_debug_offset (rtx);
 extern void arm_override_options (void);
 extern int use_return_insn (int, rtx);
 extern int arm_regno_class (int);
@@ -33,6 +46,8 @@ extern const char *arm_output_epilogue (rtx);
 extern void arm_expand_prologue (void);
 extern const char *arm_strip_name_encoding (const char *);
 extern void arm_asm_output_labelref (FILE *, const char *);
+/* APPLE LOCAL v7 support. Merge from mainline */
+extern void thumb2_asm_output_opcode (FILE *);
 extern unsigned long arm_current_func_type (void);
 extern HOST_WIDE_INT arm_compute_initial_elimination_offset (unsigned int,
 							     unsigned int);
@@ -50,15 +65,24 @@ extern void arm_encode_call_attribute (tree, int);
 extern bool arm_vector_mode_supported_p (enum machine_mode);
 extern int arm_hard_regno_mode_ok (unsigned int, enum machine_mode);
 extern int const_ok_for_arm (HOST_WIDE_INT);
+/* APPLE LOCAL begin 5831562 long long constants */
+extern bool const64_ok_for_arm_immediate (rtx);
+extern bool const64_ok_for_arm_add (rtx);
+/* APPLE LOCAL end 5831562 long long constants */
 extern int arm_split_constant (RTX_CODE, enum machine_mode, rtx,
 			       HOST_WIDE_INT, rtx, rtx, int);
+/* APPLE LOCAL 6258536 atomic builtins */
+extern void arm_split_compare_and_swap(rtx, rtx, rtx, rtx, rtx);
 extern RTX_CODE arm_canonicalize_comparison (RTX_CODE, enum machine_mode,
 					     rtx *);
 extern int legitimate_pic_operand_p (rtx);
 extern rtx legitimize_pic_address (rtx, enum machine_mode, rtx);
 extern rtx legitimize_tls_address (rtx, rtx);
 extern int arm_legitimate_address_p  (enum machine_mode, rtx, RTX_CODE, int);
-extern int thumb_legitimate_address_p (enum machine_mode, rtx, int);
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+extern int thumb1_legitimate_address_p (enum machine_mode, rtx, int);
+extern int thumb2_legitimate_address_p  (enum machine_mode, rtx, int);
+/* APPLE LOCAL end v7 support. Merge from mainline */
 extern int thumb_legitimate_offset_p (enum machine_mode, HOST_WIDE_INT);
 extern rtx arm_legitimize_address (rtx, rtx, enum machine_mode);
 extern rtx thumb_legitimize_address (rtx, rtx, enum machine_mode);
@@ -66,19 +90,43 @@ extern rtx thumb_legitimize_reload_address (rtx *, enum machine_mode, int, int,
 					    int);
 extern int arm_const_double_rtx (rtx);
 extern int neg_const_double_rtx_ok_for_fpa (rtx);
+/* APPLE LOCAL begin v7 support. Merge from Codesourcery */
+extern int vfp3_const_double_rtx (rtx);
+extern int neon_immediate_valid_for_move (rtx, enum machine_mode, rtx *, int *);
+extern int neon_immediate_valid_for_logic (rtx, enum machine_mode, int, rtx *,
+					   int *);
+extern char *neon_output_logic_immediate (const char *, rtx *,
+					  enum machine_mode, int, int);
+extern void neon_pairwise_reduce (rtx, rtx, enum machine_mode,
+				  rtx (*) (rtx, rtx, rtx));
+extern void neon_expand_vector_init (rtx, rtx);
+extern void neon_reinterpret (rtx, rtx);
+extern void neon_emit_pair_result_insn (enum machine_mode,
+					rtx (*) (rtx, rtx, rtx, rtx),
+					rtx, rtx, rtx);
+extern void neon_disambiguate_copy (rtx *, rtx *, rtx *, unsigned int);
+/* APPLE LOCAL end v7 support. Merge from Codesourcery */
 extern enum reg_class coproc_secondary_reload_class (enum machine_mode, rtx,
 						     bool);
 extern bool arm_tls_referenced_p (rtx);
 
 extern int cirrus_memory_offset (rtx);
 extern int arm_coproc_mem_operand (rtx, bool);
+/* APPLE LOCAL begin v7 support. Merge from Codesourcery */
+extern int neon_vector_mem_operand (rtx, bool);
+extern int neon_struct_mem_operand (rtx);
+/* APPLE LOCAL end v7 support. Merge from Codesourcery */
 extern int arm_no_early_store_addr_dep (rtx, rtx);
 extern int arm_no_early_alu_shift_dep (rtx, rtx);
 extern int arm_no_early_alu_shift_value_dep (rtx, rtx);
 extern int arm_no_early_mul_dep (rtx, rtx);
+/* APPLE LOCAL v7 support. Merge from Codesourcery */
+extern int arm_mac_accumulator_is_mul_result (rtx, rtx);
 
 extern int tls_mentioned_p (rtx);
 extern int symbol_mentioned_p (rtx);
+/* APPLE LOCAL ARM -mdynamic-no-pic support */
+extern int non_local_symbol_mentioned_p (rtx);
 extern int label_mentioned_p (rtx);
 extern RTX_CODE minmax_code (rtx);
 extern int adjacent_mem_locations (rtx, rtx);
@@ -109,6 +157,11 @@ extern const char *output_mov_long_double_arm_from_arm (rtx *);
 extern const char *output_mov_double_fpa_from_arm (rtx *);
 extern const char *output_mov_double_arm_from_fpa (rtx *);
 extern const char *output_move_double (rtx *);
+/* APPLE LOCAL begin v7 support. Merge from Codesourcery */
+extern const char *output_move_quad (rtx *);
+extern const char *output_move_vfp (rtx *operands);
+extern const char *output_move_neon (rtx *operands);
+/* APPLE LOCAL end v7 support. Merge from Codesourcery */
 extern const char *output_add_immediate (rtx *);
 extern const char *arithmetic_instr (rtx, int);
 extern void output_ascii_pseudo_op (FILE *, const unsigned char *, int);
@@ -116,15 +169,21 @@ extern const char *output_return_instruction (rtx, int, int);
 extern void arm_poke_function_name (FILE *, const char *);
 extern void arm_print_operand (FILE *, rtx, int);
 extern void arm_print_operand_address (FILE *, rtx);
+/* APPLE LOCAL v7 support. Merge from mainline */
+/* Removed line */
 extern void arm_final_prescan_insn (rtx);
-extern int arm_go_if_legitimate_address (enum machine_mode, rtx);
+/* APPLE LOCAL v7 support. Merge from mainline */
+/* Removed line */
 extern int arm_debugger_arg_offset (int, rtx);
 extern int arm_is_longcall_p (rtx, int, int);
 extern int    arm_emit_vector_const (FILE *, rtx);
 extern const char * arm_output_load_gr (rtx *);
-extern const char *vfp_output_fstmx (rtx *);
+/* APPLE LOCAL v7 support. Merge from mainline */
+extern const char *vfp_output_fstmd (rtx *);
 extern void arm_set_return_address (rtx, rtx);
 extern int arm_eliminable_register (rtx);
+/* APPLE LOCAL v7 support. Merge from mainline */
+extern const char *arm_output_shift(rtx *, int);
 
 extern bool arm_output_addr_const_extra (FILE *, rtx);
 
@@ -152,24 +211,33 @@ extern int arm_float_words_big_endian (void);
 /* Thumb functions.  */
 extern void arm_init_expanders (void);
 extern const char *thumb_unexpanded_epilogue (void);
-extern void thumb_expand_prologue (void);
-extern void thumb_expand_epilogue (void);
+/* APPLE LOCAL begin v7 support. Merge from mainline */
+extern void thumb1_expand_prologue (void);
+extern void thumb1_expand_epilogue (void);
 #ifdef TREE_CODE
 extern int is_called_in_ARM_mode (tree);
 #endif
 extern int thumb_shiftable_const (unsigned HOST_WIDE_INT);
 #ifdef RTX_CODE
-extern void thumb_final_prescan_insn (rtx);
+extern void thumb1_final_prescan_insn (rtx);
+extern void thumb2_final_prescan_insn (rtx);
 extern const char *thumb_load_double_from_address (rtx *);
 extern const char *thumb_output_move_mem_multiple (int, rtx *);
 extern const char *thumb_call_via_reg (rtx);
 extern void thumb_expand_movmemqi (rtx *);
-extern int thumb_go_if_legitimate_address (enum machine_mode, rtx);
 extern rtx arm_return_addr (int, rtx);
 extern void thumb_reload_out_hi (rtx *);
 extern void thumb_reload_in_hi (rtx *);
 extern void thumb_set_return_address (rtx, rtx);
+extern const char *thumb2_output_casesi(rtx *);
 #endif
+/* APPLE LOCAL end v7 support. Merge from mainline */
+
+/* APPLE LOCAL begin ARM enhance conditional insn generation */
+#ifdef BB_HEAD
+extern void arm_ifcvt_modify_multiple_tests (ce_if_block_t *, basic_block, rtx *, rtx*);
+#endif
+/* APPLE LOCAL end ARM enhance conditional insn generation */
 
 /* Defined in pe.c.  */
 extern int arm_dllexport_name_p (const char *);
@@ -187,5 +255,21 @@ extern void arm_mark_dllimport (tree);
 extern void arm_pr_long_calls (struct cpp_reader *);
 extern void arm_pr_no_long_calls (struct cpp_reader *);
 extern void arm_pr_long_calls_off (struct cpp_reader *);
+/* APPLE LOCAL 5946347 ms_struct support */
+extern int arm_field_ms_struct_align (tree);
+
+/* APPLE LOCAL begin v7 support. Merge from Codesourcery */
+extern const char *arm_mangle_type (tree);
+
+/* APPLE LOCAL end v7 support. Merge from Codesourcery */
+/* APPLE LOCAL v7 support. Fix compact switch tables */
+extern void arm_asm_output_addr_diff_vec (FILE *file, rtx LABEL, rtx BODY);
+
+/* APPLE LOCAL begin 6160917 */
+extern void neon_reload_in (rtx *, enum machine_mode);
+extern void neon_reload_out (rtx *, enum machine_mode);
+/* APPLE LOCAL end 6160917 */
+/* APPLE LOCAL 5571707 Allow R9 as caller-saved register */
+void arm_darwin_subtarget_conditional_register_usage (void);
 
 #endif /* ! GCC_ARM_PROTOS_H */

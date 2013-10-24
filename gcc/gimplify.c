@@ -1135,6 +1135,8 @@ gimplify_return_expr (tree stmt, tree *pre_p)
   tree result_decl, result;
 
   if (!ret_expr || TREE_CODE (ret_expr) == RESULT_DECL
+      /* APPLE LOCAL radar 6261552 */
+      /* code to check for cur_block is removed. */
       || ret_expr == error_mark_node)
     return GS_ALL_DONE;
 
@@ -2981,7 +2983,10 @@ gimplify_init_constructor (tree *expr_p, tree *pre_p,
 	if (valid_const_initializer
 	    && num_nonzero_elements > 1
 	    && TREE_READONLY (object)
-	    && TREE_CODE (object) == VAR_DECL)
+	    /* APPLE LOCAL begin CW asm blocks */
+	    && TREE_CODE (object) == VAR_DECL
+	    && !DECL_IASM_DONT_PROMOTE_TO_STATIC (object))
+	    /* APPLE LOCAL end CW asm blocks */
 	  {
 	    DECL_INITIAL (object) = ctor;
 	    TREE_STATIC (object) = 1;

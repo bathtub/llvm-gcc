@@ -70,6 +70,10 @@ extern rtx hook_rtx_rtx_null (rtx);
 extern rtx hook_rtx_tree_int_null (tree, int);
 
 extern const char *hook_constcharptr_tree_null (tree);
+/* APPLE LOCAL begin constant cfstrings */
+extern tree hook_tree_tree_null (tree);
+extern tree hook_tree_tree_tree_tree_null (tree, tree, tree);
+/* APPLE LOCAL end constant cfstrings */
 extern const char *hook_constcharptr_rtx_null (rtx);
 extern const char *hook_constcharptr_tree_tree_null (tree, tree);
 extern const char *hook_constcharptr_int_tree_null (int, tree);

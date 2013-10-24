@@ -441,7 +441,8 @@ get_trampoline_type (void)
 
   /* If we won't be able to guarantee alignment simply via TYPE_ALIGN,
      then allocate extra space so that we can do dynamic alignment.  */
-  if (align > STACK_BOUNDARY)
+  /* APPLE LOCAL STACK_BOUNDARY must be a signed expression on Darwin/x86 */
+  if (align > (unsigned int) STACK_BOUNDARY)
     {
       size += ((align/BITS_PER_UNIT) - 1) & -(STACK_BOUNDARY/BITS_PER_UNIT);
       align = STACK_BOUNDARY;
@@ -1966,7 +1967,8 @@ static GTY(()) struct nesting_info *root;
    subroutines and turn them into something less tightly bound.  */
 
 void
-lower_nested_functions (tree fndecl)
+/* APPLE LOCAL radar 6305545 */
+lower_nested_functions (tree fndecl, bool skip_outermost_fndecl)
 {
   struct cgraph_node *cgn;
 
@@ -1976,6 +1978,13 @@ lower_nested_functions (tree fndecl)
     return;
 
   root = create_nesting_tree (cgn);
+  /* APPLE LOCAL begin radar 6305545 */
+  /* If skip_outermost_fndecl is true, we are lowering nested functions of
+     a constructor/destructor which are cloned and thrown away. But we
+     still have to lower their nested functions, but not the outermost function. */
+  if (skip_outermost_fndecl)
+    root = root->inner;
+  /* APPLE LOCAL end radar 6305545 */
   walk_all_functions (convert_nonlocal_reference, root);
   walk_all_functions (convert_local_reference, root);
   walk_all_functions (convert_nl_goto_reference, root);

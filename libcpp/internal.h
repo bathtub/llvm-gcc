@@ -115,7 +115,8 @@ extern unsigned char *_cpp_unaligned_alloc (cpp_reader *, size_t);
 #define BUFF_LIMIT(BUFF) ((BUFF)->limit)
 
 /* #include types.  */
-enum include_type {IT_INCLUDE, IT_INCLUDE_NEXT, IT_IMPORT, IT_CMDLINE};
+/* APPLE LOCAL pch distcc --mrs */
+enum include_type {IT_INCLUDE, IT_INCLUDE_PCH, IT_INCLUDE_NEXT, IT_IMPORT, IT_CMDLINE};
 
 union utoken
 {
@@ -171,6 +172,11 @@ struct cpp_context
 
   /* True if utoken element is token, else ptoken.  */
   bool direct_p;
+
+  /* APPLE LOCAL begin CW asm blocks */
+  /* True if this expansion is at the beginning of a line.  */
+  bool bol_p;
+  /* APPLE LOCAL end CW asm blocks */
 };
 
 struct lexer_state
@@ -220,6 +226,11 @@ struct lexer_state
 
   /* Nonzero if the deferred pragma being handled allows macro expansion.  */
   unsigned char pragma_allow_expansion;
+
+  /* APPLE LOCAL begin #error with unmatched quotes 5607574 */
+  /* Nonzero when handling #error and #warning to allow unmatched quotes.  */
+  unsigned char in_diagnostic;
+  /* APPLE LOCAL end #error with unmatched quotes 5607574 */
 };
 
 /* Special nodes - identifiers with predefined significance.  */
@@ -348,6 +359,9 @@ struct cpp_reader
   struct _cpp_file *all_files;
 
   struct _cpp_file *main_file;
+  /* APPLE LOCAL begin predictive compilation */
+  bool   is_main_file;
+  /* APPLE LOCAL end predictive compilation */
 
   /* File and directory hash table.  */
   struct htab *file_hash;
@@ -372,6 +386,12 @@ struct cpp_reader
   cpp_token *cur_token;
   tokenrun base_run, *cur_run;
   unsigned int lookaheads;
+  /* APPLE LOCAL begin 4137741 */
+  /* Buffer of pending CPP_EINCL tokens.  */
+  cpp_token *beg_eincl, *end_eincl;
+  tokenrun base_eincl, *cur_eincl;
+  bool have_eincl;
+  /* APPLE LOCAL end 4137741 */
 
   /* Nonzero prevents the lexer from re-using the token runs.  */
   unsigned int keep_tokens;
@@ -479,6 +499,10 @@ extern unsigned char _cpp_trigraph_map[UCHAR_MAX + 1];
 
 /* Macros.  */
 
+/* APPLE LOCAL begin warning in system headers */
+#define CPP_IN_SYSTEM_HEADER(PFILE) ((PFILE)->line_table && (PFILE)->line_table->maps && (PFILE)->line_table->maps->sysp)
+/* APPLE LOCAL end warning in system headers */
+
 static inline int cpp_in_system_header (cpp_reader *);
 static inline int
 cpp_in_system_header (cpp_reader *pfile)
@@ -544,6 +568,8 @@ extern const cpp_token *_cpp_lex_token (cpp_reader *);
 extern cpp_token *_cpp_lex_direct (cpp_reader *);
 extern int _cpp_equiv_tokens (const cpp_token *, const cpp_token *);
 extern void _cpp_init_tokenrun (tokenrun *, unsigned int);
+/* APPLE LOCAL 4137741 */
+extern tokenrun *_cpp_next_tokenrun (tokenrun *);
 
 /* In init.c.  */
 extern void _cpp_maybe_push_include_file (cpp_reader *);

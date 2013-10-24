@@ -199,6 +199,8 @@ enum dwarf_tag
     DW_TAG_class_template = 0x4103,	/* For C++.  */
     DW_TAG_GNU_BINCL = 0x4104,
     DW_TAG_GNU_EINCL = 0x4105,
+    /* APPLE LOCAL opt diary */
+    DW_TAG_GNU_OD_entry = 0x5001,       /* For optimization diary.  */
     /* Extensions for UPC.  See: http://upc.gwu.edu/~upc.  */
     DW_TAG_upc_shared_type = 0x8765,
     DW_TAG_upc_strict_type = 0x8766,
@@ -371,12 +373,34 @@ enum dwarf_attribute
     DW_AT_GNU_vector = 0x2107,
     /* VMS extensions.  */
     DW_AT_VMS_rtnbeg_pd_address = 0x2201,
+    /* APPLE LOCAL begin opt diary */
+    /* Optimization Diary extensions.  */
+    DW_AT_GNU_OD_msg = 0x2401,
+    DW_AT_GNU_OD_category = 0x2402,
+    DW_AT_GNU_OD_version = 0x2403,
+    /* APPLE LOCAL end opt diary */
     /* UPC extension.  */
     DW_AT_upc_threads_scaled = 0x3210,
     /* PGI (STMicroelectronics) extensions.  */
     DW_AT_PGI_lbase    = 0x3a00,
     DW_AT_PGI_soffset  = 0x3a01,
-    DW_AT_PGI_lstride  = 0x3a02
+    /* APPLE LOCAL begin option verifier 4957887 */
+    DW_AT_PGI_lstride  = 0x3a02,
+    /* Apple extensions.  */
+    /* APPLE LOCAL begin radar 2338865 optimization notification  */
+    DW_AT_APPLE_optimized = 0x3fe1,
+    DW_AT_APPLE_flags     = 0x3fe2,
+    /* APPLE LOCAL end radar 2338865 optimization notification  */
+    /* APPLE LOCAL end option verifier 4957887 */
+    /* APPLE LOCAL differentiate between arm & thumb.  */
+    /* APPLE LOCAL begin radar 5811943 - Fix type of pointers to blocks  */
+    DW_AT_APPLE_isa      = 0x3fe3,
+    /* APPLE LOCAL begin radar 6386976  */
+    DW_AT_APPLE_block    = 0x3fe4,
+    /* APPLE LOCAL end radar 5811943 - Fix type of pointers to blocks  */
+    DW_AT_APPLE_major_runtime_vers = 0x3fe5,
+    DW_AT_APPLE_runtime_class = 0x3fe6
+    /* APPLE LOCAL end radar 6386976  */
   };
 
 #define DW_AT_lo_user	0x2000	/* Implementation-defined range start.  */
@@ -547,7 +571,12 @@ enum dwarf_location_atom
     DW_OP_HP_fltconst8   = 0xe3,
     DW_OP_HP_mod_range   = 0xe4,
     DW_OP_HP_unmod_range = 0xe5,
-    DW_OP_HP_tls         = 0xe6
+    /* APPLE LOCAL begin track initialization status 4964532  */
+    DW_OP_HP_tls         = 0xe6,
+    /* APPLE extensions.  */
+    /* The following is for marking uninitialized variables.  */
+    DW_OP_APPLE_uninit   = 0xf0
+    /* APPLE LOCAL end track initialization status 4964532  */
   };
 
 #define DW_OP_lo_user	0xe0	/* Implementation-defined range start.  */

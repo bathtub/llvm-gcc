@@ -1034,10 +1034,14 @@ expand_used_vars (void)
 
   /* There are several conditions under which we should create a
      stack guard: protect-all, alloca used, protected decls present.  */
-  if (flag_stack_protect == 2
+  /* APPLE LOCAL begin CW asm */
+  /* Don't create a guard for iasm functions.  */
+  if ((flag_stack_protect == 2
       || (flag_stack_protect
-	  && (current_function_calls_alloca || has_protected_decls)))
+	   && (current_function_calls_alloca || has_protected_decls)))
+      && !cfun->iasm_asm_function)
     create_stack_guard ();
+  /* APPLE LOCAL end CW asm */
 
   /* Assign rtl to each variable based on these partitions.  */
   if (stack_vars_num > 0)

@@ -218,6 +218,21 @@ has_c_linkage (tree decl)
   return DECL_EXTERN_C_P (decl);
 }
 
+/* APPLE LOCAL begin kext identify vtables */
+/* Return true if t is a vtable.  In kexts (only) these may
+   be overridden by other modules, so we can't do the
+   normal optimizations we do on initialized const objects.  */
+int
+cp_vtable_p (tree t)
+{
+  if (TREE_CODE (t) == VAR_DECL
+      && TREE_CODE (TREE_TYPE (t)) == ARRAY_TYPE
+      && TREE_TYPE (TREE_TYPE (t)) == vtable_entry_type)
+    return 1;
+  return 0;
+}
+/* APPLE LOCAL end kext identify vtables */
+
 static GTY ((if_marked ("tree_map_marked_p"), param_is (struct tree_map)))
      htab_t shadowed_var_for_decl;
 
@@ -259,5 +274,37 @@ init_shadowed_var_for_decl (void)
 					   tree_map_eq, 0);
 }
 
+/* APPLE LOCAL begin radar 5741070  */
+/* Given an IDENTIFIER tree for a class interface, find (if possible) and
+   return the record type for the class interface.  */
+
+tree
+c_return_interface_record_type (tree typename)
+{
+  enum tree_code_class class;
+  enum tree_code code;
+  tree retval = NULL;
+
+  if (typename == NULL)
+    return retval;
+
+  code = TREE_CODE (typename);
+  class = TREE_CODE_CLASS (code);
+
+  if (code != IDENTIFIER_NODE
+      || class != tcc_exceptional)
+    return retval;
+
+  if (TREE_TYPE (typename)
+      && TREE_CODE (TREE_TYPE (typename)) == RECORD_TYPE)
+    retval = TREE_TYPE (typename);
+
+  if (retval
+      && TREE_CODE (retval) != RECORD_TYPE)
+    retval = NULL;
+
+  return retval;
+}
+/* APPLE LOCAL end radar 5741070  */
 
 #include "gt-cp-cp-objcp-common.h"

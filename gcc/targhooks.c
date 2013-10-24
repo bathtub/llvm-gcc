@@ -95,6 +95,18 @@ default_return_in_memory (tree type,
 #endif
 }
 
+/* APPLE LOCAL begin radar 4781080 */
+bool
+default_objc_fpreturn_msgcall (tree type, bool no_long_double)
+{
+#ifndef OBJC_FPRETURN_MSGCALL
+  return type == NULL_TREE && no_long_double;
+#else
+  return OBJC_FPRETURN_MSGCALL (type, no_long_double);
+#endif
+}
+/* APPLE LOCAL end radar 4781080 */
+
 rtx
 default_expand_builtin_saveregs (void)
 {
@@ -133,6 +145,16 @@ default_pretend_outgoing_varargs_named (CUMULATIVE_ARGS *ca ATTRIBUTE_UNUSED)
   return (targetm.calls.setup_incoming_varargs
 	  != default_setup_incoming_varargs);
 }
+
+/* APPLE LOCAL begin Altivec */
+bool
+default_skip_vec_args(tree type ATTRIBUTE_UNUSED,
+		      int pass ATTRIBUTE_UNUSED,
+		      int* last_pass ATTRIBUTE_UNUSED)
+{
+  return false;
+}
+/* APPLE LOCAL end Altivec */
 
 enum machine_mode
 default_eh_return_filter_mode (void)
@@ -604,4 +626,21 @@ default_reloc_rw_mask (void)
   return flag_pic ? 3 : 0;
 }
 
+/* APPLE LOCAL begin mainline 4.2 5569774 */
+bool
+default_builtin_vector_alignment_reachable (tree type, bool is_packed)
+{
+  if (is_packed)
+    return false;
+
+  /* Assuming that types whose size is > pointer-size are not guaranteed to be
+     naturally aligned.  */
+  if (tree_int_cst_compare (TYPE_SIZE (type), bitsize_int (POINTER_SIZE)) > 0)
+    return false;
+
+  /* Assuming that types whose size is <= pointer-size
+     are naturally aligned.  */
+  return true;
+}
+/* APPLE LOCAL end mainline 4.2 5569774 */
 #include "gt-targhooks.h"

@@ -2591,6 +2591,11 @@ expand_unop (enum machine_mode mode, optab unoptab, rtx op0, rtx target,
 	goto try_libcall;
     }
 
+  /* APPLE LOCAL begin mainline bswap */
+  if (unoptab == bswap_optab)
+    goto try_libcall;
+
+  /* APPLE LOCAL end mainline bswap */
   if (CLASS_HAS_WIDER_MODES_P (class))
     for (wider_mode = GET_MODE_WIDER_MODE (mode);
 	 wider_mode != VOIDmode;
@@ -5253,6 +5258,8 @@ init_optabs (void)
   absv_optab = init_optabv (ABS);
   addcc_optab = init_optab (UNKNOWN);
   one_cmpl_optab = init_optab (NOT);
+  /* APPLE LOCAL mainline bswap */
+  bswap_optab = init_optab (BSWAP);
   ffs_optab = init_optab (FFS);
   clz_optab = init_optab (CLZ);
   ctz_optab = init_optab (CTZ);
@@ -5445,6 +5452,12 @@ init_optabs (void)
 				 MODE_DECIMAL_FLOAT, MODE_INT);
   init_interclass_conv_libfuncs (ufloat_optab, "floatuns",
 				 MODE_INT, MODE_DECIMAL_FLOAT);
+  /* APPLE LOCAL begin mainline bswap */
+  /* Explicitly initialize the bswap libfuncs since we need them to be
+     valid for things other than word_mode.  */
+  set_optab_libfunc (bswap_optab, SImode, "__bswapsi2");
+  set_optab_libfunc (bswap_optab, DImode, "__bswapdi2");
+  /* APPLE LOCAL end mainline bswap */
 
   /* sext_optab is also used for FLOAT_EXTEND.  */
   init_intraclass_conv_libfuncs (sext_optab, "extend", MODE_FLOAT, true);

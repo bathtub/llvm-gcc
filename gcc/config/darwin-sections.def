@@ -38,6 +38,12 @@ DEF_SECTION (objc_string_object_section, 0, ".objc_string_object", 1)
 DEF_SECTION (objc_constant_string_object_section, 0,
 	     ".section __OBJC, __cstring_object, regular, no_dead_strip", 1)
 
+/* APPLE LOCAL begin constant cfstrings */
+/* Unlike constant NSStrings, constant CFStrings do not live in the
+   __OBJC segment since they may also occur in pure C or C++ programs.  */
+DEF_SECTION (cfstring_constant_object_section, 0, ".section __DATA, __cfstring", 0)
+/* APPLE LOCAL end constant cfstrings */
+
 /* Fix-and-Continue image marker.  */
 DEF_SECTION (objc_image_info_section, 0,
 	     ".section __OBJC, __image_info, regular, no_dead_strip", 1)
@@ -47,17 +53,88 @@ DEF_SECTION (objc_meth_var_types_section, 0, ".objc_meth_var_types", 1)
 DEF_SECTION (objc_cls_refs_section, SECTION_MERGE, ".objc_cls_refs", 1)
 
 DEF_SECTION (machopic_lazy_symbol_ptr_section, 0, ".lazy_symbol_pointer", 0)
-DEF_SECTION (machopic_nl_symbol_ptr_section, 0, ".non_lazy_symbol_pointer", 0)
+/* APPLE LOCAL begin dynamic-no-pic */
+DEF_SECTION (machopic_lazy_symbol_ptr2_section,	0,
+	     ".section __DATA, __la_sym_ptr2,lazy_symbol_pointers", 0)
+DEF_SECTION (machopic_lazy_symbol_ptr3_section, 0,
+	     ".section __DATA, __la_sym_ptr3,lazy_symbol_pointers", 0)
+/* APPLE LOCAL end dynamic-no-pic */
+/* APPLE LOCAL begin AT&T-style stub 4164563 */
+DEF_SECTION (machopic_nl_symbol_ptr_section, 0,
+	     MACHOPIC_NL_SYMBOL_PTR_SECTION, 0)
+/* APPLE LOCAL end AT&T-style stub 4164563 */
 DEF_SECTION (machopic_symbol_stub_section, 0, ".symbol_stub", 0)
 DEF_SECTION (machopic_symbol_stub1_section, 0,
 	     ".section __TEXT,__symbol_stub1,symbol_stubs,"
 	     "pure_instructions,16", 0)
+/* APPLE LOCAL begin ARM pic support */
+DEF_SECTION (machopic_symbol_stub4_section, 0,
+	     ".section __TEXT,__symbol_stub4,symbol_stubs,"
+	     "none,12", 0)
+/* APPLE LOCAL end ARM pic support */
 DEF_SECTION (machopic_picsymbol_stub_section, 0, ".picsymbol_stub", 0)
 DEF_SECTION (machopic_picsymbol_stub1_section, 0,
 	     ".section __TEXT,__picsymbolstub1,symbol_stubs,"
 	     "pure_instructions,32", 0)
+/* APPLE LOCAL begin dynamic-no-pic */
+DEF_SECTION (machopic_picsymbol_stub2_section, 0,
+	     ".section __TEXT,__picsymbolstub2,symbol_stubs,pure_instructions,25", 0)
+/* APPLE LOCAL end dynamic-no-pic */
+/* APPLE LOCAL begin AT&T-style stub 4164563 */
+DEF_SECTION (machopic_picsymbol_stub3_section, 0,
+	     ".section __IMPORT,__jump_table,symbol_stubs,self_modifying_code+pure_instructions,5", 0)
+/* APPLE LOCAL end AT&T-style stub 4164563 */
+/* APPLE LOCAL begin ARM pic support */
+DEF_SECTION (machopic_picsymbol_stub4_section, 0,
+	     ".section __TEXT,__picsymbolstub4,symbol_stubs,none,16", 0)
+/* APPLE LOCAL end ARM pic support */
 DEF_SECTION (darwin_exception_section, 0,
-	     ".section __DATA,__gcc_except_tab", 0)
+	    /* APPLE LOCAL EH __TEXT __gcc_except_tab 5819051 */
+	     ".section __TEXT,__gcc_except_tab", 0)
 DEF_SECTION (darwin_eh_frame_section, 0,
 	     ".section " EH_FRAME_SECTION_NAME ",__eh_frame"
 	     EH_FRAME_SECTION_ATTR, 0)
+/* APPLE LOCAL begin ObjC new abi - radar 4792158 */
+/* APPLE LOCAL begin radar 5575115 */
+DEF_SECTION (objc_v2_message_refs_section, 0,
+	     ".section __DATA, __objc_msgrefs, coalesced", 0)
+/* APPLE LOCAL end radar 5575115 */
+/* APPLE LOCAL begin radar 6255595 */
+DEF_SECTION (objc_v2_classdefs_section, 0,
+	     ".section __DATA, __objc_data", 0)
+DEF_SECTION (objc_v2_metadata_section, 0,
+	     ".section __DATA, __objc_const", 0)
+/* APPLE LOCAL end radar 6255595 */
+DEF_SECTION (objc_v2_classrefs_section, 0, 
+             ".section __DATA, __objc_classrefs, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_classlist_section, 0,
+	     ".section __DATA, __objc_classlist, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_categorylist_section, 0,
+	     ".section __DATA, __objc_catlist, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_selector_refs_section, 0,
+	     ".section __DATA, __objc_selrefs, literal_pointers, no_dead_strip", 1)
+DEF_SECTION (objc_v2_nonlazy_class_section, 0,
+	     ".section __DATA, __objc_nlclslist, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_nonlazy_category_section, 0,
+	     ".section __DATA, __objc_nlcatlist, regular, no_dead_strip", 1)
+/* APPLE LOCAL begin radar 6351990 */
+DEF_SECTION (objc_v2_protocollist_section, 0,
+	     ".section __DATA, __objc_protolist, coalesced, no_dead_strip", 1)
+DEF_SECTION (objc_v2_protocolrefs_section, 0,
+	     ".section __DATA, __objc_protorefs, coalesced, no_dead_strip", 1)
+/* APPLE LOCAL end radar 6351990 */
+DEF_SECTION (objc_v2_super_classrefs_section, 0,
+	     ".section __DATA, __objc_superrefs, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_image_info_section, 0,
+	     ".section __DATA, __objc_imageinfo, regular, no_dead_strip", 1)
+DEF_SECTION (objc_v2_constant_string_object_section, 0,
+	     ".section __DATA, __objc_stringobj, regular, no_dead_strip", 1)
+/* APPLE LOCAL end ObjC new abi - radar 4792158 */
+/* APPLE LOCAL begin radar 4585769 - Objective-C 1.0 extensions */
+DEF_SECTION (objc_class_ext_section, 0,
+	    ".section __OBJC, __class_ext, regular, no_dead_strip", 1)
+DEF_SECTION (objc_prop_list_section, 0,
+	    ".section __OBJC, __property, regular, no_dead_strip", 1)
+DEF_SECTION (objc_protocol_ext_section, 0,
+	    ".section __OBJC, __protocol_ext, regular, no_dead_strip", 1)
+/* APPLE LOCAL end radar 4585769 - Objective-C 1.0 extensions */

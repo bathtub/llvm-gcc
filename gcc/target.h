@@ -375,6 +375,12 @@ struct gcc_target
        by the vectorizer, and return the decl of the target builtin
        function.  */
     tree (* builtin_mask_for_load) (void);
+
+    /* APPLE LOCAL begin mainline 4.2 5569774 */
+    /* Return true if vector alignment is reachable (by peeling N
+      interations) for the given type.  */
+     bool (* vector_alignment_reachable) (tree, bool);
+    /* APPLE LOCAL end mainline 4.2 5569774 */
   } vectorize;
 
   /* The initial value of target_flags.  */
@@ -419,6 +425,12 @@ struct gcc_target
      Microsoft Visual C++ bitfield layout rules.  */
   bool (* ms_bitfield_layout_p) (tree record_type);
 
+  /* APPLE LOCAL begin pragma reverse_bitfields */
+  /* Return true if bitfields in RECORD_TYPE should be allocated
+     reversed (e.g. right to left on a big-endian machine).  */
+  bool (* reverse_bitfields_p) (tree record_type);
+  /* APPLE LOCAL end pragma reverse_bitfields */
+
   /* True if the target supports decimal floating point.  */
   bool (* decimal_float_supported_p) (void);
 
@@ -436,6 +448,18 @@ struct gcc_target
   rtx (* expand_builtin) (tree exp, rtx target, rtx subtarget,
 			  enum machine_mode mode, int ignore);
 
+  /* APPLE LOCAL begin constant cfstrings */
+  /* Expand a platform-specific (but machine-independent) builtin.  */
+  tree (* expand_tree_builtin) (tree function, tree params,
+				tree coerced_params);
+
+  /* Construct a target-specific Objective-C string object based on the
+     STRING_CST passed in STR, or NULL if the default Objective-C objects
+     (based on NSConstantString or NXConstantString) should be used
+     instead.  */
+  tree (* construct_objc_string) (tree str);
+  /* APPLE LOCAL end constant cfstrings */
+
   /* Select a replacement for a target-specific builtin.  This is done
      *before* regular type checking, and so allows the target to implement
      a crude form of function overloading.  The result is a complete
@@ -445,10 +469,12 @@ struct gcc_target
   /* Fold a target-specific builtin.  */
   tree (* fold_builtin) (tree fndecl, tree arglist, bool ignore);
 
-  /* For a vendor-specific fundamental TYPE, return a pointer to
-     a statically-allocated string containing the C++ mangling for
-     TYPE.  In all other cases, return NULL.  */
-  const char * (* mangle_fundamental_type) (tree type);
+  /* APPLE LOCAL begin mangle_type 7105099 */
+  /* For a vendor-specific TYPE, return a pointer to a statically-allocated
+     string containing the C++ mangling for TYPE.  In all other cases, return
+     NULL.  */
+  const char * (* mangle_type) (tree type);
+  /* APPLE LOCAL end mangle_type 7105099 */
 
   /* Make any adjustments to libfunc names needed for this target.  */
   void (* init_libfuncs) (void);
@@ -672,6 +698,8 @@ struct gcc_target
     rtx (*struct_value_rtx) (tree fndecl, int incoming);
     bool (*return_in_memory) (tree type, tree fndecl);
     bool (*return_in_msb) (tree type);
+    /* APPLE LOCAL radar 4781080 */
+    bool (*objc_fpreturn_msgcall) (tree type, bool no_long_double);
 
     /* Return true if a parameter must be passed by reference.  TYPE may
        be null if this is a libcall.  CA may be null if this query is
@@ -693,6 +721,9 @@ struct gcc_target
     /* Given a complex type T, return true if a parameter of type T
        should be passed as two scalars.  */
     bool (* split_complex_arg) (tree type);
+    /* APPLE LOCAL begin Altivec */
+    bool (*skip_vec_args) (tree, int, int*);
+    /* APPLE LOCAL end Altivec */
 
     /* Return true if type T, mode MODE, may not be passed in registers,
        but must be passed on the stack.  */
@@ -787,6 +818,12 @@ struct gcc_target
        class  (eg, tweak visibility or perform any other required
        target modifications).  */
     void (*adjust_class_at_definition) (tree type);
+/* APPLE LOCAL begin mainline 4.3 2006-01-10 4871915 */
+    /* Returns true (the default) if the RTTI for the basic types,
+       which is always defined in the C++ runtime, should be COMDAT;
+       false if it should not be COMDAT.  */
+    bool (*library_rtti_comdat) (void);
+/* APPLE LOCAL end mainline 4.3 2006-01-10 4871915 */
   } cxx;
   
   /* For targets that need to mark extra registers as live on entry to
@@ -827,6 +864,17 @@ struct gcc_target
      at the beginning of assembly output.  */
   bool file_start_file_directive;
 
+  /* APPLE LOCAL begin AltiVec */
+  /* True if it is permissible to use cast expressions as
+     vector initializers, e.g.:
+
+       (vector unsigned int)(3, 4, 5, 6)
+       (vector float)(2.5)
+
+     This is required for the Motorola AltiVec syntax on the PowerPC.  */
+  bool cast_expr_as_vector_init;
+  /* APPLE LOCAL end AltiVec */
+  
   /* True if #pragma redefine_extname is to be supported.  */
   bool handle_pragma_redefine_extname;
 
@@ -842,6 +890,9 @@ struct gcc_target
    */
   bool arm_eabi_unwinder;
 
+/* APPLE LOCAL begin radar 5155743, mainline candidate */
+  bool have_dynamic_stack_space;
+/* APPLE LOCAL end radar 5155743, mainline candidate */
   /* Leave the boolean fields at the end.  */
 };
 

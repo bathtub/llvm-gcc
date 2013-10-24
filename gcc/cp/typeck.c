@@ -57,7 +57,8 @@ static void casts_away_constness_r (tree *, tree *);
 static bool casts_away_constness (tree, tree);
 static void maybe_warn_about_returning_address_of_local (tree);
 static tree lookup_destructor (tree, tree, tree);
-static tree convert_arguments (tree, tree, tree, int);
+/* APPLE LOCAL radar 6087117 */
+static tree convert_arguments (tree, tree, tree, int, int);
 
 /* Do `exp = require_complete_type (exp);' to make sure exp
    does not have an incomplete type.  (That includes void types.)
@@ -238,6 +239,8 @@ original_type (tree t)
       x = DECL_ORIGINAL_TYPE (x);
       if (x == NULL_TREE)
 	break;
+      if (x == t)
+	break;
       t = x;
     }
   return cp_build_qualified_type (t, quals);
@@ -406,7 +409,8 @@ composite_pointer_type_r (tree t1, tree t2, const char* location)
   tree attributes;
 
   /* Determine the types pointed to by T1 and T2.  */
-  if (TREE_CODE (t1) == POINTER_TYPE)
+  /* APPLE LOCAL blocks 6040305 */
+  if (TREE_CODE (t1) == POINTER_TYPE || TREE_CODE (t1) == BLOCK_POINTER_TYPE)
     {
       pointee1 = TREE_TYPE (t1);
       pointee2 = TREE_TYPE (t2);
@@ -453,8 +457,13 @@ composite_pointer_type_r (tree t1, tree t2, const char* location)
       result_type = build_ptrmem_type (TYPE_PTRMEM_CLASS_TYPE (t1),
 				       result_type);
     }
+  /* APPLE LOCAL begin blocks 6065211 */
+  else if (TREE_CODE (t1) == BLOCK_POINTER_TYPE
+	   && result_type != void_type_node)
+    result_type = build_block_pointer_type (result_type);
   else
     result_type = build_pointer_type (result_type);
+  /* APPLE LOCAL end blocks 6065211 */
 
   /* Merge the attributes.  */
   attributes = (*targetm.merge_type_attributes) (t1, t2);
@@ -524,8 +533,10 @@ composite_pointer_type (tree t1, tree t2, tree arg1, tree arg2,
   if (c_dialect_objc () && TREE_CODE (t1) == POINTER_TYPE
       && TREE_CODE (t2) == POINTER_TYPE)
     {
-      if (objc_compare_types (t1, t2, -3, NULL_TREE))
-	return t1;
+      /* APPLE LOCAL radar 4229905 - radar 6231433 */
+      if (objc_have_common_type (t1, t2, -3, NULL_TREE, location))
+        /* APPLE LOCAL 4154928 */
+        return objc_common_type (t1, t2);
     }
 
   /* [expr.eq] permits the application of a pointer conversion to
@@ -572,6 +583,14 @@ composite_pointer_type (tree t1, tree t2, tree arg1, tree arg2,
 	  return error_mark_node;
 	}
     }
+  /* APPLE LOCAL begin blocks 6065211 */
+  else if (TREE_CODE (t1) != TREE_CODE (t2))
+    {
+      error ("%s between distinct pointer types %qT and %qT "
+	     "lacks a cast", location, t1, t2);
+      return error_mark_node;
+    }
+  /* APPLE LOCAL end blocks 6065211 */
 
   return composite_pointer_type_r (t1, t2, location);
 }
@@ -1039,6 +1058,21 @@ comptypes (tree t1, tree t2, int strict)
 	return false;
       break;
 
+      /* APPLE LOCAL begin blocks 6040305 */
+      case BLOCK_POINTER_TYPE:
+        if (TREE_CODE (t2) == BLOCK_POINTER_TYPE)
+        {
+          tree pt1 = TREE_TYPE (t1);
+          tree pt2 = TREE_TYPE (t2);
+          if (!same_type_ignoring_top_level_qualifiers_p (TREE_TYPE (pt1),
+							  TREE_TYPE (pt2)))
+            return false;
+          if (!compparms (TYPE_ARG_TYPES (pt1), TYPE_ARG_TYPES (pt2)))
+            return false;
+          break;
+        }
+        /* APPLE LOCAL end blocks 6040305 */
+        
     case POINTER_TYPE:
     case REFERENCE_TYPE:
       if (TYPE_MODE (t1) != TYPE_MODE (t2)
@@ -1358,7 +1392,12 @@ cxx_alignof_expr (tree e)
     {
       pedwarn ("ISO C++ forbids applying %<__alignof%> to an expression of "
 	       "function type");
-      t = size_one_node;
+      /* APPLE LOCAL begin mainline aligned functions 5933878 */
+      if (TREE_CODE (e) == FUNCTION_DECL)
+	t = size_int (DECL_ALIGN_UNIT (e));
+      else
+	t = size_one_node;
+      /* APPLE LOCAL end mainline aligned functions 5933878 */
     }
   else if (type_unknown_p (e))
     {
@@ -1770,6 +1809,12 @@ build_class_member_access_expr (tree object, tree member,
 
   gcc_assert (DECL_P (member) || BASELINK_P (member));
 
+  /* APPLE LOCAL begin ObjC new abi */
+  if (DECL_P (member) 
+      && (result = objc_v2_build_ivar_ref (object, DECL_NAME (member))))
+    return result;
+  /* APPLE LOCAL end ObjC new abi */
+
   /* [expr.ref]
 
      The type of the first expression shall be "class object" (of a
@@ -1934,6 +1979,8 @@ build_class_member_access_expr (tree object, tree member,
 
       result = build3 (COMPONENT_REF, member_type, object, member,
 		       NULL_TREE);
+      /* APPLE LOCAL radar 4697411 */
+      objc_volatilize_component_ref (result, TREE_TYPE (member));
       result = fold_if_not_in_template (result);
 
       /* Mark the expression const or volatile, as appropriate.  Even
@@ -2095,6 +2142,20 @@ finish_class_member_access_expr (tree object, tree name, bool template_p)
   /* If OBJECT is an ObjC class instance, we must obey ObjC access rules.  */
   if (!objc_is_public (object, name))
     return error_mark_node;
+
+  /* APPLE LOCAL begin C* property (Radar 4436866) */
+  if (!processing_template_decl)
+    {
+      if (TREE_CODE (name) == IDENTIFIER_NODE
+	  /* APPLE LOCAL radar 5285911 */
+          && (expr = objc_build_property_reference_expr (object, name)))
+        return expr;
+      /* APPLE LOCAL begin radar 5802025 */
+      else if (objc_property_reference_expr (object))
+        object = objc_build_property_getter_func_call (object);
+      /* APPLE LOCAL end radar 5802025 */
+    }
+  /* APPLE LOCAL end C* property (Radar 4436866) */
 
   object_type = TREE_TYPE (object);
 
@@ -2264,6 +2325,8 @@ build_ptrmemfunc_access_expr (tree ptrmem, tree member_name)
      routine directly because it expects the object to be of class
      type.  */
   ptrmem_type = TREE_TYPE (ptrmem);
+  /* APPLE LOCAL KEXT 2.95-ptmf-compatibility --turly */
+  if (TARGET_KEXTABI != 1)
   gcc_assert (TYPE_PTRMEMFUNC_P (ptrmem_type));
   member = lookup_member (ptrmem_type, member_name, /*protect=*/0,
 			  /*want_type=*/false);
@@ -2539,7 +2602,10 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
 
   if (TYPE_PTRMEMFUNC_P (TREE_TYPE (function)))
     {
-      tree idx, delta, e1, e2, e3, vtbl, basetype;
+      /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+      tree idx, delta, e1, e2, e3, vtbl = vtbl, basetype;
+      tree delta2 = delta2;
+      /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
       tree fntype = TYPE_PTRMEMFUNC_FN_TYPE (TREE_TYPE (function));
 
       tree instance_ptr = *instance_ptrptr;
@@ -2571,6 +2637,17 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
       /* Start by extracting all the information from the PMF itself.  */
       e3 = pfn_from_ptrmemfunc (function);
       delta = build_ptrmemfunc_access_expr (function, delta_identifier);
+      
+      /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+      if (TARGET_KEXTABI == 1)
+	{
+	  idx = build_ptrmemfunc_access_expr (function, index_identifier);
+	  idx = save_expr (default_conversion (idx));
+	  e1 = cp_build_binary_op (GE_EXPR, idx, integer_zero_node);
+	}
+      else
+        {
+      /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
       idx = build1 (NOP_EXPR, vtable_index_type, e3);
       switch (TARGET_PTRMEMFUNC_VBIT_LOCATION)
 	{
@@ -2587,6 +2664,19 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
 	default:
 	  gcc_unreachable ();
 	}
+
+      /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+        }
+      /* DELTA2 is the amount by which to adjust the `this' pointer
+	 to find the vtbl.  */
+      if (TARGET_KEXTABI == 1)
+	{
+	  delta2 = build_ptrmemfunc_access_expr (function,
+						 pfn_or_delta2_identifier);
+	  delta2 = build_ptrmemfunc_access_expr (delta2,
+						 delta2_identifier);
+	}
+      /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
 
       /* Convert down to the right base before using the instance.  A
 	 special case is that in a pointer to member of class C, C may
@@ -2605,6 +2695,14 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
 	  if (instance_ptr == error_mark_node)
 	    return error_mark_node;
 	}
+
+      /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+      if (TARGET_KEXTABI == 1)
+	/* Next extract the vtable pointer from the object.  */
+	vtbl = build2 (PLUS_EXPR, build_pointer_type (vtbl_ptr_type_node),
+		       instance_ptr, cp_convert (ptrdiff_type_node, delta2));
+      /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
+
       /* ...and then the delta in the PMF.  */
       instance_ptr = build2 (PLUS_EXPR, TREE_TYPE (instance_ptr),
 			     instance_ptr, delta);
@@ -2612,10 +2710,21 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
       /* Hand back the adjusted 'this' argument to our caller.  */
       *instance_ptrptr = instance_ptr;
 
+      /* APPLE LOCAL KEXT 2.95-ptmf-compatibility --turly */
+      if (TARGET_KEXTABI != 1)
       /* Next extract the vtable pointer from the object.  */
       vtbl = build1 (NOP_EXPR, build_pointer_type (vtbl_ptr_type_node),
 		     instance_ptr);
       vtbl = build_indirect_ref (vtbl, NULL);
+
+      /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+      /* 2.95-style indices are off by one.  */
+      if (TARGET_KEXTABI == 1)
+	{
+	  idx = cp_build_binary_op (MINUS_EXPR, idx, integer_one_node);
+	  idx = cp_build_binary_op (LSHIFT_EXPR, idx, integer_two_node);
+	}
+      /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
 
       /* Finally, extract the function pointer from the vtable.  */
       e2 = fold_build2 (PLUS_EXPR, TREE_TYPE (vtbl), vtbl, idx);
@@ -2642,6 +2751,53 @@ get_member_function_from_ptrfunc (tree *instance_ptrptr, tree function)
     }
   return function;
 }
+
+/* APPLE LOCAL begin blocks 6040305 (cm) */
+/* APPLE LOCAL begin radar 5847213 - radar 6329245 */
+/**
+ build_block_call - Routine to build a block call; as in:
+  ((double(*)(void *, int))(BLOCK_PTR_EXP->__FuncPtr))(I, 42);
+ FNTYPE is the original function type derived from the syntax.
+ BLOCK_PTR_EXP is the block pointer variable.
+ PARAMS is the parameter list.
+*/
+static tree
+build_block_call (tree fntype, tree block_ptr_exp, tree params)
+{
+  tree function_ptr_exp;
+  tree typelist;
+  tree result;
+  /* APPLE LOCAL radar 6396238 */
+  bool block_ptr_exp_side_effect = TREE_SIDE_EFFECTS (block_ptr_exp);
+  
+  /* First convert it to 'void *'. */
+  block_ptr_exp = convert (ptr_type_node, block_ptr_exp);
+  gcc_assert (generic_block_literal_struct_type);
+  block_ptr_exp = convert (build_pointer_type (generic_block_literal_struct_type),
+                           block_ptr_exp);
+  if (block_ptr_exp_side_effect)
+    block_ptr_exp = save_expr (block_ptr_exp);
+
+  /* BLOCK_PTR_VAR->__FuncPtr */
+  function_ptr_exp =
+    finish_class_member_access_expr (build_indirect_ref (block_ptr_exp, "->"),
+                       		     get_identifier ("__FuncPtr"), false);
+  gcc_assert (function_ptr_exp);
+  
+  /* Build: result_type(*)(void *, function-arg-type-list) */
+  typelist = TYPE_ARG_TYPES (fntype);
+  typelist = tree_cons (NULL_TREE, ptr_type_node, typelist);
+  fntype = build_function_type (TREE_TYPE (fntype), typelist);
+  function_ptr_exp = convert (build_pointer_type (fntype), function_ptr_exp);
+  params = tree_cons (NULL_TREE, block_ptr_exp, params);
+  result = build3 (CALL_EXPR, TREE_TYPE (fntype),
+		   function_ptr_exp, params, NULL_TREE);
+  /* FIXME: should do more from build_cxx_call */
+  result = convert_from_reference (result);
+  return result;
+}
+/* APPLE LOCAL end radar 5847213 - radar 6329245 */
+/* APPLE LOCAL end blocks 6040305 (cm) */
 
 tree
 build_function_call (tree function, tree params)
@@ -2705,7 +2861,8 @@ build_function_call (tree function, tree params)
   is_method = (TREE_CODE (fntype) == POINTER_TYPE
 	       && TREE_CODE (TREE_TYPE (fntype)) == METHOD_TYPE);
 
-  if (!((TREE_CODE (fntype) == POINTER_TYPE
+  /* APPLE LOCAL blocks 6040305 */
+  if (!(((TREE_CODE (fntype) == POINTER_TYPE || TREE_CODE (fntype) == BLOCK_POINTER_TYPE)
 	 && TREE_CODE (TREE_TYPE (fntype)) == FUNCTION_TYPE)
 	|| is_method
 	|| TREE_CODE (function) == TEMPLATE_ID_EXPR))
@@ -2720,8 +2877,11 @@ build_function_call (tree function, tree params)
   /* Convert the parameters to the types declared in the
      function prototype, or apply default promotions.  */
 
+  /* APPLE LOCAL begin radar 6087117 */
   coerced_params = convert_arguments (TYPE_ARG_TYPES (fntype),
-				      params, fndecl, LOOKUP_NORMAL);
+				      params, fndecl, LOOKUP_NORMAL,
+				      (TREE_CODE (TREE_TYPE (function)) == BLOCK_POINTER_TYPE));
+  /* APPLE LOCAL end radar 6087117 */
   if (coerced_params == error_mark_node)
     return error_mark_node;
 
@@ -2730,7 +2890,11 @@ build_function_call (tree function, tree params)
 
   check_function_arguments (TYPE_ATTRIBUTES (fntype), coerced_params,
 			    TYPE_ARG_TYPES (fntype));
-
+  /* APPLE LOCAL begin blocks 6040305 */
+  if (TREE_CODE (TREE_TYPE (function)) == BLOCK_POINTER_TYPE)
+    return build_block_call (fntype, function, coerced_params);
+  /* APPLE LOCAL end blocks 6040305 */
+  
   return build_cxx_call (function, coerced_params);
 }
 
@@ -2752,7 +2916,8 @@ build_function_call (tree function, tree params)
    default arguments, if such were specified.  Do so here.  */
 
 static tree
-convert_arguments (tree typelist, tree values, tree fndecl, int flags)
+/* APPLE LOCAL radar 6087117 */
+convert_arguments (tree typelist, tree values, tree fndecl, int flags, int block_call)
 {
   tree typetail, valtail;
   tree result = NULL_TREE;
@@ -2794,7 +2959,8 @@ convert_arguments (tree typelist, tree values, tree fndecl, int flags)
 	      error ("at this point in file");
 	    }
 	  else
-	    error ("too many arguments to function");
+	    /* APPLE LOCAL radar 6087117 */
+	    error ("too many arguments to %s", (block_call ? "block call" : "function"));
 	  /* In case anybody wants to know if this argument
 	     list is valid.  */
 	  if (result)
@@ -2896,7 +3062,8 @@ convert_arguments (tree typelist, tree values, tree fndecl, int flags)
 	      error ("at this point in file");
 	    }
 	  else
-	    error ("too few arguments to function");
+	    /* APPLE LOCAL radar 6087117 */
+	    error ("too few arguments to %s", (block_call ? "block call" : "function"));
 	  return error_mark_node;
 	}
     }
@@ -2914,6 +3081,18 @@ build_x_binary_op (enum tree_code code, tree arg1, tree arg2,
   tree orig_arg1;
   tree orig_arg2;
   tree expr;
+
+  /* APPLE LOCAL begin CW asm blocks */
+  /* I think this is dead now.  */
+  if (inside_iasm_block)
+    if (TREE_CODE (arg1) == IDENTIFIER_NODE
+	|| TREE_CODE (arg2) == IDENTIFIER_NODE
+	|| TREE_TYPE (arg1) == NULL_TREE
+	|| TREE_TYPE (arg2) == NULL_TREE)
+      {
+	return build2 (code, NULL_TREE, arg1, arg2);
+      }
+  /* APPLE LOCAL end CW asm blocks */
 
   orig_arg1 = arg1;
   orig_arg2 = arg2;
@@ -3077,7 +3256,8 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
   if ((invalid_op_diag
        = targetm.invalid_binary_op (code, type0, type1)))
     {
-      error (invalid_op_diag);
+      /* APPLE LOCAL default to Wformat-security 5764921 */
+      error (invalid_op_diag, "");
       return error_mark_node;
     }
 
@@ -3276,7 +3456,8 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
       if ((TREE_CODE (orig_op0) == STRING_CST && !integer_zerop (op1))
 	  || (TREE_CODE (orig_op1) == STRING_CST && !integer_zerop (op0)))
 	warning (OPT_Waddress, 
-                 "comparison with string literal results in unspecified behaviour");
+		 /* APPLE LOCAL spelling 5808469 */
+                 "comparison with string literal results in unspecified behavior");
 
       build_type = boolean_type_node;
       if ((code0 == INTEGER_TYPE || code0 == REAL_TYPE
@@ -3284,28 +3465,42 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
 	  && (code1 == INTEGER_TYPE || code1 == REAL_TYPE
 	      || code1 == COMPLEX_TYPE))
 	short_compare = 1;
-      else if ((code0 == POINTER_TYPE && code1 == POINTER_TYPE)
+      /* APPLE LOCAL begin blocks 6040305 */
+      else if (((code0 == POINTER_TYPE || code0 == BLOCK_POINTER_TYPE)
+		&& (code1 == POINTER_TYPE || code1 == BLOCK_POINTER_TYPE))
 	       || (TYPE_PTRMEM_P (type0) && TYPE_PTRMEM_P (type1)))
+      /* APPLE LOCAL end blocks 6040305 */
 	result_type = composite_pointer_type (type0, type1, op0, op1,
 					      "comparison");
-      else if ((code0 == POINTER_TYPE || TYPE_PTRMEM_P (type0))
+      /* APPLE LOCAL blocks 6040305 (cl) */
+      else if ((code0 == POINTER_TYPE || code0 == BLOCK_POINTER_TYPE || TYPE_PTRMEM_P (type0))
 	       && null_ptr_cst_p (op1))
 	result_type = type0;
-      else if ((code1 == POINTER_TYPE || TYPE_PTRMEM_P (type1))
+      /* APPLE LOCAL blocks 6040305 (cl) */
+      else if ((code1 == POINTER_TYPE || code1 == BLOCK_POINTER_TYPE || TYPE_PTRMEM_P (type1))
 	       && null_ptr_cst_p (op0))
 	result_type = type1;
-      else if (code0 == POINTER_TYPE && code1 == INTEGER_TYPE)
+      /* APPLE LOCAL blocks 6040305 (cl) */
+      else if ((code0 == POINTER_TYPE || code0 == BLOCK_POINTER_TYPE) && code1 == INTEGER_TYPE)
 	{
 	  result_type = type0;
 	  error ("ISO C++ forbids comparison between pointer and integer");
 	}
-      else if (code0 == INTEGER_TYPE && code1 == POINTER_TYPE)
+      /* APPLE LOCAL blocks 6040305 (cl) */
+      else if (code0 == INTEGER_TYPE && (code1 == POINTER_TYPE || code1 == BLOCK_POINTER_TYPE))
 	{
 	  result_type = type1;
 	  error ("ISO C++ forbids comparison between pointer and integer");
 	}
       else if (TYPE_PTRMEMFUNC_P (type0) && null_ptr_cst_p (op1))
 	{
+	  /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+	  /* Shouldn't we use INDEX here rather than PFN?  This seems to
+	     work fine, though...  */
+	  if (TARGET_KEXTABI == 1)
+	    op0 = build_ptrmemfunc_access_expr (op0, index_identifier);
+	  else
+	  /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
 	  op0 = build_ptrmemfunc_access_expr (op0, pfn_identifier);
 	  op1 = cp_convert (TREE_TYPE (op0), integer_zero_node);
 	  result_type = TREE_TYPE (op0);
@@ -3385,7 +3580,8 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
       if (TREE_CODE (orig_op0) == STRING_CST
 	  || TREE_CODE (orig_op1) == STRING_CST)
 	warning (OPT_Waddress, 
-                 "comparison with string literal results in unspecified behaviour");
+		 /* APPLE LOCAL spelling 5808469 */
+                 "comparison with string literal results in unspecified behavior");
 
       build_type = boolean_type_node;
       if ((code0 == INTEGER_TYPE || code0 == REAL_TYPE)
@@ -3446,7 +3642,8 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
 	      || !same_scalar_type_ignoring_signedness (TREE_TYPE (type0),
 							TREE_TYPE (type1)))
 	    {
-	      binary_op_error (code);
+	      /* APPLE LOCAL 5612787 mainline sse4 */
+	      binary_op_error (code, type0, type1);
 	      return error_mark_node;
 	    }
 	  arithmetic_types_p = 1;
@@ -3743,10 +3940,24 @@ build_binary_op (enum tree_code code, tree orig_op0, tree orig_op1,
 
   if (! converted)
     {
-      if (TREE_TYPE (op0) != result_type)
-	op0 = cp_convert (result_type, op0);
-      if (TREE_TYPE (op1) != result_type)
-	op1 = cp_convert (result_type, op1);
+      /* APPLE LOCAL begin 64bit shorten warning 6183168 */
+      if (final_type == 0)
+	{
+	  /* APPLE LOCAL begin mainline */
+	  if (TREE_TYPE (op0) != result_type)
+	    op0 = cp_convert_and_check (result_type, op0);
+	  if (TREE_TYPE (op1) != result_type)
+	    op1 = cp_convert_and_check (result_type, op1);
+	  /* APPLE LOCAL end mainline */
+	}
+      else
+	{
+	  if (TREE_TYPE (op0) != result_type)
+	    op0 = cp_convert (result_type, op0);
+	  if (TREE_TYPE (op1) != result_type)
+	    op1 = cp_convert (result_type, op1);
+	}
+      /* APPLE LOCAL end 64bit shorten warning 6183168 */
 
       if (op0 == error_mark_node || op1 == error_mark_node)
 	return error_mark_node;
@@ -3998,7 +4209,8 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
 				    : code),
 				   TREE_TYPE (xarg))))
     {
-      error (invalid_op_diag);
+      /* APPLE LOCAL default to Wformat-security 5764921 */
+      error (invalid_op_diag, "");
       return error_mark_node;
     }
 
@@ -4218,10 +4430,18 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
 	    break;
 	  }
 
+        /* APPLE LOCAL begin radar 4712269 */
+        if ((val = objc_build_incr_decr_setter_call (code, arg, inc)))
+          return val;
+        /* APPLE LOCAL end radar 4712269 */
+
 	/* Complain about anything else that is not a true lvalue.  */
-	if (!lvalue_or_else (arg, ((code == PREINCREMENT_EXPR
-				    || code == POSTINCREMENT_EXPR)
-				   ? lv_increment : lv_decrement)))
+	/* APPLE LOCAL begin non lvalue assign */
+	if (!lvalue_or_else (&arg, ((code == PREINCREMENT_EXPR
+				     || code == POSTINCREMENT_EXPR)
+				    ? lv_increment
+				    : lv_decrement)))
+	/* APPLE LOCAL end non lvalue assign */
 	  return error_mark_node;
 
 	/* Forbid using -- on `bool'.  */
@@ -4390,7 +4610,8 @@ build_unary_op (enum tree_code code, tree xarg, int noconvert)
       if (TREE_CODE (argtype) != FUNCTION_TYPE
 	  && TREE_CODE (argtype) != METHOD_TYPE
 	  && TREE_CODE (arg) != OFFSET_REF
-	  && !lvalue_or_else (arg, lv_addressof))
+	  /* APPLE LOCAL non lvalue assign */
+	  && !lvalue_or_else (&arg, lv_addressof))
 	return error_mark_node;
 
       if (argtype != error_mark_node)
@@ -4719,7 +4940,11 @@ build_x_compound_expr (tree op1, tree op2)
 tree
 build_compound_expr (tree lhs, tree rhs)
 {
-  lhs = convert_to_void (lhs, "left-hand operand of comma");
+  /* APPLE LOCAL begin AltiVec */
+  lhs = convert_to_void (lhs, targetm.cast_expr_as_vector_init
+			      ? NULL
+			      : "left-hand operand of comma");
+  /* APPLE LOCAL end AltiVec */
 
   if (lhs == error_mark_node || rhs == error_mark_node)
     return error_mark_node;
@@ -4971,6 +5196,15 @@ build_static_cast_1 (tree type, tree expr, bool c_cast_p,
       return expr;
     }
 
+  /* APPLE LOCAL begin radar 4696522 */
+  /* Casts to a (pointer to a) specific ObjC class (or 'id' or
+     'Class') should always be retained, because this information aids
+     in method lookup.  */
+  if (objc_is_object_ptr (type)
+      && objc_is_object_ptr (intype))
+    return build_nop (type, expr);
+  /* APPLE LOCAL end radar 4696522 */
+
   if (TYPE_PTR_P (type) && TYPE_PTR_P (intype)
       && CLASS_TYPE_P (TREE_TYPE (type))
       && CLASS_TYPE_P (TREE_TYPE (intype))
@@ -5062,6 +5296,13 @@ build_static_cast (tree type, tree expr)
       return convert_from_reference (expr);
     }
 
+  /* APPLE LOCAL begin AltiVec */
+  /* If we are casting to a vector type, treat the expression as a vector
+     initializer if this target supports it.  */
+  if (TREE_CODE (type) == VECTOR_TYPE && targetm.cast_expr_as_vector_init)
+    return vector_constructor_from_expr (expr, type);
+  /* APPLE LOCAL end AltiVec */
+
   /* build_c_cast puts on a NOP_EXPR to make the result not an lvalue.
      Strip such NOP_EXPRs if VALUE is being used in non-lvalue context.  */
   if (TREE_CODE (type) != REFERENCE_TYPE
@@ -5093,6 +5334,20 @@ convert_member_func_to_ptr (tree type, tree expr)
   intype = TREE_TYPE (expr);
   gcc_assert (TYPE_PTRMEMFUNC_P (intype)
 	      || TREE_CODE (intype) == METHOD_TYPE);
+
+  /* APPLE LOCAL begin kext ptmf casts --bowdidge*/
+  /* Beginning in gcc-4.0, casts from pointer-to-member-function to pointer-to-
+     function should always be done with the OSMemberFunctionCast() to guarantee
+     the 2.95 behavior.  Casts the "old fashioned way" should be flagged as
+     errors so developers won't have kexts that silently use the new 
+     ptmf->pmf behavior and get a different function than 3.3. */ 
+
+  if (TARGET_KEXTABI)
+    {
+      error ("converting from `%T' to `%T' in a kext.  Use OSMemberFunctionCast() instead.", intype, type);
+      return error_mark_node;
+    }
+  /* APPLE LOCAL end kext ptmf casts */
 
   if (pedantic || warn_pmf2ptr)
     pedwarn ("converting from %qT to %qT", intype, type);
@@ -5211,6 +5466,30 @@ build_reinterpret_cast_1 (tree type, tree expr, bool c_cast_p,
   else if (TYPE_PTR_P (type) && INTEGRAL_OR_ENUMERATION_TYPE_P (intype))
     /* OK */
     ;
+  /* APPLE LOCAL begin blocks 6040305 (ck) */
+  else if (TREE_CODE (type) == INTEGER_TYPE && TREE_CODE (intype) == BLOCK_POINTER_TYPE)
+    {
+      if (TYPE_PRECISION (type) < TYPE_PRECISION (intype))
+	pedwarn ("cast from %qT to %qT loses precision",
+		 intype, type);
+    }
+  else if (TREE_CODE (type) == BLOCK_POINTER_TYPE && TREE_CODE (intype) == INTEGER_TYPE)
+    /* OK */
+    ;
+  else if (TREE_CODE (type) == BLOCK_POINTER_TYPE && TREE_CODE (intype) == BLOCK_POINTER_TYPE)
+    /* OK */
+    ;
+  else if (TREE_CODE (intype) == BLOCK_POINTER_TYPE
+	   && (objc_is_id (type)
+	       || (TREE_CODE (type) == POINTER_TYPE && VOID_TYPE_P (TREE_TYPE (type)))))
+    /* OK */
+    ;
+  else if (TREE_CODE (type) == BLOCK_POINTER_TYPE
+	   && TREE_CODE (intype) == POINTER_TYPE
+	   && (objc_is_id (intype) || VOID_TYPE_P (TREE_TYPE (intype))))
+    /* OK */
+    ;
+  /* APPLE LOCAL end blocks 6040305 (ck) */
   else if ((TYPE_PTRFN_P (type) && TYPE_PTRFN_P (intype))
 	   || (TYPE_PTRMEMFUNC_P (type) && TYPE_PTRMEMFUNC_P (intype)))
     return fold_if_not_in_template (build_nop (type, expr));
@@ -5263,6 +5542,14 @@ build_reinterpret_cast_1 (tree type, tree expr, bool c_cast_p,
       return error_mark_node;
     }
 
+  /* APPLE LOCAL begin don't sign-extend pointers cast to integers */
+  if (TREE_CODE (type) == INTEGER_TYPE
+      && TREE_CODE (intype) == POINTER_TYPE
+      && TYPE_PRECISION (type) > TYPE_PRECISION (intype)
+      && TYPE_UNSIGNED (type))
+    expr = cp_convert (c_common_type_for_size (POINTER_SIZE, 1), expr);
+  /* APPLE LOCAL end don't sign-extend pointers cast to integers */
+
   return cp_convert (type, expr);
 }
 
@@ -5282,6 +5569,13 @@ build_reinterpret_cast (tree type, tree expr)
 	TREE_SIDE_EFFECTS (t) = 1;
       return convert_from_reference (t);
     }
+
+  /* APPLE LOCAL begin AltiVec */
+  /* If we are casting to a vector type, treat the expression as a vector
+     initializer if this target supports it.  */
+  if (TREE_CODE (type) == VECTOR_TYPE && targetm.cast_expr_as_vector_init)
+    return vector_constructor_from_expr (expr, type);
+  /* APPLE LOCAL end AltiVec */
 
   return build_reinterpret_cast_1 (type, expr, /*c_cast_p=*/false,
 				   /*valid_p=*/NULL);
@@ -5448,13 +5742,20 @@ build_c_cast (tree type, tree expr)
       return convert_from_reference (t);
     }
 
-  /* Casts to a (pointer to a) specific ObjC class (or 'id' or
-     'Class') should always be retained, because this information aids
-     in method lookup.  */
-  if (objc_is_object_ptr (type)
-      && objc_is_object_ptr (TREE_TYPE (expr)))
-    return build_nop (type, expr);
+  /* APPLE LOCAL begin AltiVec */
+  /* If we are casting to a vector type, treat the expression as a vector
+     initializer if this target supports it.  */
+  if (TREE_CODE (type) == VECTOR_TYPE 
+      && targetm.cast_expr_as_vector_init
+      && !IS_AGGR_TYPE (TREE_TYPE (expr)))
+    return vector_constructor_from_expr (expr, type);
+  /* APPLE LOCAL end AltiVec */
 
+  /* APPLE LOCAL radar 4696522 */
+  /* objective-c pointer to object type-cast moved to build_static_cast_1. */
+
+  /* APPLE LOCAL C* warnings to easy porting to new abi */
+  diagnose_selector_cast (type, expr);
   /* build_c_cast puts on a NOP_EXPR to make the result not an lvalue.
      Strip such NOP_EXPRs if VALUE is being used in non-lvalue context.  */
   if (TREE_CODE (type) != REFERENCE_TYPE
@@ -5550,6 +5851,16 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
   if (error_operand_p (lhs) || error_operand_p (rhs))
     return error_mark_node;
 
+  /* APPLE LOCAL begin radar 4426814 */
+  if (c_dialect_objc () && flag_objc_gc)
+    {
+      /* APPLE LOCAL radar radar 5276085 */
+      objc_weak_reference_expr (&lhs);
+      lhstype = TREE_TYPE (lhs);
+      olhstype = lhstype;
+    }
+  /* APPLE LOCAL end radar 4426814 */
+
   /* Handle control structure constructs used as "lvalues".  */
   switch (TREE_CODE (lhs))
     {
@@ -5588,7 +5899,8 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
     case MAX_EXPR:
       /* MIN_EXPR and MAX_EXPR are currently only permitted as lvalues,
 	 when neither operand has side-effects.  */
-      if (!lvalue_or_else (lhs, lv_assign))
+      /* APPLE LOCAL non lvalue assign */
+      if (!lvalue_or_else (&lhs, lv_assign))
 	return error_mark_node;
 
       gcc_assert (!TREE_SIDE_EFFECTS (TREE_OPERAND (lhs, 0))
@@ -5622,7 +5934,8 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 
 	/* Check this here to avoid odd errors when trying to convert
 	   a throw to the type of the COND_EXPR.  */
-	if (!lvalue_or_else (lhs, lv_assign))
+	/* APPLE LOCAL non lvalue assign */
+	if (!lvalue_or_else (&lhs, lv_assign))
 	  return error_mark_node;
 
 	cond = build_conditional_expr
@@ -5676,6 +5989,14 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 
       if (modifycode == NOP_EXPR)
 	{
+  	  /* APPLE LOCAL begin C* property (Radar 4436866) */
+      	  if (c_dialect_objc ())
+            {
+              result = objc_build_setter_call (lhs, rhs);
+              if (result)
+                return result;
+            }
+	  /* APPLE LOCAL end C* property (Radar 4436866) */
 	  /* `operator=' is not an inheritable operator.  */
 	  if (! IS_AGGR_TYPE (lhstype))
 	    /* Do the default thing.  */;
@@ -5684,6 +6005,17 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 	      result = build_new_op (MODIFY_EXPR, LOOKUP_NORMAL,
 				     lhs, rhs, make_node (NOP_EXPR),
 				     /*overloaded_p=*/NULL);
+	      /* APPLE LOCAL begin radar 3742561 */
+	      if (c_dialect_objc () && flag_objc_gc
+		  && result && TREE_CODE (result) == MODIFY_EXPR)
+		{
+		  /* Any thing other than MODIFY_EXPR indicates that 
+		     '=' is overloaded. Leave it alone. */
+		  tree t = objc_generate_write_barrier (lhs, MODIFY_EXPR, rhs);
+		  if (t)
+		    result = t;
+		}
+	      /* APPLE LOCAL end radar 3742561 */
 	      if (result == NULL_TREE)
 		return error_mark_node;
 	      return result;
@@ -5708,13 +6040,22 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 
 	  /* Now it looks like a plain assignment.  */
 	  modifycode = NOP_EXPR;
+  	  /* APPLE LOCAL begin C* property (Radar 4436866) */
+      	  if (c_dialect_objc ())
+            {
+              result = objc_build_setter_call (lhs, newrhs);
+              if (result)
+                return result;
+            }
+	  /* APPLE LOCAL end C* property (Radar 4436866) */
 	}
       gcc_assert (TREE_CODE (lhstype) != REFERENCE_TYPE);
       gcc_assert (TREE_CODE (TREE_TYPE (newrhs)) != REFERENCE_TYPE);
     }
 
   /* The left-hand side must be an lvalue.  */
-  if (!lvalue_or_else (lhs, lv_assign))
+  /* APPLE LOCAL non lvalue assign */
+  if (!lvalue_or_else (&lhs, lv_assign))
     return error_mark_node;
 
   /* Warn about modifying something that is `const'.  Don't warn if
@@ -5861,9 +6202,46 @@ build_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 tree
 build_x_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 {
+  /* APPLE LOCAL __block assign sequence point 6639533 */
+  bool insert_sequence_point = false;
+
   if (processing_template_decl)
     return build_min_nt (MODOP_EXPR, lhs,
 			 build_min_nt (modifycode, NULL_TREE, NULL_TREE), rhs);
+
+  /* APPLE LOCAL begin __block assign sequence point 6639533 */
+  /* For byref = x;, we have to transform this into ({ typeof(x) x' =
+     x; byref = x`; )} to ensure there is a sequence point before the
+     evaluation of the byref, inorder to ensure that the access
+     expression for byref doesn't start running before x is evaluated,
+     as it will access the __forwarding pointer and that must be done
+     after x is evaluated.  */
+  /* First we check to see if lhs is a byref...  byrefs look like:
+       __Block_byref_X.__forwarding->x  */
+  if (TREE_CODE (lhs) == COMPONENT_REF)
+    {
+      tree inner = TREE_OPERAND (lhs, 0);
+      /* now check for -> */
+      if (TREE_CODE (inner) == INDIRECT_REF)
+	{
+	  inner = TREE_OPERAND (inner, 0);
+	  if (TREE_CODE (inner) == COMPONENT_REF)
+	    {
+	      inner = TREE_OPERAND (inner, 0);
+	      if (TREE_CODE (inner) == VAR_DECL
+		  && COPYABLE_BYREF_LOCAL_VAR (inner))
+		{
+		  tree old_rhs = rhs;
+		  /* then we save the rhs.  */
+		  rhs = save_expr (rhs);
+		  if (rhs != old_rhs)
+		    /* And arrange for the sequence point to be inserted.  */
+		    insert_sequence_point = true;
+		}
+	    }
+	}
+    }
+  /* APPLE LOCAL end __block assign sequence point 6639533 */
 
   if (modifycode != NOP_EXPR)
     {
@@ -5872,11 +6250,20 @@ build_x_modify_expr (tree lhs, enum tree_code modifycode, tree rhs)
 				/*overloaded_p=*/NULL);
       if (rval)
 	{
+	  /* APPLE LOCAL begin __block assign sequence point 6639533 */
+	  if (insert_sequence_point)
+	    rval = build2 (COMPOUND_EXPR, TREE_TYPE (rval), rhs, rval);
+	  /* APPLE LOCAL end __block assign sequence point 6639533 */
 	  TREE_NO_WARNING (rval) = 1;
 	  return rval;
 	}
     }
-  return build_modify_expr (lhs, modifycode, rhs);
+  lhs = build_modify_expr (lhs, modifycode, rhs);
+  /* APPLE LOCAL begin __block assign sequence point 6639533 */
+  if (insert_sequence_point)
+    lhs = build2 (COMPOUND_EXPR, TREE_TYPE (lhs), rhs, lhs);
+  /* APPLE LOCAL end __block assign sequence point 6639533 */
+  return lhs;
 }
 
 
@@ -5962,6 +6349,121 @@ build_ptrmemfunc1 (tree type, tree delta, tree pfn)
   tree delta_field;
   tree pfn_field;
   VEC(constructor_elt, gc) *v;
+
+  /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+  if (TARGET_KEXTABI == 1)
+    {
+      /* Ooo-err, Missus.  Cons up a 2.95-style ptmf struct given
+	 gcc3-style inputs!  Recall:
+
+	   struct ptmf2 {                  struct ptmf3 {
+             short __delta;                  __P  __pfn;
+             short __index;                  ptrdiff_t __delta;
+             union {                       }
+               __P __pfn;
+               short __delta2;
+             }
+           }
+
+	 Won't this be fun.  Much of this is snarfed from 2.95.
+	 Note that the __delta2 val, if required, will always be __delta.  */
+
+      /* APPLE LOCAL begin ARM kext */
+      tree subtype, pfn_or_delta2_field, idx, idx_field, delta2_field;
+      int ixval = 0;
+      int allconstant = 0, allsimple = 0, allinvariant = 0;
+      tree virt_p;
+      int pfn_offset = 0;
+      /* APPLE LOCAL end ARM kext */
+
+      delta_field = TYPE_FIELDS (type);
+      idx_field = TREE_CHAIN (delta_field);
+      pfn_or_delta2_field = TREE_CHAIN (idx_field);
+      subtype = TREE_TYPE (pfn_or_delta2_field);
+      pfn_field = TYPE_FIELDS (subtype);
+      delta2_field = TREE_CHAIN (pfn_field);
+
+      /* APPLE LOCAL begin ARM kext */
+      if (TARGET_PTRMEMFUNC_VBIT_LOCATION == ptrmemfunc_vbit_in_pfn)
+	{
+	  /* If the low bit of PFN is set, the virtual index is PFN >> 1,
+	     else it's non-virtual.  */
+	  virt_p = pfn;
+	  pfn_offset = 1;
+	}
+      else	/* Low bit of DELTA is set if we're virtual.  */
+	{
+	  virt_p = delta;
+	}
+      allconstant = TREE_CONSTANT (virt_p);
+      allinvariant = TREE_INVARIANT (virt_p);
+      allsimple = !! initializer_constant_valid_p (virt_p, TREE_TYPE (virt_p));
+
+      if (TREE_CODE (virt_p) == INTEGER_CST && (TREE_INT_CST_LOW (virt_p) & 1))
+	{
+	  /* It's a virtual function.  PFN is the vt offset + 1.  */
+
+	  int vt_entry_sz = 4;
+	  tree vt_entry_sz_tree = TYPE_SIZE_UNIT (vtable_entry_type);
+	  if (TREE_CODE (vt_entry_sz_tree) == INTEGER_CST)
+	    vt_entry_sz = TREE_INT_CST_LOW (vt_entry_sz_tree);
+
+	  ixval = (TREE_INT_CST_LOW (pfn) - pfn_offset);
+	  ixval /= vt_entry_sz;
+
+	  /* Now add 2 for that spadgey VPTR index hack, plus one
+	     because 2.95 indices are offset by 1.  */
+	  ixval += 2 + 1;
+
+	  if (TARGET_PTRMEMFUNC_VBIT_LOCATION == ptrmemfunc_vbit_in_delta)
+	    {
+	      delta = build2 (RSHIFT_EXPR, TREE_TYPE (delta),
+			      delta, integer_one_node);
+	      delta = fold_if_not_in_template (delta);
+	    }
+
+	  /* __delta2 is the same as __delta.  */
+	  u = tree_cons (delta2_field, delta, NULL_TREE);
+	}
+      else if (TREE_CODE (pfn) == INTEGER_CST && TREE_INT_CST_LOW (pfn) == 0)
+	{
+	  /* NULL pfn.  Just zero out everything.  */
+	  ixval = 0;
+	  pfn = integer_zero_node;
+	  delta = integer_zero_node;
+	  u = tree_cons (pfn_field, pfn, NULL_TREE);
+	}
+      else
+	{
+	  ixval = -1;  /* -1 ==> PFN is the pointer  */
+	  u = tree_cons (pfn_field, pfn, NULL_TREE);
+	}
+      /* APPLE LOCAL end ARM kext */
+
+      delta = convert_and_check (delta_type_node, delta);
+      idx = convert_and_check (delta_type_node, ssize_int (ixval));
+
+      u = build_constructor_from_list (subtype, u);
+      TREE_CONSTANT (u) = allconstant;
+      TREE_INVARIANT (u) = allinvariant;
+      TREE_STATIC (u) = allconstant && allsimple;
+      
+      allconstant = allconstant && TREE_CONSTANT (delta) && TREE_CONSTANT (idx);
+      allinvariant = allinvariant && TREE_INVARIANT (delta) && TREE_INVARIANT (idx);
+      allsimple = allsimple
+		&& initializer_constant_valid_p (delta, TREE_TYPE (delta))
+		&& initializer_constant_valid_p (idx, TREE_TYPE (idx));
+
+      u = tree_cons (delta_field, delta,
+		     tree_cons (idx_field, idx,
+		     tree_cons (pfn_or_delta2_field, u, NULL_TREE)));
+      u = build_constructor_from_list (type, u);
+      TREE_CONSTANT (u) = allconstant;
+      TREE_INVARIANT (u) = allinvariant;
+      TREE_STATIC (u) = allconstant && allsimple;
+      return u;
+    }
+  /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
 
   /* Pull the FIELD_DECLs out of the type.  */
   pfn_field = TYPE_FIELDS (type);
@@ -6158,6 +6660,22 @@ expand_ptrmemfunc_cst (tree cst, tree *delta, tree *pfn)
 static tree
 pfn_from_ptrmemfunc (tree t)
 {
+  /* APPLE LOCAL begin KEXT 2.95-ptmf-compatibility --turly */
+  if (TARGET_KEXTABI == 1)
+    {
+      if (TREE_CODE (t) == PTRMEM_CST)
+	{ 
+	  tree fn = PTRMEM_CST_MEMBER (t);
+	  if (!DECL_VIRTUAL_P (fn))
+	    return convert (TYPE_PTRMEMFUNC_FN_TYPE (TREE_TYPE (t)),
+			    build_addr_func (fn));
+	}
+      
+      t = build_ptrmemfunc_access_expr (t, pfn_or_delta2_identifier);
+      return build_ptrmemfunc_access_expr (t, pfn_identifier);
+    }
+  /* APPLE LOCAL end KEXT 2.95-ptmf-compatibility --turly */
+
   if (TREE_CODE (t) == PTRMEM_CST)
     {
       tree delta;
@@ -6183,6 +6701,8 @@ convert_for_assignment (tree type, tree rhs,
 {
   tree rhstype;
   enum tree_code coder;
+  /* APPLE LOCAL radar 4874632 */
+  tree new_rhs = NULL_TREE;
 
   /* Strip NON_LVALUE_EXPRs since we aren't using as an lvalue.  */
   if (TREE_CODE (rhs) == NON_LVALUE_EXPR)
@@ -6192,7 +6712,8 @@ convert_for_assignment (tree type, tree rhs,
   coder = TREE_CODE (rhstype);
 
   if (TREE_CODE (type) == VECTOR_TYPE && coder == VECTOR_TYPE
-      && vector_types_convertible_p (type, rhstype))
+      /* APPLE LOCAL 5612787 mainline sse4 */
+      && vector_types_convertible_p (type, rhstype, true))
     return convert (type, rhs);
 
   if (rhs == error_mark_node || rhstype == error_mark_node)
@@ -6233,8 +6754,10 @@ convert_for_assignment (tree type, tree rhs,
 	    }
 	}
 
-      if (objc_compare_types (type, rhstype, parmno, rname))
-	return convert (type, rhs);
+      /* APPLE LOCAL file radar 6231433 */
+      if (objc_compare_types (type, rhstype, parmno, rname, "comparison"))
+	/* APPLE LOCAL radar 4874632 */
+	new_rhs = convert (type, rhs);
     }
 
   /* [expr.ass]
@@ -6245,7 +6768,8 @@ convert_for_assignment (tree type, tree rhs,
      We allow bad conversions here because by the time we get to this point
      we are committed to doing the conversion.  If we end up doing a bad
      conversion, convert_like will complain.  */
-  if (!can_convert_arg_bad (type, rhstype, rhs))
+  /* APPLE LOCAL radar 4874632 */
+  if (!new_rhs && !can_convert_arg_bad (type, rhstype, rhs))
     {
       /* When -Wno-pmf-conversions is use, we just silently allow
 	 conversions from pointers-to-members to plain pointers.  If
@@ -6280,7 +6804,8 @@ convert_for_assignment (tree type, tree rhs,
 		 errtype);
     }
 
-  return perform_implicit_conversion (strip_top_quals (type), rhs);
+  /* APPLE LOCAL radar 4874632 */
+  return !new_rhs ? perform_implicit_conversion (strip_top_quals (type), rhs) : new_rhs;
 }
 
 /* Convert RHS to be of type TYPE.
@@ -6427,12 +6952,24 @@ maybe_warn_about_returning_address_of_local (tree retval)
       if (TREE_CODE (valtype) == REFERENCE_TYPE)
 	warning (0, "reference to local variable %q+D returned",
 		 whats_returned);
+      /* APPLE LOCAL begin blocks 6040305 (cn) */
+      else if (TREE_CODE (valtype) == BLOCK_POINTER_TYPE)
+	  error ("returning block that lives on the local stack");
+      /* APPLE LOCAL end blocks 6040305 (cn) */
       else
 	warning (0, "address of local variable %q+D returned",
 		 whats_returned);
       return;
     }
 }
+
+/* APPLE LOCAL begin blocks 6040305 (cm) */
+static bool
+types_are_block_compatible (tree t1, tree t2)
+{
+  return comptypes (t1, t2, COMPARE_STRICT);
+}
+/* APPLE LOCAL end blocks 6040305 (cm) */
 
 /* Check that returning RETVAL from the current function is valid.
    Return an expression explicitly showing all conversions required to
@@ -6476,6 +7013,64 @@ check_return_expr (tree retval, bool *no_warning)
 	error ("returning a value from a constructor");
       return NULL_TREE;
     }
+
+  /* APPLE LOCAL begin blocks 6040305 (cm) */
+  /* APPLE LOCAL radar 6185344 */
+  if (cur_block && !cur_block->block_has_return_type)
+    {
+      /* If this is the first return we've seen in the block, infer the type of
+	 the block from it. */
+      if (cur_block->return_type == NULL_TREE)
+	{
+	  if (retval)
+	    {
+	      tree restype;
+	      retval = decay_conversion (retval);
+	      restype = TYPE_MAIN_VARIANT (TREE_TYPE (retval));
+	      TREE_TYPE (current_function_decl)
+		= build_function_type (restype,
+				       TYPE_ARG_TYPES (TREE_TYPE (current_function_decl)));
+	      TREE_TYPE (DECL_RESULT (current_function_decl)) = restype;
+	      relayout_decl (DECL_RESULT (current_function_decl));
+	      cur_block->return_type = restype;
+	    }
+	  else
+	    cur_block->return_type = void_type_node;
+	}
+
+      /* Verify that this result type matches the previous one.  We
+	 are pickier with blocks than for normal functions because
+	 this is a new feature and we set the rules. */
+      if (TREE_CODE (cur_block->return_type) == VOID_TYPE)
+	{
+	  if (retval)
+	    {
+	      error ("void block should not return a value");
+	      return error_mark_node;
+	    }
+	}
+      else if (!retval)
+	{
+	  error ("non-void block should return a value");
+	  return error_mark_node;
+	}
+  
+      if (retval)
+	{
+	  /* We have a non-void block with an expression, continue checking.  */
+	  valtype = TREE_TYPE (retval);
+
+	  /* For now, restrict multiple return statements in a block to have 
+	     strict compatible types only. */
+	  if (!types_are_block_compatible (cur_block->return_type, valtype))
+	    {
+	      error ("incompatible type returning %qT, expected %qT",
+		     valtype, cur_block->return_type);
+	      return error_mark_node;
+	    }
+	}
+    }
+  /* APPLE LOCAL end blocks 6040305 (cm) */
 
   if (processing_template_decl)
     {
@@ -6693,12 +7288,14 @@ comp_ptr_ttypes_real (tree to, tree from, int constp)
 	  /* In Objective-C++, some types may have been 'volatilized' by
 	     the compiler for EH; when comparing them here, the volatile
 	     qualification must be ignored.  */
-	  bool objc_quals_match = objc_type_quals_match (to, from);
-
-	  if (!at_least_as_qualified_p (to, from) && !objc_quals_match)
+	  /* APPLE LOCAL begin radar 4330422 */
+	  tree nv_to = objc_non_volatilized_type (to);
+	  tree nv_from = objc_non_volatilized_type (from);
+	
+	  if (!at_least_as_qualified_p (nv_to, nv_from))
 	    return 0;
 
-	  if (!at_least_as_qualified_p (from, to) && !objc_quals_match)
+	  if (!at_least_as_qualified_p (nv_from, nv_to))
 	    {
 	      if (constp == 0)
 		return 0;
@@ -6706,7 +7303,8 @@ comp_ptr_ttypes_real (tree to, tree from, int constp)
 	    }
 
 	  if (constp > 0)
-	    constp &= TYPE_READONLY (to);
+	    constp &= TYPE_READONLY (nv_to);
+	  /* APPLE LOCAL end radar 4330422 */
 	}
 
       if (TREE_CODE (to) != POINTER_TYPE && !TYPE_PTRMEM_P (to))
@@ -6748,7 +7346,8 @@ ptr_reasonably_similar (tree to, tree from)
 	continue;
 
       if (TREE_CODE (to) == VECTOR_TYPE
-	  && vector_types_convertible_p (to, from))
+	  /* APPLE LOCAL 5612787 mainline sse4 */
+	  && vector_types_convertible_p (to, from, false))
 	return 1;
 
       if (TREE_CODE (to) == INTEGER_TYPE
@@ -6980,15 +7579,32 @@ non_reference (tree t)
   return t;
 }
 
+/* APPLE LOCAL begin CW asm blocks */
+tree
+iasm_cp_build_component_ref (tree datum, tree component)
+{
+  tree expr = finish_class_member_access_expr (datum, component, false);
+  /* If this is not a real component reference, extract the field
+     decl, which includes the numeric offset we'll use later.  */
+  if (TREE_CODE (datum) == TYPE_DECL)
+    expr = TREE_OPERAND (expr, 1);
+  return expr;
+}
+/* APPLE LOCAL end CW asm blocks */
 
 /* Return nonzero if REF is an lvalue valid for this language;
    otherwise, print an error message and return zero.  USE says
    how the lvalue is being used and so selects the error message.  */
 
 int
-lvalue_or_else (tree ref, enum lvalue_use use)
+/* APPLE LOCAL begin non lvalue assign */
+lvalue_or_else (tree* ref, enum lvalue_use use)
 {
-  int win = lvalue_p (ref);
+  int win = lvalue_p (*ref);
+
+  if (!win)
+    win = lvalue_or_else_1 (ref, use);
+/* APPLE LOCAL end non lvalue assign */
 
   if (!win)
     lvalue_error (use);

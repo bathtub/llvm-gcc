@@ -27,7 +27,5 @@ Generate 64-bit code
 m32
 Target RejectNegative InverseMask(64BIT)
 Generate 32-bit code
-
-mdynamic-no-pic
-Target Report Mask(MACHO_DYNAMIC_NO_PIC)
-Generate code suitable for executables (NOT shared libs)
+; APPLE LOCAL begin mdynamic-no-pic
+; APPLE LOCAL end mdynamic-no-pic

@@ -143,6 +143,8 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "tree-data-ref.h"
 #include "tree-scalar-evolution.h"
 #include "input.h"
+/* APPLE LOCAL opt diary */
+#include "debug.h"
 #include "tree-vectorizer.h"
 #include "tree-pass.h"
 
@@ -2064,6 +2066,15 @@ vectorize_loops (struct loops *loops)
 	continue;
 
       vect_transform_loop (loop_vinfo, loops);
+      /* APPLE LOCAL begin 4095567 */
+      /* Now this function uses vectors.  */
+      DECL_STRUCT_FUNCTION (current_function_decl)->uses_vector = 1;
+      /* APPLE LOCAL end 4095567 */
+      /* APPLE LOCAL begin opt diary */
+      if (flag_opt_diary && debug_hooks->opt_diary_entry)
+      (*debug_hooks->opt_diary_entry) (OD_msg_loop_vectorized,
+				       *vect_loop_location);
+      /* APPLE LOCAL end opt diary */
       num_vectorized_loops++;
     }
   vect_loop_location = UNKNOWN_LOC;

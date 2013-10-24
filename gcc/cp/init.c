@@ -2563,7 +2563,9 @@ build_vec_init (tree base, tree maxindex, tree init,
       tree elt_init;
       tree to;
 
-      for_stmt = begin_for_stmt ();
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      for_stmt = begin_for_stmt (NULL_TREE);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       finish_for_init_stmt (for_stmt);
       finish_for_cond (build2 (NE_EXPR, boolean_type_node, iterator,
 			       build_int_cst (TREE_TYPE (iterator), -1)),
@@ -2836,6 +2838,16 @@ build_delete (tree type, tree addr, special_function_kind auto_delete,
 				/*placement=*/NULL_TREE,
 				/*alloc_fn=*/NULL_TREE);
 	}
+      /* APPLE LOCAL begin KEXT double destructor  --matt 20020501  */
+      /* If we're compiling a class in kext compatibility mode we
+	 don't have a non-deleting destructor, so we unconditionally
+	 generate a reference to the deleting variety.  */
+      if (TARGET_KEXTABI == 1 && has_apple_kext_compatibility_attr_p (type))
+	{
+	  gcc_assert (auto_delete != sfk_base_destructor);
+	  auto_delete = sfk_deleting_destructor;
+	}
+      /* APPLE LOCAL end KEXT double destructor  --matt 20020501  */
 
       expr = build_dtor_call (build_indirect_ref (addr, NULL),
 			      auto_delete, flags);
@@ -2903,7 +2915,13 @@ push_base_cleanups (void)
   for (binfo = TYPE_BINFO (current_class_type), i = 0;
        BINFO_BASE_ITERATE (binfo, i, base_binfo); i++)
     {
-      if (TYPE_HAS_TRIVIAL_DESTRUCTOR (BINFO_TYPE (base_binfo))
+      /* APPLE LOCAL begin omit calls to empty destructors 5559195 */
+      tree dtor = CLASSTYPE_DESTRUCTORS (BINFO_TYPE (base_binfo));
+
+      if ((!CLASSTYPE_DESTRUCTOR_NONTRIVIAL_BECAUSE_OF_BASE (BINFO_TYPE (base_binfo))
+	   && !CLASSTYPE_HAS_NONTRIVIAL_DESTRUCTOR_BODY (BINFO_TYPE (base_binfo))
+	   && !(dtor && (TREE_PRIVATE (dtor))))
+      /* APPLE LOCAL end omit calls to empty destructors 5559195 */
 	  || BINFO_VIRTUAL_P (base_binfo))
 	continue;
 
@@ -2933,6 +2951,12 @@ push_base_cleanups (void)
 			       LOOKUP_NONVIRTUAL|LOOKUP_DESTRUCTOR|LOOKUP_NORMAL,
 			       0);
 	  finish_decl_cleanup (NULL_TREE, expr);
+
+	  /* APPLE LOCAL begin omit calls to empty destructors 5559195 */
+	  /* Even if body of current class's destructor was found to be empty,
+	     it must now be called because it must delete its members. */
+	  CLASSTYPE_DESTRUCTOR_NONTRIVIAL_BECAUSE_OF_BASE (current_class_type) = 1;
+	  /* APPLE LOCAL end omit calls to empty destructors 5559195 */
 	}
     }
 }

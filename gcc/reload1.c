@@ -633,6 +633,11 @@ static int something_needs_operands_changed;
 /* Nonzero means we couldn't get enough spill regs.  */
 static int failure;
 
+/* APPLE LOCAL begin 4321079 */
+/* Make parameter of 'reload' visible to other functions.  */
+static int from_global;
+/* APPLE LOCAL end 4321079 */
+
 /* Main entry point for the reload pass.
 
    FIRST is the first insn of the function being compiled.
@@ -653,6 +658,10 @@ reload (rtx first, int global)
   rtx insn;
   struct elim_table *ep;
   basic_block bb;
+
+  /* APPLE LOCAL begin 4321079 */
+  from_global = global;
+  /* APPLE LOCAL end 4321079 */
 
   /* Make sure even insns with volatile mem refs are recognizable.  */
   init_recog ();
@@ -751,13 +760,15 @@ reload (rtx first, int global)
 	  if (i <= LAST_VIRTUAL_REGISTER)
 	    continue;
 
+	  /* APPLE LOCAL begin ARM -mdynamic-no-pic support */
 	  if (! function_invariant_p (x)
 	      || ! flag_pic
 	      /* A function invariant is often CONSTANT_P but may
 		 include a register.  We promise to only pass
-		 CONSTANT_P objects to LEGITIMATE_PIC_OPERAND_P.  */
+		 CONSTANT_P objects to LEGITIMATE_INDIRECT_OPERAND_P.  */
 	      || (CONSTANT_P (x)
-		  && LEGITIMATE_PIC_OPERAND_P (x)))
+		  && LEGITIMATE_INDIRECT_OPERAND_P (x)))
+	  /* APPLE LOCAL end ARM -mdynamic-no-pic support */
 	    {
 	      /* It can happen that a REG_EQUIV note contains a MEM
 		 that is not a legitimate memory operand.  As later
@@ -834,6 +845,14 @@ reload (rtx first, int global)
   for (i = LAST_VIRTUAL_REGISTER + 1; i < max_regno; i++)
     alter_reg (i, -1);
 
+  /* APPLE LOCAL begin 4321079 */
+  if (from_global)
+    {
+      extern void remove_invalidated_death_notes (rtx);
+      remove_invalidated_death_notes (first);
+    }
+  /* APPLE LOCAL end 4321079 */
+
   /* If we have some registers we think can be eliminated, scan all insns to
      see if there is an insn that sets one of these registers to something
      other than itself plus a constant.  If so, the register cannot be
@@ -903,6 +922,10 @@ reload (rtx first, int global)
       set_initial_elim_offsets ();
       set_initial_label_offsets ();
 
+      /* APPLE LOCAL begin 4271691 */
+      something_changed = 0;
+      /* APPLE LOCAL end 4271691 */
+
       /* For each pseudo register that has an equivalent location defined,
 	 try to eliminate any eliminable registers (such as the frame pointer)
 	 assuming initial offsets for the replacement register, which
@@ -955,6 +978,12 @@ reload (rtx first, int global)
 		reg_equiv_memory_loc[i] = 0;
 		reg_equiv_init[i] = 0;
 		alter_reg (i, -1);
+		/* APPLE LOCAL begin 4271691 */
+		/* Since this might be a reuse of an existing stack slot
+		   rather than a new one, the frame size did not necessarily
+		   increase.  Make sure we do another pass. */
+	        something_changed = 1;
+		/* APPLE LOCAL end 4271691 */
 	      }
 	  }
 
@@ -977,7 +1006,8 @@ reload (rtx first, int global)
       CLEAR_REG_SET (&spilled_pseudos);
       did_spill = 0;
 
-      something_changed = 0;
+      /* APPLE LOCAL begin 4271691 something_changed=0 moved earlier */
+      /* APPLE LOCAL end 4271691 */
 
       /* If we allocated any new memory locations, make another pass
 	 since it might have changed elimination offsets.  */
@@ -1761,6 +1791,21 @@ find_reg (struct insn_chain *chain, int order)
 	      /* Among registers with equal cost, prefer caller-saved ones, or
 		 use REG_ALLOC_ORDER if it is defined.  */
 	      || (this_cost == best_cost
+/* APPLE LOCAL begin 5831562 add DIMODE_REG_ALLOC_ORDER */
+#ifdef DIMODE_REG_ALLOC_ORDER
+		  && ((rl->mode == DImode 
+		        && dimode_inv_reg_alloc_order[regno]
+		           < dimode_inv_reg_alloc_order[best_reg])
+		      || (rl->mode != DImode
+#ifdef REG_ALLOC_ORDER
+			  && (inv_reg_alloc_order[regno]
+			      < inv_reg_alloc_order[best_reg])
+#else
+			  && call_used_regs[regno]
+			  && ! call_used_regs[best_reg]
+#endif
+		    ))
+#else
 #ifdef REG_ALLOC_ORDER
 		  && (inv_reg_alloc_order[regno]
 		      < inv_reg_alloc_order[best_reg])
@@ -1768,6 +1813,8 @@ find_reg (struct insn_chain *chain, int order)
 		  && call_used_regs[regno]
 		  && ! call_used_regs[best_reg]
 #endif
+#endif
+/* APPLE LOCAL end 5831562 add DIMODE_REG_ALLOC_ORDER */
 		  ))
 	    {
 	      best_reg = regno;
@@ -2013,10 +2060,22 @@ alter_reg (int i, int from_reg)
 	 inherent space, and no less total space, then the previous slot.  */
       if (from_reg == -1)
 	{
-	  /* No known place to spill from => no slot to reuse.  */
-	  x = assign_stack_local (mode, total_size,
-				  min_align > inherent_align
-				  || total_size > inherent_size ? -1 : 0);
+	  /* APPLE LOCAL begin 4321079 */
+	  extern rtx find_tied_stack_pseudo (int);
+	  /* Ask global reg allocator for a stack slot already assigned
+	     to a pseudo tied to this one.  */
+	  if (from_global)
+	    x = find_tied_stack_pseudo (i);
+	  else
+	    x = NULL_RTX;
+
+	  if (!x)
+	    /* No known place to spill from => no slot to reuse.  */
+	    x = assign_stack_local (mode, total_size,
+				    min_align > inherent_align
+				    || total_size > inherent_size ? -1 : 0);
+	  /* APPLE LOCAL end 4321079 */
+
 	  if (BYTES_BIG_ENDIAN)
 	    /* Cancel the  big-endian correction done in assign_stack_local.
 	       Get the address of the beginning of the slot.
@@ -2555,6 +2614,8 @@ eliminate_regs_1 (rtx x, enum machine_mode mem_mode, rtx insn,
     case CTZ:
     case POPCOUNT:
     case PARITY:
+    /* APPLE LOCAL mainline bswap */
+    case BSWAP:
       new = eliminate_regs_1 (XEXP (x, 0), mem_mode, insn, false);
       if (new != XEXP (x, 0))
 	return gen_rtx_fmt_e (code, GET_MODE (x), new);
@@ -2775,6 +2836,8 @@ elimination_effects (rtx x, enum machine_mode mem_mode)
     case CTZ:
     case POPCOUNT:
     case PARITY:
+    /* APPLE LOCAL mainline bswap */
+    case BSWAP:
       elimination_effects (XEXP (x, 0), mem_mode);
       return;
 
@@ -3495,7 +3558,17 @@ update_eliminables (HARD_REG_SET *pset)
   struct elim_table *ep;
 
   for (ep = reg_eliminate; ep < &reg_eliminate[NUM_ELIMINABLE_REGS]; ep++)
+/* APPLE LOCAL begin ARM prefer SP to FP */
+#ifdef ALLOW_ELIMINATION_TO_SP
+    /* Don't prevent elimination to SP -- on some targets it can be more
+       efficient than the FP.  For those cases where elimination to the SP
+       isn't valid (e.g., alloca present in function), CAN_ELIMINATE must
+       be specific enough to detect and disallow them.  */
+    if (0
+#else
     if ((ep->from == HARD_FRAME_POINTER_REGNUM && FRAME_POINTER_REQUIRED)
+#endif
+/* APPLE LOCAL end ARM prefer SP to FP */
 #ifdef ELIMINABLE_REGS
 	|| ! CAN_ELIMINATE (ep->from, ep->to)
 #endif
@@ -3545,6 +3618,16 @@ update_eliminables (HARD_REG_SET *pset)
   for (ep = reg_eliminate; ep < &reg_eliminate[NUM_ELIMINABLE_REGS]; ep++)
     {
       if (ep->can_eliminate && ep->from == FRAME_POINTER_REGNUM
+/* APPLE LOCAL begin ARM prefer SP to FP */
+#ifdef ALLOW_ELIMINATION_TO_SP
+	  /* Because we allow the FP to eliminate into SP, even when
+	     FRAME_POINTER_REQUIRED is 1, we can end up with the case
+	     that all instances of FP are removed but we still have
+	     FRAME_POINTER_REQUIRED.  In that case, don't allow
+	     frame_pointer_needed to be set to 0.  */
+	  && !FRAME_POINTER_REQUIRED
+#endif
+/* APPLE LOCAL end ARM prefer SP to FP */
 	  && ep->to != HARD_FRAME_POINTER_REGNUM)
 	frame_pointer_needed = 0;
 
@@ -3587,6 +3670,10 @@ init_elim_table (void)
 			      && EXIT_IGNORE_STACK)
 			  || current_function_accesses_prior_frames
 			  || FRAME_POINTER_REQUIRED);
+  /* APPLE LOCAL begin CW asm blocks */
+  if (cfun->iasm_asm_function)
+    frame_pointer_needed = 0;
+  /* APPLE LOCAL end CW asm blocks */
 
   num_eliminable = 0;
 
@@ -3598,7 +3685,17 @@ init_elim_table (void)
       ep->to = ep1->to;
       ep->can_eliminate = ep->can_eliminate_previous
 	= (CAN_ELIMINATE (ep->from, ep->to)
+/* APPLE LOCAL begin ARM prefer SP to FP */
+#ifdef ALLOW_ELIMINATION_TO_SP
+	  /* Sometimes we do want to eliminate to the SP even when a FP
+	     is present, for performance benefits.  Note that this
+	     means that the target definition of CAN_ELIMIATE must
+	     be adequate to describe all allowable transformations.  */
+	  );
+#else
 	   && ! (ep->to == STACK_POINTER_REGNUM && frame_pointer_needed));
+#endif
+/* APPLE LOCAL end ARM prefer SP to FP */
     }
 #else
   reg_eliminate[0].from = reg_eliminate_1[0].from;
@@ -6238,6 +6335,14 @@ merge_assigned_reloads (rtx insn)
 	     share registers with a RELOAD_FOR_INPUT, so we can not change it
 	     to RELOAD_FOR_OTHER_ADDRESS.  We should never need to, since we
 	     do not modify RELOAD_FOR_OUTPUT.  */
+          /* APPLE LOCAL begin mainline 2007-04-24 5122634 */
+          /* It is possible that the RELOAD_FOR_OPERAND_ADDRESS
+             instruction is assigned the same register as the
+             earlier RELOAD_FOR_OTHER_ADDRESS instruction.
+             Merging these two instructions will cause the
+             RELOAD_FOR_OTHER_ADDRESS instruction to be deleted
+             later on. */
+          /* APPLE LOCAL end mainline 2007-04-24 5122634 */
 
 	  if (rld[i].when_needed == RELOAD_OTHER)
 	    for (j = 0; j < n_reloads; j++)
@@ -6245,6 +6350,9 @@ merge_assigned_reloads (rtx insn)
 		  && rld[j].when_needed != RELOAD_OTHER
 		  && rld[j].when_needed != RELOAD_FOR_OTHER_ADDRESS
 		  && rld[j].when_needed != RELOAD_FOR_OUTPUT_ADDRESS
+                  /* APPLE LOCAL begin mainline 2007-04-24 5122634 */
+                  && rld[j].when_needed != RELOAD_FOR_OPERAND_ADDRESS
+                  /* APPLE LOCAL end mainline 2007-04-24 5122634 */
 		  && (! conflicting_input
 		      || rld[j].when_needed == RELOAD_FOR_INPUT_ADDRESS
 		      || rld[j].when_needed == RELOAD_FOR_INPADDR_ADDRESS)
@@ -6948,8 +7056,10 @@ emit_output_reload_insns (struct insn_chain *chain, struct reload *rl,
 	  || !reg_mentioned_p (old, SET_SRC (set))
 	  || !((REGNO (old) < FIRST_PSEUDO_REGISTER)
 	       && regno_clobbered_p (REGNO (old), insn, rl->mode, 0)))
-	gen_reload (old, reloadreg, rl->opnum,
-		    rl->when_needed);
+      /* APPLE LOCAL begin mainline 2007-04-23 5002270, 5109764 */
+        gen_reload (old, reloadreg, rl->opnum,
+                    rl->when_needed);
+      /* APPLE LOCAL end mainline 2007-04-23 5002270, 5109764 */
     }
 
   /* Look at all insns we emitted, just to be safe.  */

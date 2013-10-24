@@ -18,6 +18,32 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.  */
 #ifndef GCC_DEBUG_H
 #define GCC_DEBUG_H
 
+/* APPLE LOCAL begin opt diary */
+#include "input.h"
+/* Optimization diary messages */
+enum debug_od_msg
+  {
+    OD_msg_loop_vectorized,
+    OD_msg_loop_not_vectorized,
+    OD_msg_loop_vectorized_using_versioning,
+    OD_msg_loop_vectorized_using_peeling,
+    OD_msg_loop_not_vectorized_multiple_exits,    
+    OD_msg_loop_not_vectorized_bad_data_ref,
+    OD_msg_loop_not_vectorized_unsupported_ops,
+    OD_msg_loop_not_vectorized_data_dep
+  };
+
+/* Optimization diary entry categories */
+enum debug_od_category
+  {
+    OD_parm_hint = 0x0001,
+    OD_limit = 0x0002,
+    OD_report = 0x0004,
+    OD_action = 0x0008,
+    OD_hint = 0x0010,
+    OD_command = 0x0020
+  };
+/* APPLE LOCAL end opt diary */
 /* This structure contains hooks for the debug information output
    functions, accessed through the global instance debug_hooks set in
    toplev.c according to command line options.  */
@@ -120,6 +146,11 @@ struct gcc_debug_hooks
   /* Called from final_scan_insn for any NOTE_INSN_VAR_LOCATION note.  */
   void (* var_location) (rtx);
 
+  /* APPLE LOCAL begin opt diary */
+  /* Called to emit optimization diary entry.  */
+  void (* opt_diary_entry) (enum debug_od_msg, expanded_location);
+  /* APPLE LOCAL end opt diary */
+
   /* Called from final_scan_insn if there is a switch between hot and cold
      text sections.  */
   void (* switch_text_section) (void);
@@ -142,6 +173,8 @@ extern void debug_nothing_tree_int (tree, int);
 extern void debug_nothing_tree_tree (tree, tree);
 extern bool debug_true_tree (tree);
 extern void debug_nothing_rtx (rtx);
+/* APPLE LOCAL opt diary */
+extern void debug_nothing_od_msg_loc (enum debug_od_msg, expanded_location);
 
 /* Hooks for various debug formats.  */
 extern const struct gcc_debug_hooks do_nothing_debug_hooks;

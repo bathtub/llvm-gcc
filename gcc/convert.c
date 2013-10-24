@@ -30,6 +30,10 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 #include "tree.h"
 #include "flags.h"
 #include "convert.h"
+/* APPLE LOCAL begin AltiVec */
+#include "c-tree.h"
+#include "c-common.h"
+/* APPLE LOCAL end AltiVec */
 #include "toplev.h"
 #include "langhooks.h"
 #include "real.h"
@@ -68,12 +72,61 @@ convert_to_pointer (tree type, tree expr)
 			    expr);
       return fold_build1 (CONVERT_EXPR, type, expr);
 
-
+    /* APPLE LOCAL begin blocks (C++ ck) */
+    case BLOCK_POINTER_TYPE:
+        /* APPLE LOCAL begin radar 5809099 */
+        if (objc_is_id (type)
+	    || (TREE_CODE (type) == POINTER_TYPE && VOID_TYPE_P (TREE_TYPE (type))))
+        /* APPLE LOCAL end radar 5809099 */
+          return fold_build1 (NOP_EXPR, type, expr);
+    /* APPLE LOCAL end blocks (C++ ck) */
     default:
       error ("cannot convert to a pointer type");
       return convert_to_pointer (type, integer_zero_node);
     }
 }
+
+/* APPLE LOCAL begin blocks (C++ ck) */
+tree
+convert_to_block_pointer (tree type, tree expr)
+{
+  if (TREE_TYPE (expr) == type)
+    return expr;
+
+  if (integer_zerop (expr))
+    {
+      tree t = build_int_cst (type, 0);
+      if (TREE_OVERFLOW (expr) || TREE_CONSTANT_OVERFLOW (expr))
+	t = force_fit_type (t, 0, TREE_OVERFLOW (expr),
+			    TREE_CONSTANT_OVERFLOW (expr));
+      return t;
+    }
+
+  switch (TREE_CODE (TREE_TYPE (expr)))
+    {
+    case BLOCK_POINTER_TYPE:
+      return fold_build1 (NOP_EXPR, type, expr);
+      
+    case INTEGER_TYPE:
+      if (TYPE_PRECISION (TREE_TYPE (expr)) != POINTER_SIZE)
+	expr = fold_build1 (NOP_EXPR,
+                            lang_hooks.types.type_for_size (POINTER_SIZE, 0),
+			    expr);
+      return fold_build1 (CONVERT_EXPR, type, expr);
+
+    case POINTER_TYPE:
+      /* APPLE LOCAL radar 5809099 */
+      if (objc_is_id (TREE_TYPE (expr)) || VOID_TYPE_P (TREE_TYPE (TREE_TYPE (expr))))
+        return build1 (NOP_EXPR, type, expr);
+      /* fall thru */
+
+    default:
+      error ("cannot convert to a block pointer type");
+      return convert_to_block_pointer (type, integer_zero_node);
+    }
+}
+
+/* APPLE LOCAL end blocks (C++ ck) */
 
 /* Avoid any floating point extensions from EXP.  */
 tree
@@ -459,6 +512,8 @@ convert_to_integer (tree type, tree expr)
     {
     case POINTER_TYPE:
     case REFERENCE_TYPE:
+    /* APPLE LOCAL radar 6035389 */
+    case BLOCK_POINTER_TYPE:
       if (integer_zerop (expr))
 	return build_int_cst (type, 0);
 
@@ -799,6 +854,31 @@ convert_to_complex (tree type, tree expr)
     }
 }
 
+/* APPLE LOCAL begin AltiVec */
+/* Build a COMPOUND_LITERAL_EXPR.  TYPE is the type given in the compound
+   literal.  INIT is a CONSTRUCTOR that initializes the compound literal.  */
+
+static tree
+build_compound_literal_vector (tree type, tree init) 
+{  
+  tree decl;
+  tree complit;
+  tree stmt;
+
+  decl = build_decl (VAR_DECL, NULL_TREE, type);
+  DECL_EXTERNAL (decl) = 0;
+  TREE_PUBLIC (decl) = 0;
+  TREE_USED (decl) = 1;
+  TREE_TYPE (decl) = type;
+  TREE_READONLY (decl) = TYPE_READONLY (type);
+  store_init_value (decl, init);
+  stmt = build_stmt (DECL_EXPR, decl);
+  complit = build1 (COMPOUND_LITERAL_EXPR, TREE_TYPE (decl), stmt);
+  layout_decl (decl, 0);
+  return complit;
+}
+/* APPLE LOCAL end AltiVec */
+
 /* Convert EXPR to the vector type TYPE in the usual ways.  */
 
 tree
@@ -813,6 +893,14 @@ convert_to_vector (tree type, tree expr)
 	  error ("can't convert between vector values of different size");
 	  return error_mark_node;
 	}
+      /* APPLE LOCAL begin AltiVec */
+      if (TREE_CODE (type) == VECTOR_TYPE  
+	  && TREE_CODE (TREE_TYPE (expr)) == VECTOR_TYPE
+	  && TREE_CODE (expr) == CONSTRUCTOR && TREE_CONSTANT (expr))
+	  /* converting a constant vector to new vector type with Motorola Syntax. */
+	  return convert (type, build_compound_literal_vector (TREE_TYPE (expr), expr));
+      /* APPLE LOCAL end AltiVec */
+
       return build1 (VIEW_CONVERT_EXPR, type, expr);
 
     default:

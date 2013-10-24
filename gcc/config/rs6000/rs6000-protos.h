@@ -114,6 +114,10 @@ extern rtx rs6000_machopic_legitimize_pic_address (rtx, enum machine_mode,
 #ifdef TREE_CODE
 extern unsigned int rs6000_special_round_type_align (tree, unsigned int,
 						     unsigned int);
+/* APPLE LOCAL begin mainline 2006-10-31 PR 23067, radar 4869885 */
+extern unsigned int darwin_rs6000_special_round_type_align (tree, unsigned int,
+							    unsigned int);
+/* APPLE LOCAL end mainline 2006-10-31 PR 23067, radar 4869885 */
 extern void function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode,
 				  tree, int, int);
 extern int function_arg_boundary (enum machine_mode, tree);
@@ -156,11 +160,22 @@ extern int rs6000_memory_move_cost (enum machine_mode, enum reg_class, int);
 extern bool rs6000_tls_referenced_p (rtx);
 extern int rs6000_hard_regno_nregs (int, enum machine_mode);
 extern void rs6000_conditional_register_usage (void);
+/* APPLE LOCAL AltiVec */
+extern tree rs6000_fold_builtin (tree, tree, bool);
+/* APPLE LOCAL CW asm blocks */
+extern const char *rs6000_iasm_register_name (const char *, char *);
+/* APPLE LOCAL 3399553 */
+extern void rs6000_expand_flt_rounds (rtx);
 
 /* Declare functions in rs6000-c.c */
 
 extern void rs6000_pragma_longcall (struct cpp_reader *);
 extern void rs6000_cpu_cpp_builtins (struct cpp_reader *);
+
+/* APPLE LOCAL begin AltiVec */
+extern struct cpp_hashnode *rs6000_macro_to_expand (struct cpp_reader *,
+						    const struct cpp_token *);
+/* APPLE LOCAL end AltiVec */
 
 #if TARGET_MACHO
 char *output_call (rtx, rtx *, int, int);

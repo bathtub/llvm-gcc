@@ -337,9 +337,16 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
    TARGET_SCHED_SET_SCHED_FLAGS}
 
 #define TARGET_VECTORIZE_BUILTIN_MASK_FOR_LOAD 0
+/* APPLE LOCAL begin mainline 4.2 5569774 */
+#define TARGET_VECTOR_ALIGNMENT_REACHABLE \
+  default_builtin_vector_alignment_reachable
+/* APPLE LOCAL end mainline 4.2 5569774 */
 
 #define TARGET_VECTORIZE                                                \
-  {TARGET_VECTORIZE_BUILTIN_MASK_FOR_LOAD}
+  /* APPLE LOCAL begin mainline 4.2 5569774 */				\
+  {TARGET_VECTORIZE_BUILTIN_MASK_FOR_LOAD,				\
+   TARGET_VECTOR_ALIGNMENT_REACHABLE}
+  /* APPLE LOCAL end mainline 4.2 5569774 */
 
 #define TARGET_DEFAULT_TARGET_FLAGS 0
 
@@ -361,6 +368,16 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #define TARGET_EXPAND_BUILTIN default_expand_builtin
 #define TARGET_RESOLVE_OVERLOADED_BUILTIN NULL
 #define TARGET_FOLD_BUILTIN hook_tree_tree_tree_bool_null
+
+/* APPLE LOCAL begin constant cfstrings */
+/* In c-common.c.  */
+#ifndef TARGET_EXPAND_TREE_BUILTIN
+#define TARGET_EXPAND_TREE_BUILTIN hook_tree_tree_tree_tree_null
+#endif
+#ifndef TARGET_CONSTRUCT_OBJC_STRING
+#define TARGET_CONSTRUCT_OBJC_STRING hook_tree_tree_null
+#endif
+/* APPLE LOCAL end constant cfstrings */
 
 /* In varasm.c.  */
 #ifndef TARGET_SECTION_TYPE_FLAGS
@@ -427,10 +444,13 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #define TARGET_INSERT_ATTRIBUTES hook_void_tree_treeptr
 #define TARGET_FUNCTION_ATTRIBUTE_INLINABLE_P hook_bool_tree_false
 #define TARGET_MS_BITFIELD_LAYOUT_P hook_bool_tree_false
+/* APPLE LOCAL pragma reverse_bitfields */
+#define TARGET_REVERSE_BITFIELDS_P hook_bool_tree_false
 #define TARGET_ALIGN_ANON_BITFIELD hook_bool_void_false
 #define TARGET_NARROW_VOLATILE_BITFIELD hook_bool_void_false
 #define TARGET_RTX_COSTS hook_bool_rtx_int_int_intp_false
-#define TARGET_MANGLE_FUNDAMENTAL_TYPE hook_constcharptr_tree_null
+/* APPLE LOCAL mangle_type 7105099 */	\
+#define TARGET_MANGLE_TYPE hook_constcharptr_tree_null
 #define TARGET_ALLOCATE_INITIAL_VALUE NULL
 
 #ifndef TARGET_INIT_LIBFUNCS
@@ -448,6 +468,10 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #ifndef TARGET_INVALID_ARG_FOR_UNPROTOTYPED_FN
 #define TARGET_INVALID_ARG_FOR_UNPROTOTYPED_FN hook_invalid_arg_for_unprototyped_fn
 #endif
+
+/* APPLE LOCAL begin AltiVec */
+#define TARGET_CAST_EXPR_AS_VECTOR_INIT false
+/* APPLE LOCAL end AltiVec */
 
 #define TARGET_INVALID_CONVERSION hook_constcharptr_tree_tree_null
 #define TARGET_INVALID_UNARY_OP hook_constcharptr_int_tree_null
@@ -489,12 +513,18 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #define TARGET_STRUCT_VALUE_RTX hook_rtx_tree_int_null
 #define TARGET_RETURN_IN_MEMORY default_return_in_memory
 #define TARGET_RETURN_IN_MSB hook_bool_tree_false
+/* APPLE LOCAL radar 4781080 */
+#define TARGET_OBJC_FPRETURN_MSGCALL default_objc_fpreturn_msgcall
 
 #define TARGET_EXPAND_BUILTIN_SAVEREGS default_expand_builtin_saveregs
 #define TARGET_SETUP_INCOMING_VARARGS default_setup_incoming_varargs
 #define TARGET_STRICT_ARGUMENT_NAMING hook_bool_CUMULATIVE_ARGS_false
 #define TARGET_PRETEND_OUTGOING_VARARGS_NAMED \
   default_pretend_outgoing_varargs_named
+/* APPLE LOCAL begin Altivec */
+#define TARGET_SKIP_VEC_ARGS default_skip_vec_args
+/* APPLE LOCAL end Altivec */
+
 #define TARGET_SPLIT_COMPLEX_ARG NULL
 
 #define TARGET_GIMPLIFY_VA_ARG_EXPR std_gimplify_va_arg_expr
@@ -509,6 +539,10 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #define TARGET_FUNCTION_VALUE default_function_value
 #define TARGET_INTERNAL_ARG_POINTER default_internal_arg_pointer
 
+/* APPLE LOCAL begin radar 5155743, mainline candidate */
+#define TARGET_HAVE_DYNAMIC_STACK_SPACE false
+/* APPLE LOCAL end radar 5155743, mainline candidate */
+
 #define TARGET_CALLS {						\
    TARGET_PROMOTE_FUNCTION_ARGS,				\
    TARGET_PROMOTE_FUNCTION_RETURN,				\
@@ -516,12 +550,17 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
    TARGET_STRUCT_VALUE_RTX,					\
    TARGET_RETURN_IN_MEMORY,					\
    TARGET_RETURN_IN_MSB,					\
+   /* APPLE LOCAL radar 4781080 */				\
+   TARGET_OBJC_FPRETURN_MSGCALL,				\
    TARGET_PASS_BY_REFERENCE,					\
    TARGET_EXPAND_BUILTIN_SAVEREGS,				\
    TARGET_SETUP_INCOMING_VARARGS,				\
    TARGET_STRICT_ARGUMENT_NAMING,				\
    TARGET_PRETEND_OUTGOING_VARARGS_NAMED,			\
    TARGET_SPLIT_COMPLEX_ARG,					\
+   /* APPLE LOCAL begin Altivec */				\
+   TARGET_SKIP_VEC_ARGS,					\
+   /* APPLE LOCAL end Altivec */				\
    TARGET_MUST_PASS_IN_STACK,					\
    TARGET_CALLEE_COPIES,					\
    TARGET_ARG_PARTIAL_BYTES,					\
@@ -592,6 +631,12 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 #define TARGET_CXX_ADJUST_CLASS_AT_DEFINITION hook_void_tree
 #endif
 
+/* APPLE LOCAL begin mainline 4.3 2006-01-10 4871915 */
+#ifndef TARGET_CXX_LIBRARY_RTTI_COMDAT
+#define TARGET_CXX_LIBRARY_RTTI_COMDAT hook_bool_void_true
+#endif
+
+/* APPLE LOCAL end mainline 4.3 2006-01-10 4871915 */
 #define TARGET_CXX				\
   {						\
     TARGET_CXX_GUARD_TYPE,			\
@@ -604,7 +649,10 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
     TARGET_CXX_DETERMINE_CLASS_DATA_VISIBILITY,	\
     TARGET_CXX_CLASS_DATA_ALWAYS_COMDAT,        \
     TARGET_CXX_USE_AEABI_ATEXIT,		\
-    TARGET_CXX_ADJUST_CLASS_AT_DEFINITION	\
+/* APPLE LOCAL begin mainline 4.3 2006-01-10 4871915 */ \
+    TARGET_CXX_ADJUST_CLASS_AT_DEFINITION,	\
+    TARGET_CXX_LIBRARY_RTTI_COMDAT,	        \
+/* APPLE LOCAL end mainline 4.3 2006-01-10 4871915 */ \
   }
 
 /* The whole shebang.  */
@@ -624,14 +672,22 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
   TARGET_INSERT_ATTRIBUTES,			\
   TARGET_FUNCTION_ATTRIBUTE_INLINABLE_P,	\
   TARGET_MS_BITFIELD_LAYOUT_P,			\
+  /* APPLE LOCAL pragma reverse_bitfields */    \
+  TARGET_REVERSE_BITFIELDS_P,			\
   TARGET_DECIMAL_FLOAT_SUPPORTED_P,		\
   TARGET_ALIGN_ANON_BITFIELD,			\
   TARGET_NARROW_VOLATILE_BITFIELD,		\
   TARGET_INIT_BUILTINS,				\
   TARGET_EXPAND_BUILTIN,			\
+  /* APPLE LOCAL begin constant cfstrings */	\
+  TARGET_EXPAND_TREE_BUILTIN,			\
+  TARGET_CONSTRUCT_OBJC_STRING,			\
+  /* APPLE LOCAL end constant cfstrings */	\
   TARGET_RESOLVE_OVERLOADED_BUILTIN,		\
   TARGET_FOLD_BUILTIN,				\
-  TARGET_MANGLE_FUNDAMENTAL_TYPE,		\
+  /* APPLE LOCAL begin mangle_type 7105099 */	\
+  TARGET_MANGLE_TYPE,				\
+  /* APPLE LOCAL end mangle_type 7105099 */	\
   TARGET_INIT_LIBFUNCS,				\
   TARGET_SECTION_TYPE_FLAGS,			\
   TARGET_CANNOT_MODIFY_JUMPS_P,			\
@@ -695,10 +751,15 @@ Foundation, 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
   TARGET_TERMINATE_DW2_EH_FRAME_INFO,		\
   TARGET_ASM_FILE_START_APP_OFF,		\
   TARGET_ASM_FILE_START_FILE_DIRECTIVE,		\
+  /* APPLE LOCAL AltiVec */			\
+  TARGET_CAST_EXPR_AS_VECTOR_INIT,		\
   TARGET_HANDLE_PRAGMA_REDEFINE_EXTNAME,	\
   TARGET_HANDLE_PRAGMA_EXTERN_PREFIX,		\
   TARGET_RELAXED_ORDERING,			\
-  TARGET_ARM_EABI_UNWINDER			\
+  /* APPLE LOCAL begin radar 5155743, mainline candidate */	\
+  TARGET_ARM_EABI_UNWINDER,			\
+  TARGET_HAVE_DYNAMIC_STACK_SPACE		\
+  /* APPLE LOCAL end radar 5155743, mainline candidate */	\
 }
 
 #include "hooks.h"

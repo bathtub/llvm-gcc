@@ -1,4 +1,5 @@
-/* Specific flags and argument handling of the C++ front-end.
+/* APPLE LOCAL mainline 2007-04-02 5027856 */ \
+/* Specific flags and argument handling of the C++ front end.
    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004
    Free Software Foundation, Inc.
 
@@ -149,6 +150,7 @@ lang_specific_driver (int *in_argc, const char *const **in_argv,
 	    saw_verbose_flag = 1;
 	  else if (strncmp (argv[i], "-x", 2) == 0)
 	    {
+/* APPLE LOCAL begin mainline 2007-04-02 5027856 */ \
 	      const char * arg;
 	      if (argv[i][2] != '\0')
 		arg = argv[i]+2;
@@ -159,11 +161,20 @@ lang_specific_driver (int *in_argc, const char *const **in_argv,
 		arg = "";
 	      if (library == 0
 		  && (strcmp (arg, "c++") == 0
-		      || strcmp (arg, "c++-cpp-output") == 0))
+		      || strcmp (arg, "c++-cpp-output") == 0
+		      || strcmp (arg, "objective-c++") == 0
+		      || strcmp (arg, "objective-c++-cpp-output") == 0))
 		library = 1;
 		
 	      saw_speclang = 1;
 	    }
+	  else if (strcmp (argv[i], "-ObjC++") == 0)
+	    {
+	      if (library == 0)
+		library = 1;
+	      saw_speclang = 1;
+	    }
+/* APPLE LOCAL end mainline 2007-04-02 5027856 */ \
 	  /* Arguments that go directly to the linker might be .o files,
 	     or something, and so might cause libstdc++ to be needed.  */
 	  else if (strcmp (argv[i], "-Xlinker") == 0)
@@ -237,12 +248,8 @@ lang_specific_driver (int *in_argc, const char *const **in_argv,
   if (quote)
     fatal ("argument to '%s' missing\n", quote);
 
-  /* If we know we don't have to do anything, bail now.  */
-  if (! added && library <= 0)
-    {
-      free (args);
-      return;
-    }
+  /* APPLE LOCAL mainline 2007-04-02 5027856 */ \
+  /* Removed early exit */
 
   /* There's no point adding -shared-libgcc if we don't have a shared
      libgcc.  */

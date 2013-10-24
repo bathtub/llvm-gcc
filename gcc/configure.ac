@@ -866,6 +866,10 @@ AC_SUBST(ranlib_flags)
      
 gcc_AC_PROG_INSTALL
 
+# APPLE LOCAL begin Mach time
+AC_CHECK_HEADERS(mach/mach_time.h)
+# APPLE LOCAL end Mach time
+
 # See if cmp has --ignore-initial.
 gcc_AC_PROG_CMP_IGNORE_INITIAL
 
@@ -1729,7 +1733,10 @@ for f in $build_xm_file; do
   esac
 done
 
-# Define macro CROSS_COMPILE in compilation if this is a cross-compiler.
+ # APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
+# Define macro CROSS_DIRECTORY_STRUCTURE in compilation if this is a
+# cross-compiler which does not use the native headers and libraries.
+ # APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
 # Also use all.cross instead of all.internal and adjust SYSTEM_HEADER_DIR.
 CROSS=						AC_SUBST(CROSS)
 ALL=all.internal				AC_SUBST(ALL)
@@ -1746,7 +1753,9 @@ fi
 
 if test x$host != x$target
 then
-	CROSS="-DCROSS_COMPILE"
+ # APPLE LOCAL begin mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
+	CROSS="-DCROSS_DIRECTORY_STRUCTURE"
+ # APPLE LOCAL end mainline 4.3 2006-12-13 CROSS_DIRECTORY_STRUCTURE 4697325
 	ALL=all.cross
 	SYSTEM_HEADER_DIR=$build_system_header_dir
 	case "$host","$target" in
@@ -2033,6 +2042,14 @@ gcc_GAS_CHECK_FEATURE([.p2align with maximum skip], gcc_cv_as_max_skip_p2align,
 [AC_DEFINE(HAVE_GAS_MAX_SKIP_P2ALIGN, 1,
   [Define if your assembler supports specifying the maximum number
    of bytes to skip when using the GAS .p2align command.])])
+
+# APPLE LOCAL begin mainline x86_64 literal16
+gcc_GAS_CHECK_FEATURE([.literal16], gcc_cv_as_literal16,
+ [2,8,0],,
+ [.literal16],,
+[AC_DEFINE(HAVE_GAS_LITERAL16, 1,
+  [Define if your assembler supports .literal16.])])
+# APPLE LOCAL end mainline x86_64 literal16
 
 gcc_GAS_CHECK_FEATURE([working .subsection -1], gcc_cv_as_subsection_m1,
  [elf,2,9,0],,
@@ -3200,40 +3217,48 @@ if test x$with_sysroot = x && test x$host = x$target \
 [Define to PREFIX/include if cpp should also search that directory.])
 fi
 
+# APPLE LOCAL begin mainline
 # Test for stack protector support in target C library.
-case "$target" in
-  *-*-linux*)
-    AC_CACHE_CHECK(__stack_chk_fail in target GNU C library,
+AC_CACHE_CHECK(__stack_chk_fail in target C library,
       gcc_cv_libc_provides_ssp,
       [gcc_cv_libc_provides_ssp=no
+    case "$target" in
+       *-*-linux*)
       if test x$host != x$target || test "x$TARGET_SYSTEM_ROOT" != x; then
-	if test "x$with_sysroot" = x; then
-	  glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-include"
-	elif test "x$with_sysroot" = xyes; then
-	  glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-root/usr/include"
-	else
-	  glibc_header_dir="${with_sysroot}/usr/include"
-	fi
+        if test "x$with_sysroot" = x; then
+          glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-include"
+        elif test "x$with_sysroot" = xyes; then
+          glibc_header_dir="${exec_prefix}/${target_noncanonical}/sys-root/usr/include"
+        else
+          glibc_header_dir="${with_sysroot}/usr/include"
+        fi
       else
-	glibc_header_dir=/usr/include
+        glibc_header_dir=/usr/include
       fi
       # glibc 2.4 and later provides __stack_chk_fail and
       # either __stack_chk_guard, or TLS access to stack guard canary.
       if test -f $glibc_header_dir/features.h \
-	 && $EGREP '^@<:@ 	@:>@*#[ 	]*define[ 	]+__GNU_LIBRARY__[ 	]+([1-9][0-9]|[6-9])' \
-	    $glibc_header_dir/features.h > /dev/null; then
-	if $EGREP '^@<:@ 	@:>@*#[ 	]*define[ 	]+__GLIBC__[ 	]+([1-9][0-9]|[3-9])' \
-	   $glibc_header_dir/features.h > /dev/null; then
-	  gcc_cv_libc_provides_ssp=yes
-	elif $EGREP '^@<:@ 	@:>@*#[ 	]*define[ 	]+__GLIBC__[ 	]+2' \
-	     $glibc_header_dir/features.h > /dev/null \
-	     && $EGREP '^@<:@ 	@:>@*#[ 	]*define[ 	]+__GLIBC_MINOR__[ 	]+([1-9][0-9]|[4-9])' \
-	     $glibc_header_dir/features.h > /dev/null; then
-	  gcc_cv_libc_provides_ssp=yes
-	fi
-      fi]) ;;
+         && $EGREP '^@<:@       @:>@*#[         ]*define[       ]+__GNU_LIBRARY__[      ]+([1-9][0-9]|[6-9])' \
+            $glibc_header_dir/features.h > /dev/null; then
+        if $EGREP '^@<:@        @:>@*#[         ]*define[       ]+__GLIBC__[    ]+([1-9][0-9]|[3-9])' \
+           $glibc_header_dir/features.h > /dev/null; then
+          gcc_cv_libc_provides_ssp=yes
+        elif $EGREP '^@<:@      @:>@*#[         ]*define[       ]+__GLIBC__[    ]+2' \
+             $glibc_header_dir/features.h > /dev/null \
+             && $EGREP '^@<:@   @:>@*#[         ]*define[       ]+__GLIBC_MINOR__[      ]+([1-9][0-9]|[4-9])' \
+             $glibc_header_dir/features.h > /dev/null; then
+          gcc_cv_libc_provides_ssp=yes
+        fi
+        fi
+        ;;
+       *-*-darwin*)
+         AC_CHECK_FUNC(__stack_chk_fail,[gcc_cv_libc_provides_ssp=yes],
+           [echo "no __stack_chk_fail on this target"])
+        ;;
   *) gcc_cv_libc_provides_ssp=no ;;
-esac
+    esac])
+
+# APPLE LOCAL end mainline
 if test x$gcc_cv_libc_provides_ssp = xyes; then
   AC_DEFINE(TARGET_LIBC_PROVIDES_SSP, 1,
 	    [Define if your target C library provides stack protector support])

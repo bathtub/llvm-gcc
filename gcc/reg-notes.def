@@ -163,3 +163,8 @@ REG_NOTE (CROSSING_JUMP)
 /* This kind of note is generated at each to `setjmp', and similar
    functions that can return twice.  */
 REG_NOTE (SETJMP)
+
+/* APPLE LOCAL begin ObjC direct dispatch */
+/* Indicate calls to a hard-coded address in memory.  */
+REG_NOTE (ABSCALL)
+/* APPLE LOCAL end ObjC direct dispatch */

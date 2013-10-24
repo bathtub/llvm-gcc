@@ -119,11 +119,19 @@ extern short int __get_eh_table_version (struct exception_descriptor *);
 
 /* FIXME: This #ifdef probably should be removed, ie. enable the test
    for mips too.  */
+/* APPLE LOCAL begin mainline 4.3 2007-04-24 4876451 */
+/* Don't use IBM Extended Double TFmode for TI->SF calculations.
+   The conversion from long double to float suffers from double
+   rounding, because we convert via double.  In other cases, going
+   through the software fp routines is much slower than the fallback.  */
 #ifdef __powerpc__
-#define IS_IBM_EXTENDED(SIZE) (SIZE == 106)
+#define AVOID_FP_TYPE_CONVERSION(SIZE) (SIZE == 106)
+#elif defined(WIDEST_HARDWARE_FP_SIZE)
+#define AVOID_FP_TYPE_CONVERSION(SIZE) (SIZE > WIDEST_HARDWARE_FP_SIZE)
 #else
-#define IS_IBM_EXTENDED(SIZE) 0
+#define AVOID_FP_TYPE_CONVERSION(SIZE) 0
 #endif
+/* APPLE LOCAL end mainline 4.3 2007-04-24 4876451 */
 
 /* In the first part of this file, we are interfacing to calls generated
    by the compiler itself.  These calls pass values into these routines
@@ -350,6 +358,10 @@ extern DWtype __addvDI3 (DWtype, DWtype);
 extern DWtype __subvDI3 (DWtype, DWtype);
 extern DWtype __mulvDI3 (DWtype, DWtype);
 extern DWtype __negvDI2 (DWtype);
+/* APPLE LOCAL begin mainline bswap */
+extern SItype __bswapsi2 (SItype);
+extern DItype __bswapdi2 (DItype);
+/* APPLE LOCAL end mainline bswap */
 
 #ifdef COMPAT_SIMODE_TRAPPING_ARITHMETIC
 extern SItype __absvsi2 (SItype);

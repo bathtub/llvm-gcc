@@ -145,7 +145,8 @@ bool
 probably_never_executed_bb_p (basic_block bb)
 {
   if (profile_info && flag_branch_probabilities)
-    return ((bb->count + profile_info->runs / 2) / profile_info->runs) == 0;
+    /* APPLE LOCAL hot/cold partitioning */
+    return (bb->count == 0);
   return false;
 }
 

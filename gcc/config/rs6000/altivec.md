@@ -144,20 +144,22 @@
 (define_mode_attr VI_char [(V4SI "w") (V8HI "h") (V16QI "b")])
 
 ;; Generic LVX load instruction.
+;; APPLE LOCAL begin 4708231
 (define_insn "altivec_lvx_<mode>"
   [(set (match_operand:V 0 "altivec_register_operand" "=v")
-	(match_operand:V 1 "memory_operand" "Z"))]
+	(match_operand:V 1 "indexed_or_indirect_operand" "Z"))]
   "TARGET_ALTIVEC"
   "lvx %0,%y1"
   [(set_attr "type" "vecload")])
 
 ;; Generic STVX store instruction.
 (define_insn "altivec_stvx_<mode>"
-  [(set (match_operand:V 0 "memory_operand" "=Z")
+  [(set (match_operand:V 0 "indexed_or_indirect_operand" "=Z")
 	(match_operand:V 1 "altivec_register_operand" "v"))]
   "TARGET_ALTIVEC"
   "stvx %1,%y0"
   [(set_attr "type" "vecstore")])
+;; APPLE LOCAL end 4708231
 
 ;; Vector move instructions.
 (define_expand "mov<mode>"
@@ -1683,17 +1685,138 @@
   "")
 
 ;; We can get away with generating the opcode on the fly (%3 below)
-;; because all the predicates have the same scheduling parameters.
+;; APPLE LOCAL begin radar 4571747 
+;; because all the predicates for v4sf have the same scheduling parameters.
+;; APPLE LOCAL end radar 4571747 
 
-(define_insn "altivec_predicate_<mode>"
+;; APPLE LOCAL begin radar 4571747 
+(define_insn "altivec_predicate_v4sf"
   [(set (reg:CC 74)
-	(unspec:CC [(match_operand:V 1 "register_operand" "v")
-		    (match_operand:V 2 "register_operand" "v")
-		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
-   (clobber (match_scratch:V 0 "=v"))]
+	(unspec:CC [(match_operand:V4SF 1 "register_operand" "v")
+		    (match_operand:V4SF 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] 174))
+   (clobber (match_scratch:V4SF 0 "=v"))]
   "TARGET_ALTIVEC"
   "%3 %0,%1,%2"
 [(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpequw"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V4SI 1 "register_operand" "v")
+		    (match_operand:V4SI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V4SI 0 "register_operand" "=v")
+        (unspec:V4SI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPEQUW))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtsw"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V4SI 1 "register_operand" "v")
+		    (match_operand:V4SI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V4SI 0 "register_operand" "=v")
+        (unspec:V4SI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPGTSW))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtuw"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V4SI 1 "register_operand" "v")
+		    (match_operand:V4SI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V4SI 0 "register_operand" "=v")
+        (unspec:V4SI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPGTUW))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtuh"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V8HI 1 "register_operand" "v")
+		    (match_operand:V8HI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V8HI 0 "register_operand" "=v")
+        (unspec:V8HI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPGTUH))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtsh"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V8HI 1 "register_operand" "v")
+		    (match_operand:V8HI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V8HI 0 "register_operand" "=v")
+        (unspec:V8HI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPGTSH))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpequh"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V8HI 1 "register_operand" "v")
+		    (match_operand:V8HI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V8HI 0 "register_operand" "=v")
+        (unspec:V8HI [(match_dup 1)
+                      (match_dup 2)]
+                      UNSPEC_VCMPEQUH))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpequb"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V16QI 1 "register_operand" "v")
+		    (match_operand:V16QI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V16QI 0 "register_operand" "=v")
+        (unspec:V16QI [(match_dup 1)
+                       (match_dup 2)]
+                       UNSPEC_VCMPEQUB))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtsb"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V16QI 1 "register_operand" "v")
+		    (match_operand:V16QI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V16QI 0 "register_operand" "=v")
+        (unspec:V16QI [(match_dup 1)
+                       (match_dup 2)]
+                       UNSPEC_VCMPGTSB))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+
+(define_insn "altivec_predicate_vcmpgtub"
+  [(set (reg:CC 74)
+	(unspec:CC [(match_operand:V16QI 1 "register_operand" "v")
+		    (match_operand:V16QI 2 "register_operand" "v")
+		    (match_operand 3 "any_operand" "")] UNSPEC_PREDICATE))
+   (set (match_operand:V16QI 0 "register_operand" "=v")
+        (unspec:V16QI [(match_dup 1)
+                       (match_dup 2)]
+                       UNSPEC_VCMPGTUB))]
+  "TARGET_ALTIVEC"
+  "%3 %0,%1,%2"
+[(set_attr "type" "veccmp")])
+;; APPLE LOCAL end radar 4571747 
 
 (define_insn "altivec_mtvscr"
   [(set (reg:SI 110)
@@ -1755,19 +1878,21 @@
   "dststt %0,%1,%2"
   [(set_attr "type" "vecsimple")])
 
+;; APPLE LOCAL begin 4708231
 (define_insn "altivec_lvsl"
   [(set (match_operand:V16QI 0 "register_operand" "=v")
-	(unspec:V16QI [(match_operand 1 "memory_operand" "Z")] UNSPEC_LVSL))]
+	(unspec:V16QI [(match_operand 1 "indexed_or_indirect_operand" "Z")] UNSPEC_LVSL))]
   "TARGET_ALTIVEC"
   "lvsl %0,%y1"
   [(set_attr "type" "vecload")])
 
 (define_insn "altivec_lvsr"
   [(set (match_operand:V16QI 0 "register_operand" "=v")
-	(unspec:V16QI [(match_operand 1 "memory_operand" "Z")] UNSPEC_LVSR))]
+	(unspec:V16QI [(match_operand 1 "indexed_or_indirect_operand" "Z")] UNSPEC_LVSR))]
   "TARGET_ALTIVEC"
   "lvsr %0,%y1"
   [(set_attr "type" "vecload")])
+;; APPLE LOCAL end 4708231
 
 (define_expand "build_vector_mask_for_load"
   [(set (match_operand:V16QI 0 "register_operand" "")
@@ -1792,10 +1917,11 @@
 ;; Parallel some of the LVE* and STV*'s with unspecs because some have
 ;; identical rtl but different instructions-- and gcc gets confused.
 
+;; APPLE LOCAL begin 4708231
 (define_insn "altivec_lve<VI_char>x"
   [(parallel
     [(set (match_operand:VI 0 "register_operand" "=v")
-	  (match_operand:VI 1 "memory_operand" "Z"))
+	  (match_operand:VI 1 "indexed_or_indirect_operand" "Z"))
      (unspec [(const_int 0)] UNSPEC_LVE)])]
   "TARGET_ALTIVEC"
   "lve<VI_char>x %0,%y1"
@@ -1804,7 +1930,7 @@
 (define_insn "*altivec_lvesfx"
   [(parallel
     [(set (match_operand:V4SF 0 "register_operand" "=v")
-	  (match_operand:V4SF 1 "memory_operand" "Z"))
+	  (match_operand:V4SF 1 "indexed_or_indirect_operand" "Z"))
      (unspec [(const_int 0)] UNSPEC_LVE)])]
   "TARGET_ALTIVEC"
   "lvewx %0,%y1"
@@ -1813,7 +1939,7 @@
 (define_insn "altivec_lvxl"
   [(parallel
     [(set (match_operand:V4SI 0 "register_operand" "=v")
-	  (match_operand:V4SI 1 "memory_operand" "Z"))
+	  (match_operand:V4SI 1 "indexed_or_indirect_operand" "Z"))
      (unspec [(const_int 0)] UNSPEC_SET_VSCR)])]
   "TARGET_ALTIVEC"
   "lvxl %0,%y1"
@@ -1821,14 +1947,14 @@
 
 (define_insn "altivec_lvx"
   [(set (match_operand:V4SI 0 "register_operand" "=v")
-	(match_operand:V4SI 1 "memory_operand" "Z"))]
+	(match_operand:V4SI 1 "indexed_or_indirect_operand" "Z"))]
   "TARGET_ALTIVEC"
   "lvx %0,%y1"
   [(set_attr "type" "vecload")])
 
 (define_insn "altivec_stvx"
   [(parallel
-    [(set (match_operand:V4SI 0 "memory_operand" "=Z")
+    [(set (match_operand:V4SI 0 "indexed_or_indirect_operand" "=Z")
 	  (match_operand:V4SI 1 "register_operand" "v"))
      (unspec [(const_int 0)] UNSPEC_STVX)])]
   "TARGET_ALTIVEC"
@@ -1837,7 +1963,7 @@
 
 (define_insn "altivec_stvxl"
   [(parallel
-    [(set (match_operand:V4SI 0 "memory_operand" "=Z")
+    [(set (match_operand:V4SI 0 "indexed_or_indirect_operand" "=Z")
 	  (match_operand:V4SI 1 "register_operand" "v"))
      (unspec [(const_int 0)] UNSPEC_STVXL)])]
   "TARGET_ALTIVEC"
@@ -1846,7 +1972,7 @@
 
 (define_insn "altivec_stve<VI_char>x"
   [(parallel
-    [(set (match_operand:VI 0 "memory_operand" "=Z")
+    [(set (match_operand:VI 0 "indexed_or_indirect_operand" "=Z")
 	  (match_operand:VI 1 "register_operand" "v"))
      (unspec [(const_int 0)] UNSPEC_STVE)])]
   "TARGET_ALTIVEC"
@@ -1855,12 +1981,13 @@
 
 (define_insn "*altivec_stvesfx"
   [(parallel
-    [(set (match_operand:V4SF 0 "memory_operand" "=Z")
+    [(set (match_operand:V4SF 0 "indexed_or_indirect_operand" "=Z")
 	  (match_operand:V4SF 1 "register_operand" "v"))
      (unspec [(const_int 0)] UNSPEC_STVE)])]
   "TARGET_ALTIVEC"
   "stvewx %1,%y0"
   [(set_attr "type" "vecstore")])
+;; APPLE LOCAL end 4708231
 
 (define_expand "vec_init<mode>"
   [(match_operand:V 0 "register_operand" "")

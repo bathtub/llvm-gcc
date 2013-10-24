@@ -69,6 +69,10 @@ const char *const tree_code_class_strings[] =
   "expression",
 };
 
+/* APPLE LOCAL begin 6353006  */
+tree generic_block_literal_struct_type;
+/* APPLE LOCAL end 6353006  */
+
 /* obstack.[ch] explicitly declined to prototype this.  */
 extern int _obstack_allocated_p (struct obstack *h, void *obj);
 
@@ -117,7 +121,8 @@ struct type_hash GTY(())
 };
 
 /* Initial size of the hash table (rounded to next prime).  */
-#define TYPE_HASH_INITIAL_SIZE 1000
+/* APPLE LOCAL fsf candidate */
+#define TYPE_HASH_INITIAL_SIZE 4111
 
 /* Now here is the hash table.  When recording a type, it is added to
    the slot whose index is the hash code.  Note that the hash table is
@@ -541,9 +546,17 @@ make_node_stat (enum tree_code code MEM_STAT_DECL)
 	DECL_IN_SYSTEM_HEADER (t) = in_system_header;
       if (CODE_CONTAINS_STRUCT (code, TS_DECL_COMMON))
 	{
-	  if (code != FUNCTION_DECL)
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  if (code == FUNCTION_DECL)
+	    {
+	      DECL_ALIGN (t) = FUNCTION_BOUNDARY;
+	      DECL_MODE (t) = FUNCTION_MODE;
+	    }
+	  else
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	    DECL_ALIGN (t) = 1;
-	  DECL_USER_ALIGN (t) = 0;	  
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	  /* We have not yet computed the alias set for this declaration.  */
 	  DECL_POINTER_ALIAS_SET (t) = -1;
 	}
@@ -960,6 +973,12 @@ build_vector (tree type, tree vals)
   tree v = make_node (VECTOR_CST);
   int over1 = 0, over2 = 0;
   tree link;
+  /* APPLE LOCAL begin AltiVec */
+  /* APPLE LOCAL begin AltiVec, radar 4870336, 4874471, 4874208 */
+  int count = 0;
+  /* APPLE LOCAL end AltiVec, radar 4870336, 4874471, 4874208 */
+  tree list = NULL_TREE;
+  /* APPLE LOCAL end AltiVec */
 
   TREE_VECTOR_CST_ELTS (v) = vals;
   TREE_TYPE (v) = type;
@@ -973,9 +992,34 @@ build_vector (tree type, tree vals)
       if (!CONSTANT_CLASS_P (value))
 	continue;
 
+      /* APPLE LOCAL begin AltiVec */
+      value = fold (value);
+      TREE_VALUE (link) = value;
+      count++;
+      list = link;
+      /* APPLE LOCAL end AltiVec */
+
       over1 |= TREE_OVERFLOW (value);
       over2 |= TREE_CONSTANT_OVERFLOW (value);
     }
+
+  /* APPLE LOCAL begin AltiVec, radar 4870336, 4874471, 4874208 */
+#ifdef TARGET_PIM_ALTIVEC
+  if (TARGET_PIM_ALTIVEC)
+  {
+  int max_index = TYPE_VECTOR_SUBPARTS (type);
+  if (count > 0 && count < max_index)
+    {
+      int index;
+      tree expr = TREE_VALUE (list);
+      for (index = count; index < max_index; ++index)
+         list = chainon (list,
+                         build_tree_list (NULL_TREE,
+                                          convert (TREE_TYPE (type), expr)));
+    }
+  }
+#endif
+  /* APPLE LOCAL end AltiVec, radar 4870336, 4874471, 4874208 */
 
   TREE_OVERFLOW (v) = over1;
   TREE_CONSTANT_OVERFLOW (v) = over2;
@@ -1881,15 +1925,20 @@ expr_align (tree t)
       align1 = expr_align (TREE_OPERAND (t, 2));
       return MIN (align0, align1);
 
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      /* FIXME: LABEL_DECL and CONST_DECL never have DECL_ALIGN set
+	 meaningfully, it's always 1.  */
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
     case LABEL_DECL:     case CONST_DECL:
     case VAR_DECL:       case PARM_DECL:   case RESULT_DECL:
-      if (DECL_ALIGN (t) != 0)
-	return DECL_ALIGN (t);
-      break;
-
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
     case FUNCTION_DECL:
-      return FUNCTION_BOUNDARY;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      gcc_assert (DECL_ALIGN (t) != 0);
+      return DECL_ALIGN (t);
 
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
     default:
       break;
     }
@@ -2977,6 +3026,10 @@ build2_stat (enum tree_code code, tree tt, tree arg0, tree arg1 MEM_STAT_DECL)
   /* Expressions without side effects may be constant if their
      arguments are as well.  */
   constant = (TREE_CODE_CLASS (code) == tcc_comparison
+	      /* APPLE LOCAL begin Altivec */
+	      || (targetm.cast_expr_as_vector_init
+		  && code == COMPOUND_EXPR)
+	      /* APPLE LOCAL end AltiVec */
 	      || TREE_CODE_CLASS (code) == tcc_binary);
   read_only = 1;
   side_effects = TREE_SIDE_EFFECTS (t);
@@ -3174,9 +3227,9 @@ build_decl_stat (enum tree_code code, tree name, tree type MEM_STAT_DECL)
 
   if (code == VAR_DECL || code == PARM_DECL || code == RESULT_DECL)
     layout_decl (t, 0);
-  else if (code == FUNCTION_DECL)
-    DECL_MODE (t) = FUNCTION_MODE;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
 
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
   return t;
 }
 
@@ -4212,6 +4265,10 @@ type_hash_eq (const void *va, const void *vb)
     case RECORD_TYPE:
     case UNION_TYPE:
     case QUAL_UNION_TYPE:
+      /* APPLE LOCAL begin radar 4865576 */
+      if (!TYPE_FIELDS (a->type) && !TYPE_FIELDS (b->type))
+	return TYPE_NAME (a->type) == TYPE_NAME (b->type);
+      /* APPLE LOCAL end radar 4865576 */
       return (TYPE_FIELDS (a->type) == TYPE_FIELDS (b->type)
 	      || (TYPE_FIELDS (a->type)
 		  && TREE_CODE (TYPE_FIELDS (a->type)) == TREE_LIST
@@ -5013,6 +5070,31 @@ build_pointer_type (tree to_type)
 {
   return build_pointer_type_for_mode (to_type, ptr_mode, false);
 }
+
+/* APPLE LOCAL begin radar 5732232 - blocks */
+tree
+build_block_pointer_type (tree to_type)
+{
+  tree t;
+  
+  /* APPLE LOCAL begin radar 6300081 & 6353006 */
+  if (!generic_block_literal_struct_type)
+    generic_block_literal_struct_type = 
+                                 lang_hooks.build_generic_block_struct_type ();
+  /* APPLE LOCAL end radar 6300081 & 6353006 */
+
+  t = make_node (BLOCK_POINTER_TYPE);
+
+  TREE_TYPE (t) = to_type;
+  TYPE_MODE (t) = ptr_mode;
+
+  /* Lay out the type.  This function has many callers that are concerned
+     with expression-construction, and this simplifies them all.  */
+  layout_type (t);
+
+  return t;
+}
+/* APPLE LOCAL end radar 5732232 - blocks */
 
 /* Same as build_pointer_type_for_mode, but for REFERENCE_TYPE.  */
 
@@ -6043,42 +6125,51 @@ clean_symbol_name (char *p)
       *p = '_';
 }
 
-/* Generate a name for a function unique to this translation unit.
+/* APPLE LOCAL begin mainline 2006-11-01 5125268 */ \
+/* Generate a name for a special-purpose function function.
+   The generated name may need to be unique across the whole link.
    TYPE is some string to identify the purpose of this function to the
-   linker or collect2.  */
+   linker or collect2; it must start with an uppercase letter,
+   one of:
+   I - for constructors
+   D - for destructors
+   N - for C++ anonymous namespaces
+   F - for DWARF unwind frame information.  */
 
 tree
-get_file_function_name_long (const char *type)
+get_file_function_name (const char *type)
 {
   char *buf;
   const char *p;
   char *q;
 
+  /* If we already have a name we know to be unique, just use that.  */
   if (first_global_object_name)
+    p = first_global_object_name;
+  /* If the target is handling the constructors/destructors, they
+     will be local to this file and the name is only necessary for
+     debugging purposes.  */
+  else if ((type[0] == 'I' || type[0] == 'D') && targetm.have_ctors_dtors)
     {
-      p = first_global_object_name;
-
-      /* For type 'F', the generated name must be unique not only to this
-	 translation unit but also to any given link.  Since global names
-	 can be overloaded, we concatenate the first global object name
-	 with a string derived from the file name of this object.  */
-      if (!strcmp (type, "F"))
-	{
-	  const char *file = main_input_filename;
-
-	  if (! file)
-	    file = input_filename;
-
-	  q = alloca (strlen (p) + 10);
-	  sprintf (q, "%s_%08X", p, crc32_string (0, file));
-
-	  p = q;
-	}
+      const char *file = main_input_filename;
+      if (! file)
+	file = input_filename;
+      /* Just use the file's basename, because the full pathname
+	 might be quite long.  */
+      p = strrchr (file, '/');
+      if (p)
+	p++;
+      else
+	p = file;
+      p = q = ASTRDUP (p);
+      clean_symbol_name (q);
     }
   else
     {
-      /* We don't have anything that we know to be unique to this translation
+      /* Otherwise, the name must be unique across the entire link.
+	 We don't have anything that we know to be unique to this translation
 	 unit, so use what we do have and throw in some randomness.  */
+/* APPLE LOCAL end mainline 2006-11-01 5125268 */ \
       unsigned len;
       const char *name = weak_global_object_name;
       const char *file = main_input_filename;
@@ -6109,20 +6200,8 @@ get_file_function_name_long (const char *type)
 
   return get_identifier (buf);
 }
-
-/* If KIND=='I', return a suitable global initializer (constructor) name.
-   If KIND=='D', return a suitable global clean-up (destructor) name.  */
-
-tree
-get_file_function_name (int kind)
-{
-  char p[2];
-
-  p[0] = kind;
-  p[1] = 0;
-
-  return get_file_function_name_long (p);
-}
+/* APPLE LOCAL mainline 2006-11-01 5125268 */
+/* Remove get_file_function_name */
 
 #if defined ENABLE_TREE_CHECKING && (GCC_VERSION >= 2007)
 
@@ -6583,6 +6662,10 @@ build_common_tree_nodes_2 (int short_double)
   double_ptr_type_node = build_pointer_type (double_type_node);
   long_double_ptr_type_node = build_pointer_type (long_double_type_node);
   integer_ptr_type_node = build_pointer_type (integer_type_node);
+  /* APPLE LOCAL begin mainline bswap */
+  uint32_type_node = build_nonstandard_integer_type (32, true);
+  uint64_type_node = build_nonstandard_integer_type (64, true);
+  /* APPLE LOCAL end mainline bswap */
 
   /* Decimal float types. */
   dfloat32_type_node = make_node (REAL_TYPE);
@@ -6832,7 +6915,16 @@ reconstruct_complex_type (tree type, tree bottom)
   if (POINTER_TYPE_P (type))
     {
       inner = reconstruct_complex_type (TREE_TYPE (type), bottom);
-      outer = build_pointer_type (inner);
+      /* APPLE LOCAL begin AltiVec */
+      outer = (TREE_CODE (type) == REFERENCE_TYPE
+	       ? build_reference_type (inner)
+               /* APPLE LOCAL begin blocks 5882266 */
+	       : (TREE_CODE (type) == BLOCK_POINTER_TYPE ? 
+                  build_block_pointer_type (inner) : 
+                  build_pointer_type (inner))
+               );
+               /* APPLE LOCAL end blocks 5882266 */
+      /* APPLE LOCAL end AltiVec */
     }
   else if (TREE_CODE (type) == ARRAY_TYPE)
     {
@@ -7771,5 +7863,35 @@ empty_body_p (tree stmt)
 
   return true;
 }
+
+/* APPLE LOCAL begin CW asm blocks */
+static GTY(()) bool alternative_entry_points;
+
+bool
+has_alternative_entry_points (void)
+{
+  return alternative_entry_points;
+}
+
+void
+note_alternative_entry_points (void)
+{
+  alternative_entry_points = true;
+}
+/* APPLE LOCAL end CW asm blocks */
+
+/* APPLE LOCAL begin weak_import on property 6676828 */
+static GTY(()) int objc_property_decl_context;
+
+void note_objc_property_decl_context (void) {
+  objc_property_decl_context = 1;
+}
+void note_end_objc_property_decl_context (void) {
+  objc_property_decl_context = 0;
+}
+bool in_objc_property_decl_context (void) {
+  return objc_property_decl_context;
+}
+/* APPLE LOCAL end weak_import on property 6676828 */
 
 #include "gt-tree.h"

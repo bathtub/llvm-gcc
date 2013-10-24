@@ -229,6 +229,8 @@ static void output_alternate_entry_point (FILE *, rtx);
 static tree get_mem_expr_from_op (rtx, int *);
 static void output_asm_operand_names (rtx *, int *, int);
 static void output_operand (rtx, int);
+/* APPLE LOCAL ARM compact switch tables */
+static void calculate_alignments (void);
 #ifdef LEAF_REGISTERS
 static void leaf_renumber_regs (rtx);
 #endif
@@ -343,16 +345,13 @@ int insn_current_align;
    for each insn we'll call the alignment chain of this insn in the following
    comments.  */
 
-struct label_alignment
-{
-  short alignment;
-  short max_skip;
-};
-
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 static rtx *uid_align;
 static int *uid_shuid;
-static struct label_alignment *label_align;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
 
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 /* Indicate that branch shortening hasn't yet been done.  */
 
 void
@@ -555,20 +554,16 @@ final_addr_vec_align (rtx addr_vec)
 
 #define INSN_SHUID(INSN) (uid_shuid[INSN_UID (INSN)])
 
-static int min_labelno, max_labelno;
-
-#define LABEL_TO_ALIGNMENT(LABEL) \
-  (label_align[CODE_LABEL_NUMBER (LABEL) - min_labelno].alignment)
-
-#define LABEL_TO_MAX_SKIP(LABEL) \
-  (label_align[CODE_LABEL_NUMBER (LABEL) - min_labelno].max_skip)
-
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 /* For the benefit of port specific code do this also as a function.  */
 
 int
 label_to_alignment (rtx label)
 {
-  return LABEL_TO_ALIGNMENT (label);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+  return LABEL_ALIGN_LOG (label);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 }
 
 #ifdef HAVE_ATTR_length
@@ -617,7 +612,9 @@ align_fuzz (rtx start, rtx end, int known_align_log, unsigned int growth)
       align_addr = INSN_ADDRESSES (uid) - insn_lengths[uid];
       if (uid_shuid[uid] > end_shuid)
 	break;
-      known_align_log = LABEL_TO_ALIGNMENT (align_label);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      known_align_log = LABEL_ALIGN_LOG (align_label);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       new_align = 1 << known_align_log;
       if (new_align < known_align)
 	continue;
@@ -682,22 +679,19 @@ insn_current_reference_address (rtx branch)
 static unsigned int
 compute_alignments (void)
 {
-  int log, max_skip, max_log;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
   basic_block bb;
 
-  if (label_align)
-    {
-      free (label_align);
-      label_align = 0;
-    }
-
-  max_labelno = max_label_num ();
-  min_labelno = get_first_label_num ();
-  label_align = XCNEWVEC (struct label_alignment, max_labelno - min_labelno + 1);
-
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL begin ARM compact switch tables */
+#if !defined (TARGET_EXACT_SIZE_CALCULATIONS)
   /* If not optimizing or optimizing for size, don't assign any alignments.  */
   if (! optimize || optimize_size)
     return 0;
+#endif
+/* APPLE LOCAL end ARM compact switch tables */
 
   FOR_EACH_BB (bb)
     {
@@ -705,10 +699,24 @@ compute_alignments (void)
       int fallthru_frequency = 0, branch_frequency = 0, has_fallthru = 0;
       edge e;
       edge_iterator ei;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      int log, max_skip, max_log;
 
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
+/* APPLE LOCAL begin ARM compact switch tables */
       if (!LABEL_P (label)
-	  || probably_never_executed_bb_p (bb))
+#if !defined (TARGET_EXACT_SIZE_CALCULATIONS)
+	  || probably_never_executed_bb_p (bb)
+#endif
+	 )
 	continue;
+/* APPLE LOCAL end ARM compact switch tables */
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      /* If user has specified an alignment, honour it.  */
+      if (LABEL_ALIGN_LOG (label) > 0)
+	continue;
+
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       max_log = LABEL_ALIGN (label);
       max_skip = LABEL_ALIGN_MAX_SKIP;
 
@@ -757,8 +765,9 @@ compute_alignments (void)
 	      max_skip = LOOP_ALIGN_MAX_SKIP;
 	    }
 	}
-      LABEL_TO_ALIGNMENT (label) = max_log;
-      LABEL_TO_MAX_SKIP (label) = max_skip;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      SET_LABEL_ALIGN (label, max_log, max_skip);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
     }
   return 0;
 }
@@ -800,18 +809,23 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
   int i;
   int max_log;
   int max_skip;
+  /* APPLE LOCAL begin ARM compact switch tables */
+  /* Removed seq.  */
 #ifdef HAVE_ATTR_length
 #define MAX_CODE_ALIGN 16
-  rtx seq;
   int something_changed = 1;
   char *varying_length;
   rtx body;
   int uid;
-  rtx align_tab[MAX_CODE_ALIGN];
+  /* Removed align_tab.  */
+  bool asms_present = false;
+  /* APPLE LOCAL end ARM compact switch tables */
 
 #endif
 
-  /* Compute maximum UID and allocate label_align / uid_shuid.  */
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+  /* Compute maximum UID and allocate uid_shuid.  */
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
   max_uid = get_max_uid ();
 
   /* Free uid_shuid before reallocating it.  */
@@ -819,29 +833,8 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 
   uid_shuid = XNEWVEC (int, max_uid);
 
-  if (max_labelno != max_label_num ())
-    {
-      int old = max_labelno;
-      int n_labels;
-      int n_old_labels;
-
-      max_labelno = max_label_num ();
-
-      n_labels = max_labelno - min_labelno + 1;
-      n_old_labels = old - min_labelno + 1;
-
-      label_align = xrealloc (label_align,
-			      n_labels * sizeof (struct label_alignment));
-
-      /* Range of labels grows monotonically in the function.  Failing here
-         means that the initialization of array got lost.  */
-      gcc_assert (n_old_labels <= n_labels);
-
-      memset (label_align + n_old_labels, 0,
-	      (n_labels - n_old_labels) * sizeof (struct label_alignment));
-    }
-
-  /* Initialize label_align and set up uid_shuid to be strictly
+  /* APPLE LOCAL for-fsf-4_4 3274130 5295549 */ \
+  /* Initialize set up uid_shuid to be strictly
      monotonically rising with insn order.  */
   /* We use max_log here to keep track of the maximum alignment we want to
      impose on the next CODE_LABEL (or the current one if we are processing
@@ -863,11 +856,15 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 	  rtx next;
 
 	  /* Merge in alignments computed by compute_alignments.  */
-	  log = LABEL_TO_ALIGNMENT (insn);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  log = LABEL_ALIGN_LOG (insn);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	  if (max_log < log)
 	    {
 	      max_log = log;
-	      max_skip = LABEL_TO_MAX_SKIP (insn);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	      max_skip = LABEL_MAX_SKIP (insn);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	    }
 
 	  log = LABEL_ALIGN (insn);
@@ -895,8 +892,9 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 		      }
 		  }
 	      }
-	  LABEL_TO_ALIGNMENT (insn) = max_log;
-	  LABEL_TO_MAX_SKIP (insn) = max_skip;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  SET_LABEL_ALIGN (insn, max_log, max_skip);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	  max_log = 0;
 	  max_skip = 0;
 	}
@@ -929,30 +927,11 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 
   varying_length = XCNEWVEC (char, max_uid);
 
-  /* Initialize uid_align.  We scan instructions
-     from end to start, and keep in align_tab[n] the last seen insn
-     that does an alignment of at least n+1, i.e. the successor
-     in the alignment chain for an insn that does / has a known
-     alignment of n.  */
+  /* APPLE LOCAL begin ARM compact switch tables */
   uid_align = XCNEWVEC (rtx, max_uid);
+  calculate_alignments ();
 
-  for (i = MAX_CODE_ALIGN; --i >= 0;)
-    align_tab[i] = NULL_RTX;
-  seq = get_last_insn ();
-  for (; seq; seq = PREV_INSN (seq))
-    {
-      int uid = INSN_UID (seq);
-      int log;
-      log = (LABEL_P (seq) ? LABEL_TO_ALIGNMENT (seq) : 0);
-      uid_align[uid] = align_tab[0];
-      if (log)
-	{
-	  /* Found an alignment label.  */
-	  uid_align[uid] = align_tab[log];
-	  for (i = log - 1; i >= 0; i--)
-	    align_tab[i] = seq;
-	}
-    }
+  /* APPLE LOCAL end ARM compact switch tables */
 #ifdef CASE_VECTOR_SHORTEN_MODE
   if (optimize)
     {
@@ -991,8 +970,10 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 		  max = shuid;
 		  max_lab = lab;
 		}
-	      if (min_align > LABEL_TO_ALIGNMENT (lab))
-		min_align = LABEL_TO_ALIGNMENT (lab);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	      if (min_align > (int) LABEL_ALIGN_LOG (lab))
+		min_align = LABEL_ALIGN_LOG (lab);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	    }
 	  XEXP (pat, 2) = gen_rtx_LABEL_REF (Pmode, min_lab);
 	  XEXP (pat, 3) = gen_rtx_LABEL_REF (Pmode, max_lab);
@@ -1011,7 +992,14 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 #endif /* CASE_VECTOR_SHORTEN_MODE */
 
   /* Compute initial lengths, addresses, and varying flags for each insn.  */
-  for (insn_current_address = 0, insn = first;
+/* APPLE LOCAL begin ARM compact switch tables */
+#ifdef TARGET_UNEXPANDED_PROLOGUE_SIZE
+  insn_current_address = TARGET_UNEXPANDED_PROLOGUE_SIZE;
+#else
+  insn_current_address = 0;
+#endif
+  for (insn = first;
+/* APPLE LOCAL end ARM compact switch tables */
        insn != 0;
        insn_current_address += insn_lengths[uid], insn = NEXT_INSN (insn))
     {
@@ -1021,7 +1009,9 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 
       if (LABEL_P (insn))
 	{
-	  int log = LABEL_TO_ALIGNMENT (insn);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  int log = LABEL_ALIGN_LOG (insn);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	  if (log)
 	    {
 	      int align = 1 << log;
@@ -1051,7 +1041,12 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 	  /* Alignment is handled by ADDR_VEC_ALIGN.  */
 	}
       else if (GET_CODE (body) == ASM_INPUT || asm_noperands (body) >= 0)
-	insn_lengths[uid] = asm_insn_count (body) * insn_default_length (insn);
+	/* APPLE LOCAL begin ARM compact switch tables */
+	{
+	  insn_lengths[uid] = asm_insn_count (body) * insn_default_length (insn);
+	  asms_present = true;
+	}
+	/* APPLE LOCAL end ARM compact switch tables */
       else if (GET_CODE (body) == SEQUENCE)
 	{
 	  int i;
@@ -1113,7 +1108,14 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
     {
       something_changed = 0;
       insn_current_align = MAX_CODE_ALIGN - 1;
-      for (insn_current_address = 0, insn = first;
+/* APPLE LOCAL begin ARM compact switch tables */
+#ifdef TARGET_UNEXPANDED_PROLOGUE_SIZE
+      insn_current_address = TARGET_UNEXPANDED_PROLOGUE_SIZE;
+#else
+      insn_current_address = 0;
+#endif
+      for (insn = first;
+/* APPLE LOCAL end ARM compact switch tables */
 	   insn != 0;
 	   insn = NEXT_INSN (insn))
 	{
@@ -1127,7 +1129,9 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 
 	  if (LABEL_P (insn))
 	    {
-	      int log = LABEL_TO_ALIGNMENT (insn);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	      int log = LABEL_ALIGN_LOG (insn);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	      if (log > insn_current_align)
 		{
 		  int align = 1 << log;
@@ -1151,6 +1155,11 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 
 #ifdef CASE_VECTOR_SHORTEN_MODE
 	  if (optimize && JUMP_P (insn)
+/* APPLE LOCAL begin ARM compact switch tables */
+#ifdef TARGET_EXACT_SIZE_CALCULATIONS
+	      && !asms_present
+#endif
+/* APPLE LOCAL end ARM compact switch tables */
 	      && GET_CODE (PATTERN (insn)) == ADDR_DIFF_VEC)
 	    {
 	      rtx body = PATTERN (insn);
@@ -1176,7 +1185,9 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 		   prev = PREV_INSN (prev))
 		if (varying_length[INSN_UID (prev)] & 2)
 		  {
-		    rel_align = LABEL_TO_ALIGNMENT (prev);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+		    rel_align = LABEL_ALIGN_LOG (prev);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 		    break;
 		  }
 
@@ -1250,7 +1261,18 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 		{
 		  insn_lengths[uid]
 		    = (XVECLEN (body, 1) * GET_MODE_SIZE (GET_MODE (body)));
+/* APPLE LOCAL begin ARM compact switch tables */
+#ifdef ADJUST_INSN_LENGTH
+		  ADJUST_INSN_LENGTH (insn, insn_lengths[uid]);
+#endif
 		  insn_current_address += insn_lengths[uid];
+#ifdef TARGET_ALIGN_ADDR_DIFF_VEC_LABEL
+		  /* Label gets same alignment as table. */
+		  SET_LABEL_ALIGN (rel_lab, ADDR_VEC_ALIGN (insn),
+				   LABEL_MAX_SKIP (rel_lab));
+		  calculate_alignments ();
+#endif
+/* APPLE LOCAL end ARM compact switch tables */
 		  if (insn_lengths[uid] != old_length)
 		    something_changed = 1;
 		}
@@ -1342,6 +1364,41 @@ shorten_branches (rtx first ATTRIBUTE_UNUSED)
 #endif /* HAVE_ATTR_length */
 }
 
+/* APPLE LOCAL begin ARM compact switch tables */
+/* Initialize uid_align.  We scan instructions
+   from end to start, and keep in align_tab[n] the last seen insn
+   that does an alignment of at least n+1, i.e. the successor
+   in the alignment chain for an insn that does / has a known
+   alignment of n.  */
+static void
+calculate_alignments (void)
+{
+  int i;
+  rtx seq;
+  rtx align_tab[MAX_CODE_ALIGN];
+
+  for (i = MAX_CODE_ALIGN; --i >= 0;)
+    align_tab[i] = NULL_RTX;
+  seq = get_last_insn ();
+  for (; seq; seq = PREV_INSN (seq))
+    {
+      int uid = INSN_UID (seq);
+      int log;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      log = (LABEL_P (seq) ? LABEL_ALIGN_LOG (seq) : 0);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
+      uid_align[uid] = align_tab[0];
+      if (log)
+        {
+          /* Found an alignment label.  */
+          uid_align[uid] = align_tab[log];
+          for (i = log - 1; i >= 0; i--)
+            align_tab[i] = seq;
+        }
+    }
+}
+/* APPLE LOCAL end ARM compact switch tables */
+
 #ifdef HAVE_ATTR_length
 /* Given the body of an INSN known to be generated by an ASM statement, return
    the number of machine instructions likely to be generated for this insn.
@@ -1378,7 +1435,8 @@ asm_insn_count (rtx body)
 
 void
 final_start_function (rtx first ATTRIBUTE_UNUSED, FILE *file,
-		      int optimize ATTRIBUTE_UNUSED)
+		    /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+		      int optimizing ATTRIBUTE_UNUSED)
 {
   block_depth = 0;
 
@@ -1389,7 +1447,10 @@ final_start_function (rtx first ATTRIBUTE_UNUSED, FILE *file,
 
   high_block_linenum = high_function_linenum = last_linenum;
 
-  (*debug_hooks->begin_prologue) (last_linenum, last_filename);
+  /* APPLE LOCAL begin aaa */
+  if (!flag_save_repository || !flag_pch_file)
+    (*debug_hooks->begin_prologue) (last_linenum, last_filename);
+  /* APPLE LOCAL end aaa */
 
 #if defined (DWARF2_UNWIND_INFO) || defined (TARGET_UNWIND_INFO)
   if (write_symbols != DWARF2_DEBUG && write_symbols != VMS_AND_DWARF2_DEBUG)
@@ -1536,7 +1597,8 @@ final_end_function (void)
    For description of args, see `final_start_function', above.  */
 
 void
-final (rtx first, FILE *file, int optimize)
+/* APPLE LOCAL optimization pragmas 3124235/3420242 */
+final (rtx first, FILE *file, int optimizing)
 {
   rtx insn;
   int max_uid = 0;
@@ -1578,7 +1640,8 @@ final (rtx first, FILE *file, int optimize)
 #ifdef HAVE_cc0
       /* If CC tracking across branches is enabled, record the insn which
 	 jumps to each branch only reached from one place.  */
-      if (optimize && JUMP_P (insn))
+      /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+      if (optimizing && JUMP_P (insn))
 	{
 	  rtx lab = JUMP_LABEL (insn);
 	  if (lab && LABEL_NUSES (lab) == 1)
@@ -1608,7 +1671,8 @@ final (rtx first, FILE *file, int optimize)
 	insn_current_address = INSN_ADDRESSES (INSN_UID (insn));
 #endif /* HAVE_ATTR_length */
 
-      insn = final_scan_insn (insn, file, optimize, 0, &seen);
+      /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+      insn = final_scan_insn (insn, file, optimizing, 0, &seen);
     }
 }
 
@@ -1676,7 +1740,8 @@ output_alternate_entry_point (FILE *file, rtx insn)
    first.  */
 
 rtx
-final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
+/* APPLE LOCAL optimization pragmas 3124235/3420242 */
+final_scan_insn (rtx insn, FILE *file, int optimizing ATTRIBUTE_UNUSED,
 		 int nopeepholes ATTRIBUTE_UNUSED, int *seen)
 {
 #ifdef HAVE_cc0
@@ -1700,6 +1765,8 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 	case NOTE_INSN_FUNCTION_END:
 	case NOTE_INSN_REPEATED_LINE_NUMBER:
 	case NOTE_INSN_EXPECTED_VALUE:
+	/* APPLE LOCAL ARM 5051776 */
+	case NOTE_INSN_ALLOCA:
 	  break;
 
 	case NOTE_INSN_SWITCH_TEXT_SECTIONS:
@@ -1783,7 +1850,10 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 	      high_block_linenum = last_linenum;
 
 	      /* Output debugging info about the symbol-block beginning.  */
-	      (*debug_hooks->begin_block) (last_linenum, n);
+	      /* APPLE LOCAL begin aaa */
+	      if (!flag_save_repository || !flag_pch_file)
+		(*debug_hooks->begin_block) (last_linenum, n);
+	      /* APPLE LOCAL end aaa */
 
 	      /* Mark this block as output.  */
 	      TREE_ASM_WRITTEN (NOTE_BLOCK (insn)) = 1;
@@ -1805,7 +1875,10 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 	      --block_depth;
 	      gcc_assert (block_depth >= 0);
 
-	      (*debug_hooks->end_block) (high_block_linenum, n);
+	      /* APPLE LOCAL begin aaa */
+	      if (!flag_save_repository || !flag_pch_file)
+		(*debug_hooks->end_block) (high_block_linenum, n);
+	      /* APPLE LOCAL end aaa */
 	    }
 	  break;
 
@@ -1839,26 +1912,27 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
     case CODE_LABEL:
       /* The target port might emit labels in the output function for
 	 some insn, e.g. sh.c output_branchy_insn.  */
-      if (CODE_LABEL_NUMBER (insn) <= max_labelno)
-	{
-	  int align = LABEL_TO_ALIGNMENT (insn);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      {
+	int align = LABEL_ALIGN_LOG (insn);
 #ifdef ASM_OUTPUT_MAX_SKIP_ALIGN
-	  int max_skip = LABEL_TO_MAX_SKIP (insn);
+	int max_skip = LABEL_MAX_SKIP (insn);
 #endif
-
-	  if (align && NEXT_INSN (insn))
-	    {
+	
+	if (align && NEXT_INSN (insn))
+	  {
 #ifdef ASM_OUTPUT_MAX_SKIP_ALIGN
-	      ASM_OUTPUT_MAX_SKIP_ALIGN (file, align, max_skip);
+	    ASM_OUTPUT_MAX_SKIP_ALIGN (file, align, max_skip);
 #else
 #ifdef ASM_OUTPUT_ALIGN_WITH_NOP
-              ASM_OUTPUT_ALIGN_WITH_NOP (file, align);
+	    ASM_OUTPUT_ALIGN_WITH_NOP (file, align);
 #else
-	      ASM_OUTPUT_ALIGN (file, align);
+	    ASM_OUTPUT_ALIGN (file, align);
 #endif
 #endif
-	    }
-	}
+	  }
+      }
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 #ifdef HAVE_cc0
       CC_STATUS_INIT;
       /* If this label is reached from only one place, set the condition
@@ -1866,7 +1940,8 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 
       /* Disabled because some insns set cc_status in the C output code
 	 and NOTICE_UPDATE_CC alone can set incorrect status.  */
-      if (0 /* optimize && LABEL_NUSES (insn) == 1*/)
+      /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+      if (0 /* optimizing && LABEL_NUSES (insn) == 1*/)
 	{
 	  rtx jump = LABEL_REFS (insn);
 	  rtx barrier = prev_nonnote_insn (insn);
@@ -2058,7 +2133,10 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 	   note in a row.  */
 	if (notice_source_line (insn))
 	  {
-	    (*debug_hooks->source_line) (last_linenum, last_filename);
+	      /* APPLE LOCAL begin aaa */
+	      if (!flag_save_repository || !flag_pch_file)
+		(*debug_hooks->source_line) (last_linenum, last_filename);
+	      /* APPLE LOCAL end aaa */
 	  }
 
 	if (GET_CODE (body) == ASM_INPUT)
@@ -2190,7 +2268,8 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 	   and the next statement should reexamine the variable
 	   to compute the condition codes.  */
 
-	if (optimize)
+	/* APPLE LOCAL optimization pragmas 3124235/3420242 */
+	if (optimizing)
 	  {
 	    if (set
 		&& GET_CODE (SET_DEST (set)) == CC0
@@ -2331,7 +2410,8 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 #ifdef HAVE_peephole
 	/* Do machine-specific peephole optimizations if desired.  */
 
-	if (optimize && !flag_no_peephole && !nopeepholes)
+	/* APPLE LOCAL optimization pragmas 3124235/3420242 */
+	if (optimizing && !flag_no_peephole && !nopeepholes)
 	  {
 	    rtx next = peephole (insn);
 	    /* When peepholing, if there were notes within the peephole,
@@ -2342,7 +2422,8 @@ final_scan_insn (rtx insn, FILE *file, int optimize ATTRIBUTE_UNUSED,
 
 		for (note = NEXT_INSN (insn); note != next;
 		     note = NEXT_INSN (note))
-		  final_scan_insn (note, file, optimize, nopeepholes, seen);
+		  /* APPLE LOCAL optimization pragmas 3124235/3420242 */
+		  final_scan_insn (note, file, optimizing, nopeepholes, seen);
 
 		/* Put the notes in the proper position for a later
 		   rescan.  For example, the SH target can do this
@@ -3864,6 +3945,11 @@ debug_flush_symbol_queue (void)
     }
 
   symbol_queue_index = 0;
+/* APPLE LOCAL begin dbxout_type rewrite.  */
+#ifdef DBX_DEBUGGING_INFO
+  dbxout_flush_type_queue ();
+#endif
+/* APPLE LOCAL end dbxout_type rewrite.  */
   --debug_nesting;
 }
 
@@ -3950,7 +4036,10 @@ rest_of_handle_final (void)
      *will* be routed past here.  */
 
   timevar_push (TV_SYMOUT);
-  (*debug_hooks->function_decl) (current_function_decl);
+  /* APPLE LOCAL begin aaa */
+  if (!flag_save_repository || !flag_pch_file)
+    (*debug_hooks->function_decl) (current_function_decl);
+  /* APPLE LOCAL end aaa */
   timevar_pop (TV_SYMOUT);
   return 0;
 }
@@ -4041,6 +4130,16 @@ rest_of_clean_state (void)
   free_basic_block_vars ();
   free_bb_for_insn ();
 
+/* APPLE LOCAL begin radar 4216496, 4229407, 4120689, 4095567 */
+#ifdef TARGET_386
+  if (SAVE_PREFERRED_STACK_BOUNDARY > 0)
+    {
+      PREFERRED_STACK_BOUNDARY = SAVE_PREFERRED_STACK_BOUNDARY;
+      cfun->stack_alignment_needed = STACK_BOUNDARY;
+      cfun->preferred_stack_boundary = STACK_BOUNDARY;
+    }
+#endif
+/* APPLE LOCAL end radar 4216496, 4229407, 4120689, 4095567 */
 
   if (targetm.binds_local_p (current_function_decl))
     {

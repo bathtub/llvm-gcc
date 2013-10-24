@@ -51,6 +51,8 @@ Boston, MA 02110-1301, USA.  */
 #include "c-pragma.h"
 #include "tree-dump.h"
 #include "intl.h"
+/* APPLE LOCAL elide global inits 3814991 */
+#include "tree-iterator.h"
 
 extern cpp_reader *parse_in;
 
@@ -74,7 +76,8 @@ static tree start_static_storage_duration_function (unsigned);
 static void finish_static_storage_duration_function (tree);
 static priority_info get_priority_info (int);
 static void do_static_initialization_or_destruction (tree, bool);
-static void one_static_initialization_or_destruction (tree, tree, bool);
+/* APPLE LOCAL elide global inits 5642351 */
+static void one_static_initialization_or_destruction (tree, tree, bool, priority_info);
 static void generate_ctor_or_dtor_function (bool, int, location_t *);
 static int generate_ctor_and_dtor_functions_for_priority (splay_tree_node,
 							  void *);
@@ -1596,6 +1599,17 @@ constrain_visibility (tree decl, int visibility)
       DECL_VISIBILITY (decl) = visibility;
       return true;
     }
+  /* APPLE LOCAL begin constrain visibility for templates 5813435 */
+  else if (visibility > DECL_VISIBILITY (decl)
+	   && DECL_VISIBILITY_SPECIFIED (decl)
+	   && !lookup_attribute ("visibility", DECL_ATTRIBUTES (decl))
+	   && !lookup_attribute ("dllexport", DECL_ATTRIBUTES (decl)))
+    {
+      /* We also constrain implicit visibilities (for templates).  */
+      DECL_VISIBILITY (decl) = visibility;
+      return true;
+    }
+  /* APPLE LOCAL end constrain visibility for templates 5813435 */
   return false;
 }
 
@@ -1698,10 +1712,8 @@ determine_visibility (tree decl)
      class can influence the visibility of the DECL.  */
   if (DECL_CLASS_SCOPE_P (decl))
     class_type = DECL_CONTEXT (decl);
-  else if (TREE_CODE (decl) == VAR_DECL
-	   && DECL_TINFO_P (decl)
-	   && CLASS_TYPE_P (TREE_TYPE (DECL_NAME (decl))))
-    class_type = TREE_TYPE (DECL_NAME (decl));
+  /* APPLE LOCAL mainline 2007-06-14 5195787 */
+  /* Deleted 'else if'.  */
   else
     {
       /* Not a class member.  */
@@ -1730,6 +1742,22 @@ determine_visibility (tree decl)
 	     but have no TEMPLATE_INFO, so don't try to check it.  */
 	  use_template = 0;
 	}
+      /* APPLE LOCAL begin mainline 2007-06-28 ms tinfo compat 4230099 */
+      else if (TREE_CODE (decl) == VAR_DECL && DECL_TINFO_P (decl)
+	       && flag_visibility_ms_compat)
+	{
+	  tree underlying_type = TREE_TYPE (DECL_NAME (decl));
+	  int underlying_vis = type_visibility (underlying_type);
+	  if (underlying_vis == VISIBILITY_ANON
+	      /* APPLE LOCAL begin 6983171 */
+	      || (TREE_CODE (underlying_type) == RECORD_TYPE
+		  && CLASSTYPE_VISIBILITY_SPECIFIED (underlying_type)))
+	      /* APPLE LOCAL end 6983171 */
+	    constrain_visibility (decl, underlying_vis);
+	  else
+	    DECL_VISIBILITY (decl) = VISIBILITY_DEFAULT;
+	}
+      /* APPLE LOCAL end mainline 2007-06-28 ms tinfo compat 4230099 */
       else if (TREE_CODE (decl) == VAR_DECL && DECL_TINFO_P (decl))
 	{
 	  /* tinfo visibility is based on the type it's for.  */
@@ -1787,7 +1815,10 @@ determine_visibility (tree decl)
     {
       /* Propagate anonymity from type to decl.  */
       int tvis = type_visibility (TREE_TYPE (decl));
-      if (tvis == VISIBILITY_ANON)
+      /* APPLE LOCAL begin mainline 2007-06-14 4471483 */
+      if (tvis == VISIBILITY_ANON
+	  || ! DECL_VISIBILITY_SPECIFIED (decl))
+	/* APPLE LOCAL end mainline 2007-06-14 4471483 */
 	constrain_visibility (decl, tvis);
     }
 }
@@ -1860,9 +1891,14 @@ constrain_class_visibility (tree type)
 	int subvis = type_visibility (ftype);
 
 	if (subvis == VISIBILITY_ANON)
-	  warning (0, "\
+          /* APPLE LOCAL begin mainline radar 6194879 */
+	  {
+	    if (!in_main_input_context ())
+	      warning (0, "\
 %qT has a field %qD whose type uses the anonymous namespace",
 		   type, t);
+	  }
+          /* APPLE LOCAL end mainline radar 6194879 */
 	else if (IS_AGGR_TYPE (ftype)
 		 && vis < VISIBILITY_HIDDEN
 		 && subvis >= VISIBILITY_HIDDEN)
@@ -1877,9 +1913,14 @@ constrain_class_visibility (tree type)
       int subvis = type_visibility (TREE_TYPE (t));
 
       if (subvis == VISIBILITY_ANON)
-	warning (0, "\
+        /* APPLE LOCAL begin mainline radar 6194879 */
+        {
+	  if (!in_main_input_context())
+	    warning (0, "\
 %qT has a base %qT whose type uses the anonymous namespace",
 		 type, TREE_TYPE (t));
+	}
+        /* APPLE LOCAL end mainline radar 6194879 */
       else if (vis < VISIBILITY_HIDDEN
 	       && subvis >= VISIBILITY_HIDDEN)
 	warning (OPT_Wattributes, "\
@@ -1887,6 +1928,27 @@ constrain_class_visibility (tree type)
 		 type, TREE_TYPE (t));
     }
 }
+
+/* APPLE LOCAL begin weak types 5954418 */
+static bool
+typeinfo_comdat (tree type)
+{
+  tree binfo, base_binfo;
+  int j;
+
+  if (lookup_attribute ("weak", TYPE_ATTRIBUTES (type)))
+    return true;
+  
+  for (binfo = TYPE_BINFO (type), j = 0;
+       BINFO_BASE_ITERATE (binfo, j, base_binfo); ++j)
+    {
+      if (typeinfo_comdat (BINFO_TYPE (base_binfo)))
+	return true;
+    }
+
+  return false;
+}
+/* APPLE LOCAL end weak types 5954418 */
 
 /* DECL is a FUNCTION_DECL or VAR_DECL.  If the object file linkage
    for DECL has not already been determined, do so now by setting
@@ -2084,7 +2146,10 @@ import_export_decl (tree decl)
 		{
 		  comdat_p = (targetm.cxx.class_data_always_comdat ()
 			      || (CLASSTYPE_KEY_METHOD (type)
-				  && DECL_DECLARED_INLINE_P (CLASSTYPE_KEY_METHOD (type))));
+				  /* APPLE LOCAL begin weak types 5954418 */
+				  && DECL_DECLARED_INLINE_P (CLASSTYPE_KEY_METHOD (type)))
+			      || typeinfo_comdat (type));
+		  /* APPLE LOCAL end weak types 5954418 */
 		  mark_needed (decl);
 		  if (!flag_weak)
 		    {
@@ -2320,7 +2385,9 @@ start_objects (int method_type, int initp)
     sprintf (type, "%c", method_type);
 
   fndecl = build_lang_decl (FUNCTION_DECL,
-			    get_file_function_name_long (type),
+/* APPLE LOCAL begin mainline 2006-11-01 5125268 */ \
+			    get_file_function_name (type),
+/* APPLE LOCAL end mainline 2006-11-01 5125268 */ \
 			    build_function_type (void_type_node,
 						 void_list_node));
   start_preparsed_function (fndecl, /*attrs=*/NULL_TREE, SF_PRE_PARSED);
@@ -2328,6 +2395,12 @@ start_objects (int method_type, int initp)
   /* It can be a static function as long as collect2 does not have
      to scan the object file to find its ctor/dtor routine.  */
   TREE_PUBLIC (current_function_decl) = ! targetm.have_ctors_dtors;
+
+  /* APPLE LOCAL begin mainline 4.3 2007-06-28 4992129 */
+  /* Mark as artificial because it's not explicitly in the user's
+     source code.  */
+  DECL_ARTIFICIAL (current_function_decl) = 1;
+  /* APPLE LOCAL end mainline 4.3 2007-06-28 4992129 */
 
   /* Mark this declaration as used to avoid spurious warnings.  */
   TREE_USED (current_function_decl) = 1;
@@ -2338,6 +2411,15 @@ start_objects (int method_type, int initp)
   else
     DECL_GLOBAL_DTOR_P (current_function_decl) = 1;
   DECL_LANG_SPECIFIC (current_function_decl)->decl_flags.u2sel = 1;
+
+  /* APPLE LOCAL begin static structors in __StaticInit section */
+#ifdef STATIC_INIT_SECTION
+  /* What should we do for kextabi == 2? */
+  if (!TARGET_KEXTABI)
+    DECL_SECTION_NAME (current_function_decl) = 
+      build_string (strlen (STATIC_INIT_SECTION), STATIC_INIT_SECTION);
+#endif
+  /* APPLE LOCAL end static structors in __StaticInit section */
 
   body = begin_compound_stmt (BCS_FN_BODY);
 
@@ -2445,6 +2527,15 @@ start_static_storage_duration_function (unsigned count)
 			       type);
   TREE_PUBLIC (ssdf_decl) = 0;
   DECL_ARTIFICIAL (ssdf_decl) = 1;
+
+  /* APPLE LOCAL begin static structors in __StaticInit section */
+#ifdef STATIC_INIT_SECTION
+  /* What should we do for kextabi == 2? */
+  if (!TARGET_KEXTABI)
+    DECL_SECTION_NAME (ssdf_decl) = build_string (strlen (STATIC_INIT_SECTION),
+						  STATIC_INIT_SECTION);
+#endif
+  /* APPLE LOCAL end static structors in __StaticInit section */
 
   /* Put this function in the list of functions to be called from the
      static constructors and destructors.  */
@@ -2556,16 +2647,154 @@ get_priority_info (int priority)
 /* Whether a DECL needs a guard to protect it against multiple
    initialization.  */
 
+/* APPLE LOCAL begin Radar 4539933 */
+/* Need guard variables for explicitly instantiated templated
+   static data (darwin only) */
 #define NEEDS_GUARD_P(decl) (TREE_PUBLIC (decl) && (DECL_COMMON (decl)      \
 						    || DECL_ONE_ONLY (decl) \
-						    || DECL_WEAK (decl)))
+						    || DECL_WEAK (decl) \
+						    || (TARGET_WEAK_NOT_IN_ARCHIVE_TOC && DECL_LANG_SPECIFIC (decl) \
+							&& (DECL_EXPLICIT_INSTANTIATION (decl) \
+							    ||  DECL_TEMPLATE_SPECIALIZATION (decl)))))
+/* APPLE LOCAL end Radar 4539933 */
+
+/* APPLE LOCAL begin elide global inits 3814991 */
+/* Return true if the tree is proved to do nothing (have no lasting
+   side effects).
+
+   Ideally, we'd like for the backend to obviate most of this code,
+   such as folding and empty statement lists inside BIND_EXPRs and so
+   on, but until they do, we should handle them here.  */
+
+static bool
+does_nothing_p (tree exp)
+{
+  tree_stmt_iterator i;
+  
+  if (exp == NULL_TREE)
+    return true;
+  if (TREE_CODE (exp) == STATEMENT_LIST)
+    {
+      for (i = tsi_start (exp); !tsi_end_p (i); tsi_next (&i))
+	{
+	  if (!does_nothing_p (*tsi_stmt_ptr (i)))
+	    return false;
+	}
+      return true;
+    }
+  else if (TREE_CODE (exp) == CALL_EXPR)
+    {
+      tree decl = NULL_TREE;
+      if (TREE_CODE (TREE_OPERAND (exp, 0)) == ADDR_EXPR
+	  && (TREE_CODE (decl = TREE_OPERAND (TREE_OPERAND (exp, 0), 0))
+	      == FUNCTION_DECL))
+	{
+	  if (TREE_OPERAND (exp, 1))
+	    {
+	      if (TREE_CODE (TREE_OPERAND (exp, 1)) != TREE_LIST)
+		return false;
+	      if (TREE_CHAIN (TREE_OPERAND (exp, 1)))
+		return false;
+	      if (TREE_SIDE_EFFECTS (TREE_VALUE (TREE_OPERAND (exp, 1))))
+		return false;
+	    }	      	    
+
+	  if (DECL_UNINLINABLE (decl))
+	    return false;
+
+	  /* Avoid inlining if -fno-inline is in effect when
+	     optimiing, unless of course always_inline is given.  */
+	  if (!((flag_inline_trees || !flag_no_inline) && !flag_really_no_inline)
+	      && !lookup_attribute ("always_inline", DECL_ATTRIBUTES (decl)))
+	    return false;
+
+	  exp = DECL_SAVED_TREE (decl);
+
+	  if (!exp)
+	    return false;
+
+	  return does_nothing_p (exp);
+	}
+
+      /* Other forms of CALL_EXPRs.  */
+      return false;
+    }
+  else if (TREE_CODE (exp) == EXPR_STMT)
+    return does_nothing_p (TREE_OPERAND (exp, 0));
+  else if (TREE_CODE (exp) == BIND_EXPR)
+    return does_nothing_p (BIND_EXPR_BODY (exp));
+  else if (TREE_CODE (exp) == MODIFY_EXPR)
+    {
+      bool was_set_zero = (integer_zerop (TREE_OPERAND (exp, 1))
+			   || real_zerop (TREE_OPERAND (exp, 1)));
+
+      if (TREE_SIDE_EFFECTS (TREE_OPERAND (exp, 1)))
+	return false;
+      exp = TREE_OPERAND (exp, 0);
+      if (TREE_SIDE_EFFECTS (exp))
+	return false;
+      if (TREE_CODE (exp) != VAR_DECL)
+	{
+	  /* Modifications of this object with zero don't count either
+	     as all objects initialized by file scope constructors are
+	     required to be zero initialized first.  */
+	  if (was_set_zero
+	      && TREE_CODE (exp) == COMPONENT_REF
+	      && !TREE_SIDE_EFFECTS (exp)
+	      && TREE_CODE (TREE_OPERAND (exp, 1)) == FIELD_DECL
+	      && TREE_CODE (exp=TREE_OPERAND (exp, 0)) == INDIRECT_REF
+	      && TREE_CODE (exp=TREE_OPERAND (exp, 0)) == PARM_DECL
+	      && DECL_NAME (exp) == this_identifier)
+	    return true;
+	    
+	  return false;
+	}
+      if (TREE_STATIC (exp))
+	return false;
+
+      /* Modifications of stack variables without side-effects don't
+	 count as side effects.  */
+      return true;
+    }
+  else if (TREE_CODE (exp) == COND_EXPR)
+    {
+      tree cond = TREE_OPERAND (exp, 0);
+      cond = fold (cond);
+      if (integer_onep (cond))
+	return does_nothing_p (TREE_OPERAND (exp, 1));
+      else if (integer_zerop (cond))
+	return does_nothing_p (TREE_OPERAND (exp, 2));
+    }
+  else if (TREE_CODE (exp) == TRY_CATCH_EXPR)
+    return does_nothing_p (TREE_OPERAND (exp, 0));
+
+  return false;
+}
+/* APPLE LOCAL end elide global inits 3814991 */
+
+/* APPLE LOCAL begin Wglobal-constructors 6324584 */
+static void
+warn_init (tree decl)
+{
+  warning (OPT_Wglobal_constructors, "%J%qD requires global construction", decl, decl);
+}
+
+static void
+warn_deinit (tree decl)
+{
+  warning (OPT_Wglobal_constructors, "%J%qD requires global destruction", decl, decl);
+}
+/* APPLE LOCAL end Wglobal-constructors 6324584 */
 
 /* Set up to handle the initialization or destruction of DECL.  If
    INITP is nonzero, we are initializing the variable.  Otherwise, we
    are destroying it.  */
 
 static void
-one_static_initialization_or_destruction (tree decl, tree init, bool initp)
+/* APPLE LOCAL begin elide global inits 5642351 */
+one_static_initialization_or_destruction (tree decl, tree init, bool initp,
+					  priority_info pi)
+/* APPLE LOCAL end elide global inits 5642351 */
 {
   tree guard_if_stmt = NULL_TREE;
   tree guard;
@@ -2612,6 +2841,22 @@ one_static_initialization_or_destruction (tree decl, tree init, bool initp)
 
       guard = get_guard (decl);
 
+      /* APPLE LOCAL begin elide global inits 5642351 */
+      /* We can't avoid running the guard code.  */
+      if (initp)
+	{
+	  pi->initializations_p = 1;
+	  /* APPLE LOCAL Wglobal-constructors 6324584 */
+	  warn_init (decl);
+	}
+      else
+	{
+	  pi->destructions_p = 1;
+	  /* APPLE LOCAL Wglobal-constructors 6324584 */
+	  warn_deinit (decl);
+	}
+      /* APPLE LOCAL end elide global inits 5642351 */
+
       /* When using __cxa_atexit, we just check the GUARD as we would
 	 for a local static.  */
       if (flag_use_cxa_atexit)
@@ -2657,15 +2902,42 @@ one_static_initialization_or_destruction (tree decl, tree init, bool initp)
   if (initp)
     {
       if (init)
-	finish_expr_stmt (init);
+	/* APPLE LOCAL begin elide global inits 3814991 5642351 */
+	{
+	  if (!does_nothing_p (init))
+	    {
+	      pi->initializations_p = 1;
+	      /* APPLE LOCAL Wglobal-constructors 6324584 */
+	      if (!guard) warn_init (decl);
+	      finish_expr_stmt (init);
+	    }
+	}
+	/* APPLE LOCAL end elide global inits 3814991 5642351 */
 
       /* If we're using __cxa_atexit, register a function that calls the
 	 destructor for the object.  */
       if (flag_use_cxa_atexit)
-	finish_expr_stmt (register_dtor_fn (decl));
+	/* APPLE LOCAL begin elide global inits 5642351 */
+	{
+	  pi->initializations_p = 1;
+	  /* APPLE LOCAL begin Wglobal-constructors 6324584 */
+	  if (!guard
+	      && !TYPE_HAS_TRIVIAL_DESTRUCTOR (TREE_TYPE (decl)))
+	    warn_deinit (decl);
+	  /* APPLE LOCAL end Wglobal-constructors 6324584 */
+	  finish_expr_stmt (register_dtor_fn (decl));
+	}
+      /* APPLE LOCAL end global inits 5642351 */
     }
   else
-    finish_expr_stmt (build_cleanup (decl));
+    /* APPLE LOCAL begin elide global inits 5642351 */
+    {
+      pi->destructions_p = 1;
+      /* APPLE LOCAL Wglobal-constructors 6324584 */
+      if (!guard) warn_deinit (decl);
+      finish_expr_stmt (build_cleanup (decl));
+    }
+  /* APPLE LOCAL end global inits 5642351 */
 
   /* Finish the guard if-stmt, if necessary.  */
   if (guard)
@@ -2716,10 +2988,9 @@ do_static_initialization_or_destruction (tree vars, bool initp)
        priority.  */
     priority = DECL_EFFECTIVE_INIT_PRIORITY (decl);
     pi = get_priority_info (priority);
-    if (initp)
-      pi->initializations_p = 1;
-    else
-      pi->destructions_p = 1;
+    /* APPLE LOCAL begin elide global inits 5642351 */
+    /* removed pi->initializations_p and destructions_p setting */
+    /* APPLE LOCAL end elide global inits 5642351 */
 
     /* Conditionalize this initialization on being in the right priority
        and being initializing/finalizing appropriately.  */
@@ -2735,7 +3006,8 @@ do_static_initialization_or_destruction (tree vars, bool initp)
 	 node = TREE_CHAIN (node))
       /* Do one initialization or destruction.  */
       one_static_initialization_or_destruction (TREE_VALUE (node),
-						TREE_PURPOSE (node), initp);
+						/* APPLE LOCAL elide global inits 5642351 */
+						TREE_PURPOSE (node), initp, pi);
 
     /* Finish up the priority if-stmt body.  */
     finish_then_clause (priority_if_stmt);
@@ -2794,6 +3066,20 @@ prune_vars_needing_no_initialization (tree *vars)
 	  var = &TREE_CHAIN (t);
 	  continue;
 	}
+
+      /* APPLE LOCAL begin elide global inits 3814991 */
+      /* If the initializer does nothing of interest, don't create the
+	 expense of a global constructor.  */
+      if (init
+	  && does_nothing_p (init)
+	  && TYPE_HAS_TRIVIAL_DESTRUCTOR (TREE_TYPE (decl))
+	  /* If we have guards, ensure we run them.  */
+	  && !NEEDS_GUARD_P (decl))
+	{
+	  var = &TREE_CHAIN (t);
+	  continue;
+	}
+      /* APPLE LOCAL end elide global inits 3814991 */
 
       /* This variable is going to need initialization and/or
 	 finalization, so we add it to the list.  */
@@ -2860,6 +3146,10 @@ generate_ctor_or_dtor_function (bool constructor_p, int priority,
     {
       body = start_objects (function_key, priority);
       static_ctors = objc_generate_static_init_call (static_ctors);
+      /* APPLE LOCAL begin Wglobal-constructors 6324584 */
+      warning (OPT_Wglobal_constructors,
+	       "GNU Objective-C runtime requires global initialization");
+      /* APPLE LOCAL end Wglobal-constructors 6324584 */
     }
 
   /* Call the static storage duration function with appropriate
@@ -2894,6 +3184,13 @@ generate_ctor_or_dtor_function (bool constructor_p, int priority,
 	   fns = TREE_CHAIN (fns))
 	{
 	  fndecl = TREE_VALUE (fns);
+
+	  /* APPLE LOCAL begin Wglobal-constructors 6324584 */
+	  if (constructor_p)
+	    warn_init (fndecl);
+	  else
+	    warn_deinit (fndecl);
+	  /* APPLE LOCAL end Wglobal-constructors 6324584 */
 
 	  /* Calls to pure/const functions will expand to nothing.  */
 	  if (! (flags_from_decl_or_type (fndecl) & (ECF_CONST | ECF_PURE)))
@@ -3023,6 +3320,10 @@ build_java_method_aliases (void)
     }
 }
 
+/* APPLE LOCAL begin radar 4721858 */
+static void emit_deferred (location_t *);
+/* APPLE LOCAL end radar 4721858 */
+
 /* This routine is called from the last rule in yyparse ().
    Its job is to create all the code needed to initialize and
    destroy the global aggregates.  We do the destruction
@@ -3031,13 +3332,9 @@ build_java_method_aliases (void)
 void
 cp_finish_file (void)
 {
-  tree vars;
-  bool reconsider;
-  size_t i;
+  /* APPLE LOCAL begin radar 4721858 */
   location_t locus;
-  unsigned ssdf_count = 0;
-  int retries = 0;
-  tree decl;
+  /* APPLE LOCAL end radar 4721858 */
 
   locus = input_location;
   at_eof = 1;
@@ -3046,8 +3343,8 @@ cp_finish_file (void)
   if (! global_bindings_p () || current_class_type || decl_namespace_list)
     return;
 
-  if (pch_file)
-    c_common_write_pch ();
+  /* APPLE LOCAL radar 4874613 */
+  /* dump of pch file moved to c_parse_file (). */
 
 #ifdef USE_MAPPED_LOCATION
   /* FIXME - huh? */
@@ -3076,6 +3373,29 @@ cp_finish_file (void)
   timevar_push (TV_VARCONST);
 
   emit_support_tinfos ();
+
+/* APPLE LOCAL begin radar 4721858 */
+  emit_instantiate_pending_templates (&locus);
+
+  emit_deferred (&locus);
+}
+
+/* This routine emits pending functions and instatiates pending templates
+   as more opportunities arises. */
+
+void
+emit_instantiate_pending_templates (location_t *locusp)
+{
+  tree vars;
+  bool reconsider;
+  size_t i;
+  unsigned ssdf_count = 0;
+  int retries = 0;
+
+  /* APPLE LOCAL radar 4874626 */
+  /* initialization removed. */
+  at_eof = 1;
+/* APPLE LOCAL end radar 4721858 */
 
   do
     {
@@ -3154,7 +3474,8 @@ cp_finish_file (void)
 
 	  /* Set the line and file, so that it is obviously not from
 	     the source file.  */
-	  input_location = locus;
+	  /* APPLE LOCAL radar 4721858 */
+	  input_location = *locusp;
 	  ssdf_body = start_static_storage_duration_function (ssdf_count);
 
 	  /* Make sure the back end knows about all the variables.  */
@@ -3180,7 +3501,8 @@ cp_finish_file (void)
 
 	  /* Finish up the static storage duration function for this
 	     round.  */
-	  input_location = locus;
+	  /* APPLE LOCAL radar 4721858 */
+	  input_location = *locusp;
 	  finish_static_storage_duration_function (ssdf_body);
 
 	  /* All those initializations and finalizations might cause
@@ -3191,7 +3513,8 @@ cp_finish_file (void)
 #ifdef USE_MAPPED_LOCATION
 	  /* ??? */
 #else
-	  locus.line++;
+	  /* APPLE LOCAL radar 4721858 */
+	  locusp->line++;
 #endif
 	}
 
@@ -3280,6 +3603,22 @@ cp_finish_file (void)
 	     back end.  */
 	  if (DECL_NOT_REALLY_EXTERN (decl) && decl_needed_p (decl))
 	    DECL_EXTERNAL (decl) = 0;
+	  /* APPLE LOCAL begin  write used class statics  20020226 --turly  */
+#ifdef MACHOPIC_VAR_REFERRED_TO_P
+	  else
+	  if (TREE_USED (decl) && DECL_INITIAL (decl) != 0
+	      && DECL_INITIAL (decl) != error_mark_node
+	      && TREE_CODE (DECL_INITIAL (decl)) != CONSTRUCTOR
+	      && DECL_EXTERNAL (decl)
+	      && MACHOPIC_VAR_REFERRED_TO_P (IDENTIFIER_POINTER (
+						DECL_ASSEMBLER_NAME (decl))))
+	    {
+	      /* Force a local copy of this decl to be written.  */
+	      DECL_EXTERNAL (decl) = 0;
+	      TREE_PUBLIC (decl) = 0;
+	    }
+#endif
+	  /* APPLE LOCAL end  write used class statics  20020226 --turly  */
 	}
       if (VEC_length (tree, pending_statics) != 0
 	  && wrapup_global_declarations (VEC_address (tree, pending_statics),
@@ -3289,7 +3628,16 @@ cp_finish_file (void)
       retries++;
     }
   while (reconsider);
+/* APPLE LOCAL begin radar 4721858 */
+}
 
+static void
+emit_deferred (location_t *locusp)
+{
+  size_t i;
+  tree decl;
+  bool reconsider = false;
+/* APPLE LOCAL end radar 4721858 */
   /* All used inline functions must have a definition at this point.  */
   for (i = 0; VEC_iterate (tree, deferred_fns, i, decl); ++i)
     {
@@ -3320,17 +3668,20 @@ cp_finish_file (void)
   if (priority_info_map)
     splay_tree_foreach (priority_info_map,
 			generate_ctor_and_dtor_functions_for_priority,
-			/*data=*/&locus);
+			/* APPLE LOCAL radar 4721858 */
+			/*data=*/locusp);
   else
     {
       /* If we have a ctor or this is obj-c++ and we need a static init,
 	 call generate_ctor_or_dtor_function.  */
       if (static_ctors || (c_dialect_objc () && objc_static_init_needed_p ()))
 	generate_ctor_or_dtor_function (/*constructor_p=*/true,
-					DEFAULT_INIT_PRIORITY, &locus);
+					/* APPLE LOCAL radar 4721858 */
+					DEFAULT_INIT_PRIORITY, locusp);
       if (static_dtors)
 	generate_ctor_or_dtor_function (/*constructor_p=*/false,
-					DEFAULT_INIT_PRIORITY, &locus);
+					/* APPLE LOCAL radar 4721858 */
+					DEFAULT_INIT_PRIORITY, locusp);
     }
 
   /* We're done with the splay-tree now.  */
@@ -3383,7 +3734,8 @@ cp_finish_file (void)
       dump_tree_statistics ();
       dump_time_statistics ();
     }
-  input_location = locus;
+  /* APPLE LOCAL radar 4721858 */
+  input_location = *locusp;
 
 #ifdef ENABLE_CHECKING
   validate_conversion_obstack ();

@@ -47,14 +47,25 @@ obj-c++: cc1objplus$(exeext)
 # headers accessible.
 objcp-warn = $(STRICT_WARN) -DOBJCPLUS -I$(srcdir)/objc -I$(srcdir)/cp
 
+# APPLE LOCAL begin order files  --ilr
+ifeq ($(ORDER_FILES),yes)
+CC1OBJPLUS_ORDER_FLAGS = `if [ -f $(srcdir)/../order-files/cc1objplus.order ]; then \
+		           echo -sectorder __TEXT __text $(srcdir)/../order-files/cc1objplus.order -e start ; fi`
+else
+CC1OBJPLUS_ORDER_FLAGS =
+endif
+# APPLE LOCAL end order files  --ilr
+
 # Language-specific object files for Objective C++.
 OBJCXX_OBJS = objcp/objcp-act.o objcp/objcp-lang.o objcp/objcp-decl.o \
    $(CXX_AND_OBJCXX_OBJS)
 
+# APPLE LOCAL begin order files  --ilr
 cc1objplus-dummy$(exeext): $(OBJCXX_OBJS) dummy-checksum.o $(BACKEND) \
 		$(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
-		$(OBJCXX_OBJS) dummy-checksum.o $(BACKEND) $(LIBS)
+		$(OBJCXX_OBJS) dummy-checksum.o $(BACKEND) $(LIBS) \
+		$(CC1OBJPLUS_ORDER_FLAGS)
 
 cc1objplus-checksum.c : cc1objplus-dummy$(exeext) build/genchecksum$(build_exeext)
 	build/genchecksum$(build_exeext) cc1objplus-dummy$(exeext) > $@
@@ -63,7 +74,9 @@ cc1objplus-checksum.o : cc1objplus-checksum.c
 
 cc1objplus$(exeext): $(OBJCXX_OBJS) cc1objplus-checksum.o $(BACKEND) $(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
-		$(OBJCXX_OBJS) cc1objplus-checksum.o $(BACKEND) $(LIBS)
+		$(OBJCXX_OBJS) cc1objplus-checksum.o $(BACKEND) $(LIBS) \
+		$(CC1OBJPLUS_ORDER_FLAGS)
+# APPLE LOCAL end order files  --ilr
 
 # Objective C++ language specific files.
 

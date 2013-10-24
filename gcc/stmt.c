@@ -136,9 +136,19 @@ label_rtx (tree label)
   if (!DECL_RTL_SET_P (label))
     {
       rtx r = gen_label_rtx ();
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      unsigned align = DECL_ALIGN_UNIT (label);
+      int align_log2 = exact_log2 (align);
+      
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       SET_DECL_RTL (label, r);
       if (FORCED_LABEL (label) || DECL_NONLOCAL (label))
 	LABEL_PRESERVE_P (r) = 1;
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+
+      if (align_log2 >= 0 && align_log2 <= 0xFF)
+	SET_LABEL_ALIGN (r, align_log2, align - 1);
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
     }
 
   return DECL_RTL (label);
@@ -194,11 +204,12 @@ expand_computed_goto (tree exp)
 /* Specify the location in the RTL code of a label LABEL,
    which is a LABEL_DECL tree node.
 
-   This is used for the kind of label that the user can jump to with a
-   goto statement, and for alternatives of a switch or case statement.
-   RTL labels generated for loops and conditionals don't go through here;
-   they are generated directly at the RTL level, by other functions below.
+   APPLE LOCAL begin for-fsf-4_4 3274130 5295549
+   This is used for those labels created by the front-end that survive
+   through CFG generation, including all user labels.  (Some labels
+   are removed by cleanup_dead_labels in tree-cfg.c.)
 
+   APPLE LOCAL end for-fsf-4_4 3274130 5295549
    Note that this has nothing to do with defining label *names*.
    Languages vary in how they do that and what that even means.  */
 
@@ -640,15 +651,19 @@ tree_conflicts_with_clobbers_p (tree t, HARD_REG_SET *clobbered_regs)
 
    VOL nonzero means the insn is volatile; don't optimize it.  */
 
+/* APPLE LOCAL begin CW asm blocks */
 static void
 expand_asm_operands (tree string, tree outputs, tree inputs,
-		     tree clobbers, int vol, location_t locus)
+		     tree clobbers, int vol, tree uses, location_t locus)
+/* APPLE LOCAL end CW asm blocks */
 {
   rtvec argvec, constraintvec;
   rtx body;
   int ninputs = list_length (inputs);
   int noutputs = list_length (outputs);
   int ninout;
+  /* APPLE LOCAL CW asm blocks */
+  int nuses = 0;
   int nclobbers;
   HARD_REG_SET clobbered_regs;
   int clobber_conflict_found = 0;
@@ -709,7 +724,12 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
       if (i >= 0)
         {
 	  /* Clobbering the PIC register is an error.  */
-	  if (i == (int) PIC_OFFSET_TABLE_REGNUM)
+	  /* APPLE LOCAL begin CW asm blocks */
+	  /* Clobbering of PIC register is allowed in CW asm block.
+	     We check this condition by checking value of 'uses'.
+	     'uses' is non-null for a CW asm expression only. */
+	  if (uses == NULL && i == (int) PIC_OFFSET_TABLE_REGNUM)
+	  /* APPLE LOCAL end CW asm blocks */
 	    {
 	      error ("PIC register %qs clobbered in %<asm%>", regname);
 	      return;
@@ -943,6 +963,18 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
       generating_concat_p = old_generating_concat_p;
       ASM_OPERANDS_INPUT (body, i) = op;
 
+      /* APPLE LOCAL begin CW asm blocks */
+      /* Crude way of detecting an entry static label declaration 
+	 (See iasm_entry).  Make this a local symbol. */
+      if (i == 0 && !TREE_CHAIN (tail) 
+	  && strcmp (TREE_STRING_POINTER (string), "%0:") == 0
+	  && GET_CODE (op) == SYMBOL_REF)
+        {
+	  SYMBOL_REF_FLAGS (op) |= SYMBOL_FLAG_LOCAL;
+          SYMBOL_REF_FLAGS (op) &= ~SYMBOL_FLAG_EXTERNAL;
+        }
+      /* APPLE LOCAL end CW asm blocks */
+
       ASM_OPERANDS_INPUT_CONSTRAINT_EXP (body, i)
 	= gen_rtx_ASM_INPUT (TYPE_MODE (type), 
 			     ggc_strdup (constraints[i + noutputs]));
@@ -970,6 +1002,10 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
 	= gen_rtx_ASM_INPUT (inout_mode[i], ggc_strdup (buffer));
     }
 
+    /* APPLE LOCAL begin CW asm blocks */
+    for (tail = uses; tail; tail = TREE_CHAIN (tail))
+      nuses++;
+    /* APPLE LOCAL end CW asm blocks */
   generating_concat_p = old_generating_concat_p;
 
   /* Now, for each output, construct an rtx
@@ -977,13 +1013,15 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
 			       ARGVEC CONSTRAINTS OPNAMES))
      If there is more than one, put them inside a PARALLEL.  */
 
-  if (noutputs == 1 && nclobbers == 0)
+  /* APPLE LOCAL CW asm blocks */
+  if (noutputs == 1 && nclobbers == 0 && nuses == 0)
     {
       ASM_OPERANDS_OUTPUT_CONSTRAINT (body) = ggc_strdup (constraints[0]);
       emit_insn (gen_rtx_SET (VOIDmode, output_rtx[0], body));
     }
 
-  else if (noutputs == 0 && nclobbers == 0)
+  /* APPLE LOCAL CW asm blocks */
+  else if (noutputs == 0 && nclobbers == 0 && nuses == 0)
     {
       /* No output operands: put in a raw ASM_OPERANDS rtx.  */
       emit_insn (body);
@@ -997,7 +1035,8 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
       if (num == 0)
 	num = 1;
 
-      body = gen_rtx_PARALLEL (VOIDmode, rtvec_alloc (num + nclobbers));
+      /* APPLE LOCAL CW asm blocks */
+      body = gen_rtx_PARALLEL (VOIDmode, rtvec_alloc (num + nclobbers + nuses));
 
       /* For each output operand, store a SET.  */
       for (i = 0, tail = outputs; tail; tail = TREE_CHAIN (tail), i++)
@@ -1073,6 +1112,17 @@ expand_asm_operands (tree string, tree outputs, tree inputs,
 	    = gen_rtx_CLOBBER (VOIDmode, clobbered_reg);
 	}
 
+      /* APPLE LOCAL begin CW asm blocks */
+      for (tail = uses; tail; tail = TREE_CHAIN (tail))
+        {
+          int regno;
+          rtx rtx_reg;
+          const char *use_regname = TREE_STRING_POINTER (TREE_VALUE (tail));
+          regno = decode_reg_name (use_regname);
+          rtx_reg = gen_rtx_REG (QImode, regno);
+	  XVECEXP (body, 0, i++) = gen_rtx_USE (VOIDmode, rtx_reg);
+        }
+      /* APPLE LOCAL end CW asm blocks */
       emit_insn (body);
     }
 
@@ -1111,6 +1161,8 @@ expand_asm_expr (tree exp)
      OUTPUTS some trees for where the values were actually stored.  */
   expand_asm_operands (ASM_STRING (exp), outputs, ASM_INPUTS (exp),
 		       ASM_CLOBBERS (exp), ASM_VOLATILE_P (exp),
+  /* APPLE LOCAL CW asm blocks */
+		       ASM_USES (exp),
 		       input_location);
 
   /* Copy all the intermediate outputs into the specified outputs.  */
@@ -1675,7 +1727,10 @@ expand_return (tree retval)
 	  store_bit_field (dst, bitsize, xbitpos % BITS_PER_WORD, word_mode,
 			   extract_bit_field (src, bitsize,
 					      bitpos % BITS_PER_WORD, 1,
-					      NULL_RTX, word_mode, word_mode));
+			   /* APPLE LOCAL begin 6020402 */
+					      NULL_RTX, word_mode, word_mode),
+			   NULL_TREE);
+			   /* APPLE LOCAL end 6020402 */
 	}
 
       tmpmode = GET_MODE (result_rtl);
@@ -2332,6 +2387,8 @@ expand_case (tree exp)
   /* Label to jump to if no case matches.  */
   tree default_label_decl;
 
+  /* APPLE LOCAL ARM switch tables 6288519 */
+  bool have_casesi;
   /* The switch body is lowered in gimplify.c, we should never have
      switches with a non-NULL SWITCH_BODY here.  */
   gcc_assert (!SWITCH_BODY (exp));
@@ -2426,6 +2483,8 @@ expand_case (tree exp)
       /* Compute span of values.  */
       range = fold_build2 (MINUS_EXPR, index_type, maxval, minval);
 
+      /* APPLE LOCAL ARM switch tables 6288519 */
+      have_casesi = HAVE_casesi;
       /* Try implementing this switch statement by a short sequence of
 	 bit-wise comparisons.  However, we let the binary-tree case
 	 below handle constant index expressions.  */
@@ -2462,14 +2521,17 @@ expand_case (tree exp)
 	       /* RANGE may be signed, and really large ranges will show up
 		  as negative numbers.  */
 	       || compare_tree_int (range, 0) < 0
-#ifndef ASM_OUTPUT_ADDR_DIFF_ELT
+/* APPLE LOCAL begin ARM compact switch tables */
+#if !defined(ASM_OUTPUT_ADDR_DIFF_ELT) && !defined(ASM_OUTPUT_ADDR_DIFF_VEC)
 	       || flag_pic
 #endif
+/* APPLE LOCAL end ARM compact switch tables */
 	       || !flag_jump_tables
 	       || TREE_CONSTANT (index_expr)
 	       /* If neither casesi or tablejump is available, we can
 		  only go this way.  */
-	       || (!HAVE_casesi && !HAVE_tablejump))
+	       /* APPLE LOCAL ARM switch tables 6288519 */
+	       || (!have_casesi && !HAVE_tablejump))
 	{
 	  index = expand_normal (index_expr);
 
@@ -2542,6 +2604,10 @@ expand_case (tree exp)
 	  /* Get table of labels to jump to, in order of case index.  */
 
 	  ncases = tree_low_cst (range, 0) + 1;
+/* APPLE LOCAL begin ARM compact switch tables */
+	  /* Add target-specific extra labels.  */
+	  ncases += TARGET_EXTRA_CASES;
+/* APPLE LOCAL end ARM compact switch tables */
 	  labelvec = alloca (ncases * sizeof (rtx));
 	  memset (labelvec, 0, ncases * sizeof (rtx));
 

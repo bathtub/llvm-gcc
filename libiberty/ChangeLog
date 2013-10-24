@@ -1,3 +1,11 @@
+2007-05-05  Geoffrey Keating  <geoffk@apple.com>
+
+	* cp-demangle.c (d_name): Detect local-source-name.
+	(d_prefix): Likewise.
+	(d_unqualified_name): Implement local-source-name.
+
+/* APPLE LOCAL merge marger */
+/* Stuff above is only in mainline, not the 4.2 branch */
 2007-07-19  Release Manager
 
 	* GCC 4.2.1 released.

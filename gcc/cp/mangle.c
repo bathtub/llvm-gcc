@@ -688,7 +688,10 @@ write_mangled_name (const tree decl, bool top_level)
 	}
     }
   else if (TREE_CODE (decl) == VAR_DECL
-	   /* The names of global variables aren't mangled.  */
+/* APPLE LOCAL begin mainline 2007-05-09 5173149 */ \
+	   /* The names of non-static global variables aren't mangled.  */
+	   && DECL_EXTERNAL_LINKAGE_P (decl)
+/* APPLE LOCAL end mainline 2007-05-09 5173149 */ \
 	   && (CP_DECL_CONTEXT (decl) == global_namespace
 	       /* And neither are `extern "C"' variables.  */
 	       || DECL_EXTERN_C_P (decl)))
@@ -1086,8 +1089,13 @@ write_template_prefix (const tree node)
 
     <unqualified-name>  ::= <operator-name>
 			::= <special-name>
-			::= <source-name>  */
+ APPLE LOCAL begin mainline 2007-05-09 5173149
+			::= <source-name>
+			::= <local-source-name> 
 
+    <local-source-name>	::= L <source-name> <discriminator> */
+
+/* APPLE LOCAL end mainline 2007-05-09 5173149 */ \
 static void
 write_unqualified_name (const tree decl)
 {
@@ -1126,6 +1134,18 @@ write_unqualified_name (const tree decl)
 
       write_string (oni[DECL_OVERLOADED_OPERATOR_P (decl)].mangled_name);
     }
+/* APPLE LOCAL begin mainline 2007-05-09 5173149 */ \
+  else if (VAR_OR_FUNCTION_DECL_P (decl) && ! TREE_PUBLIC (decl)
+	   && DECL_NAMESPACE_SCOPE_P (decl)
+	   && decl_linkage (decl) == lk_internal)
+    {
+      MANGLE_TRACE_TREE ("local-source-name", decl);
+      write_char ('L');
+      write_source_name (DECL_NAME (decl));
+      /* The default discriminator is 1, and that's all we ever use,
+	 so there's no code to output one here.  */
+    }
+/* APPLE LOCAL end mainline 2007-05-09 5173149 */ \
   else
     write_source_name (DECL_NAME (decl));
 }
@@ -1365,15 +1385,19 @@ write_identifier (const char *identifier)
 
    Currently, allocating constructors are never used.
 
-   We also need to provide mangled names for the maybe-in-charge
-   constructor, so we treat it here too.  mangle_decl_string will
-   append *INTERNAL* to that, to make sure we never emit it.  */
+   APPLE LOCAL decloning
+   Deleted comment.  */
 
 static void
 write_special_name_constructor (const tree ctor)
 {
   if (DECL_BASE_CONSTRUCTOR_P (ctor))
     write_string ("C2");
+  /* APPLE LOCAL begin decloning */  
+  /* This is the old-style "[unified]" constructor.  */
+  else if (DECL_MAYBE_IN_CHARGE_CONSTRUCTOR_P (ctor))
+    write_string ("C4");
+  /* APPLE LOCAL end decloning */  
   else
     {
       gcc_assert (DECL_COMPLETE_CONSTRUCTOR_P (ctor)
@@ -1404,6 +1428,11 @@ write_special_name_destructor (const tree dtor)
     write_string ("D0");
   else if (DECL_BASE_DESTRUCTOR_P (dtor))
     write_string ("D2");
+  /* APPLE LOCAL begin decloning */  
+  else if (DECL_MAYBE_IN_CHARGE_DESTRUCTOR_P (dtor))
+    /* This is the old-style "[unified]" destructor.  */
+    write_string ("D4");
+  /* APPLE LOCAL end decloning */  
   else
     {
       gcc_assert (DECL_COMPLETE_DESTRUCTOR_P (dtor)
@@ -1439,6 +1468,10 @@ discriminator_for_local_entity (tree entity)
 	  tree type = VEC_index (tree, local_classes, ix);
 	  if (type == entity)
 	    break;
+	  /* APPLE LOCAL begin anon types 6822746 */
+	  if (TYPE_MAIN_DECL (type) == TYPE_MAIN_DECL (entity))
+	    break;
+	  /* APPLE LOCAL end anon types 6822746 */
 	  if (TYPE_IDENTIFIER (type) == TYPE_IDENTIFIER (entity)
 	      && TYPE_CONTEXT (type) == TYPE_CONTEXT (entity))
 	    ++discriminator;
@@ -1557,21 +1590,19 @@ write_type (tree type)
     write_array_type (type);
   else
     {
+      /* APPLE LOCAL begin mangle_type 7105099 */
+      tree type_orig = type;
+
       /* See through any typedefs.  */
       type = TYPE_MAIN_VARIANT (type);
 
       if (TYPE_PTRMEM_P (type))
 	write_pointer_to_member_type (type);
-      else switch (TREE_CODE (type))
-	{
-	case VOID_TYPE:
-	case BOOLEAN_TYPE:
-	case INTEGER_TYPE:  /* Includes wchar_t.  */
-	case REAL_TYPE:
-	{
+      else
+        {
 	  /* Handle any target-specific fundamental types.  */
 	  const char *target_mangling
-	    = targetm.mangle_fundamental_type (type);
+	    = targetm.mangle_type (type_orig);
 
 	  if (target_mangling)
 	    {
@@ -1579,75 +1610,91 @@ write_type (tree type)
 	      return;
 	    }
 
-	  /* If this is a typedef, TYPE may not be one of
-	     the standard builtin type nodes, but an alias of one.  Use
-	     TYPE_MAIN_VARIANT to get to the underlying builtin type.  */
-	  write_builtin_type (TYPE_MAIN_VARIANT (type));
-	  ++is_builtin_type;
-	  break;
+	  switch (TREE_CODE (type))
+	    {
+	    case VOID_TYPE:
+	    case BOOLEAN_TYPE:
+	    case INTEGER_TYPE:  /* Includes wchar_t.  */
+	    case REAL_TYPE:
+	      {
+		/* If this is a typedef, TYPE may not be one of
+		   the standard builtin type nodes, but an alias of one.  Use
+		   TYPE_MAIN_VARIANT to get to the underlying builtin type.  */
+		write_builtin_type (TYPE_MAIN_VARIANT (type));
+		++is_builtin_type;
+	      }
+	      break;
+
+	    case COMPLEX_TYPE:
+	      write_char ('C');
+	      write_type (TREE_TYPE (type));
+	      break;
+
+	    case FUNCTION_TYPE:
+	    case METHOD_TYPE:
+	      write_function_type (type);
+	      break;
+
+	    case UNION_TYPE:
+	    case RECORD_TYPE:
+	    case ENUMERAL_TYPE:
+	      /* A pointer-to-member function is represented as a special
+		 RECORD_TYPE, so check for this first.  */
+	      if (TYPE_PTRMEMFUNC_P (type))
+		write_pointer_to_member_type (type);
+	      else
+		write_class_enum_type (type);
+	      break;
+
+	    case TYPENAME_TYPE:
+	    case UNBOUND_CLASS_TEMPLATE:
+	      /* We handle TYPENAME_TYPEs and UNBOUND_CLASS_TEMPLATEs like
+		 ordinary nested names.  */
+	      write_nested_name (TYPE_STUB_DECL (type));
+	      break;
+
+	    case POINTER_TYPE:
+	      write_char ('P');
+	      write_type (TREE_TYPE (type));
+	      break;
+
+              /* APPLE LOCAL begin blocks 6040305 */
+            case BLOCK_POINTER_TYPE:
+              write_string ("U13block_pointer");
+              write_type (TREE_TYPE (type));
+              break;
+              /* APPLE LOCAL end blocks 6040305 */
+
+	    case REFERENCE_TYPE:
+	      write_char ('R');
+	      write_type (TREE_TYPE (type));
+	      break;
+
+	    case TEMPLATE_TYPE_PARM:
+	    case TEMPLATE_PARM_INDEX:
+	      write_template_param (type);
+	      break;
+
+	    case TEMPLATE_TEMPLATE_PARM:
+	      write_template_template_param (type);
+	      break;
+
+	    case BOUND_TEMPLATE_TEMPLATE_PARM:
+	      write_template_template_param (type);
+	      write_template_args
+		(TI_ARGS (TEMPLATE_TEMPLATE_PARM_TEMPLATE_INFO (type)));
+	      break;
+
+	    case VECTOR_TYPE:
+	      write_string ("U8__vector");
+	      write_type (TREE_TYPE (type));
+	      break;
+
+	    default:
+	      gcc_unreachable ();
+	    }
 	}
-
-	case COMPLEX_TYPE:
-	  write_char ('C');
-	  write_type (TREE_TYPE (type));
-	  break;
-
-	case FUNCTION_TYPE:
-	case METHOD_TYPE:
-	  write_function_type (type);
-	  break;
-
-	case UNION_TYPE:
-	case RECORD_TYPE:
-	case ENUMERAL_TYPE:
-	  /* A pointer-to-member function is represented as a special
-	     RECORD_TYPE, so check for this first.  */
-	  if (TYPE_PTRMEMFUNC_P (type))
-	    write_pointer_to_member_type (type);
-	  else
-	    write_class_enum_type (type);
-	  break;
-
-	case TYPENAME_TYPE:
-	case UNBOUND_CLASS_TEMPLATE:
-	  /* We handle TYPENAME_TYPEs and UNBOUND_CLASS_TEMPLATEs like
-	     ordinary nested names.  */
-	  write_nested_name (TYPE_STUB_DECL (type));
-	  break;
-
-	case POINTER_TYPE:
-	  write_char ('P');
-	  write_type (TREE_TYPE (type));
-	  break;
-
-	case REFERENCE_TYPE:
-	  write_char ('R');
-	  write_type (TREE_TYPE (type));
-	  break;
-
-	case TEMPLATE_TYPE_PARM:
-	case TEMPLATE_PARM_INDEX:
-	  write_template_param (type);
-	  break;
-
-	case TEMPLATE_TEMPLATE_PARM:
-	  write_template_template_param (type);
-	  break;
-
-	case BOUND_TEMPLATE_TEMPLATE_PARM:
-	  write_template_template_param (type);
-	  write_template_args
-	    (TI_ARGS (TEMPLATE_TEMPLATE_PARM_TEMPLATE_INFO (type)));
-	  break;
-
-	case VECTOR_TYPE:
-	  write_string ("U8__vector");
-	  write_type (TREE_TYPE (type));
-	  break;
-
-	default:
-	  gcc_unreachable ();
-	}
+      /* APPLE LOCAL end mangle_type 7105099 */
     }
 
   /* Types other than builtin types are substitution candidates.  */

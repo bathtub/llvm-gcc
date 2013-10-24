@@ -70,6 +70,15 @@ g++-cross$(exeext): g++$(exeext)
 	-rm -f g++-cross$(exeext)
 	cp g++$(exeext) g++-cross$(exeext)
 
+# APPLE LOCAL begin order files  --ilr
+ifeq ($(ORDER_FILES),yes)
+CC1PLUS_ORDER_FLAGS = `if [ -f $(srcdir)/../order-files/cc1plus.order ]; then \
+		         echo -sectorder __TEXT __text $(srcdir)/../order-files/cc1plus.order -e start ; fi`
+else
+CC1PLUS_ORDER_FLAGS =
+endif
+# APPLE LOCAL end order files  --ilr
+
 # The compiler itself.
 # Shared with C front end:
 CXX_C_OBJS = attribs.o c-common.o c-format.o c-pragma.o c-semantics.o c-lex.o \
@@ -91,9 +100,11 @@ CXX_OBJS = cp/cp-lang.o stub-objc.o $(CXX_AND_OBJCXX_OBJS)
 # Use strict warnings for this front end.
 cp-warn = $(STRICT_WARN) $(CXX_COMPAT_WARN)
 
+# APPLE LOCAL begin order files  --ilr
 cc1plus-dummy$(exeext): $(CXX_OBJS) dummy-checksum.o $(BACKEND) $(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
-	      $(CXX_OBJS) dummy-checksum.o $(BACKEND) $(LIBS)
+	      $(CXX_OBJS) dummy-checksum.o $(BACKEND) $(LIBS) \
+	      $(CC1PLUS_ORDER_FLAGS)
 
 cc1plus-checksum.c : cc1plus-dummy$(exeext) build/genchecksum$(build_exeext)
 	build/genchecksum$(build_exeext) cc1plus-dummy$(exeext) > $@
@@ -102,7 +113,13 @@ cc1plus-checksum.o : cc1plus-checksum.c
 
 cc1plus$(exeext): $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBDEPS)
 	$(CC) $(ALL_CFLAGS) $(LDFLAGS) -o $@ \
-	      $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBS)
+	      $(CXX_OBJS) cc1plus-checksum.o $(BACKEND) $(LIBS) \
+	      $(CC1PLUS_ORDER_FLAGS)
+# APPLE LOCAL end order files  --ilr
+# APPLE LOCAL 4133801
+cp/parser.o: debug.h
+# APPLE LOCAL optimization pragmas 3124235/3420242
+cp/decl.o: opts.h
 
 # Special build rules.
 $(srcdir)/cp/cfns.h: $(srcdir)/cp/cfns.gperf
@@ -264,8 +281,10 @@ cp/tree.o: cp/tree.c $(CXX_TREE_H) $(TM_H) $(FLAGS_H) toplev.h $(RTL_H) \
   insn-config.h $(INTEGRATE_H) $(TREE_INLINE_H) $(REAL_H) gt-cp-tree.h \
   $(TARGET_H) debug.h
 cp/ptree.o: cp/ptree.c $(CXX_TREE_H) $(TM_H)
+ # APPLE LOCAL begin mainline 4.3 2006-01-10 4871915
 cp/rtti.o: cp/rtti.c $(CXX_TREE_H) $(TM_H) $(FLAGS_H) toplev.h convert.h \
-  gt-cp-rtti.h
+  $(TARGET_H) gt-cp-rtti.h
+ # APPLE LOCAL end mainline 4.3 2006-01-10 4871915
 cp/except.o: cp/except.c $(CXX_TREE_H) $(TM_H) $(FLAGS_H) $(RTL_H) except.h \
   toplev.h cp/cfns.h $(EXPR_H) libfuncs.h $(TREE_INLINE_H) $(TARGET_H)
 cp/expr.o: cp/expr.c $(CXX_TREE_H) $(TM_H) $(RTL_H) $(FLAGS_H) $(EXPR_H) \

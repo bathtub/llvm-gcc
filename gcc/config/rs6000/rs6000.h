@@ -314,6 +314,10 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
 #define MASK_ALIGN_POWER   0x00000000
 #define MASK_ALIGN_NATURAL 0x00000001
 #define TARGET_ALIGN_NATURAL (rs6000_alignment_flags & MASK_ALIGN_NATURAL)
+/* APPLE LOCAL begin Macintosh alignment 2002-2-26 --ff */
+#define OPTION_MASK_ALIGN_MAC68K  0x00000002
+#define OPTION_ALIGN_MAC68K (rs6000_alignment_flags & OPTION_MASK_ALIGN_MAC68K)
+/* APPLE LOCAL end Macintosh alignment 2002-2-26 --ff */
 #else
 #define TARGET_ALIGN_NATURAL 0
 #endif
@@ -497,6 +501,13 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
 /* Allocation boundary (in *bits*) for the code of a function.  */
 #define FUNCTION_BOUNDARY 32
 
+/* APPLE LOCAL begin Macintosh alignment */
+/* Constants for alignment macros below.  */
+#define RS6000_DOUBLE_ALIGNMENT 64
+#define RS6000_LONGLONG_ALIGNMENT 64
+#define RS6000_VECTOR_ALIGNMENT 128
+/* APPLE LOCAL end Macintosh alignment */
+
 /* No data type wants to be aligned rounder than this.  */
 #define BIGGEST_ALIGNMENT 128
 
@@ -591,13 +602,23 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
    Another pseudo (not included in DWARF_FRAME_REGISTERS) is soft frame
    pointer, which is eventually eliminated in favor of SP or FP.  */
 
-#define FIRST_PSEUDO_REGISTER 114
+/* APPLE LOCAL begin 3399553 */
+/* OK, so this isn't technically the last physical register on the
+   processor.  It's the last register we want mapped into the EH
+   information.  Typically, this would be the last physical register,
+   however in our case we'd like to maintain backwards compatibility
+   instead of defining space we won't use anyway.  */
+#define LAST_PHYSICAL_REGISTER	113
+
+#define FIRST_PSEUDO_REGISTER 115
+/* APPLE LOCAL end 3399553 */
 
 /* This must be included for pre gcc 3.0 glibc compatibility.  */
 #define PRE_GCC3_DWARF_FRAME_REGISTERS 77
 
 /* Add 32 dwarf columns for synthetic SPE registers.  */
-#define DWARF_FRAME_REGISTERS ((FIRST_PSEUDO_REGISTER - 1) + 32)
+/* APPLE LOCAL 3399553 */
+#define DWARF_FRAME_REGISTERS (LAST_PHYSICAL_REGISTER + 32)
 
 /* The SPE has an additional 32 synthetic registers, with DWARF debug
    info numbering for these registers starting at 1200.  While eh_frame
@@ -612,8 +633,10 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
 
    We must map them here to avoid huge unwinder tables mostly consisting
    of unused space.  */
-#define DWARF_REG_TO_UNWIND_COLUMN(r) \
-  ((r) > 1200 ? ((r) - 1200 + FIRST_PSEUDO_REGISTER - 1) : (r))
+/* APPLE LOCAL begin 3399553 */
+#define DWARF_REG_TO_UNWIND_COLUMN(r)	\
+  ((r) > 1200 ? ((r) - 1200 + LAST_PHYSICAL_REGISTER) : (r))
+/* APPLE LOCAL end 3399553 */
 
 /* Use standard DWARF numbering for DWARF debugging information.  */
 #define DBX_REGISTER_NUMBER(REGNO) rs6000_dbx_register_number (REGNO)
@@ -654,6 +677,8 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
    1, 1						   \
    , 1, 1, 1                                       \
+   /* APPLE LOCAL 3399553 */                       \
+   , 1                                             \
 }
 
 /* 1 for registers not available across function calls.
@@ -674,6 +699,8 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
    1, 1						   \
    , 1, 1, 1                                       \
+   /* APPLE LOCAL 3399553 */                       \
+   , 1                                             \
 }
 
 /* Like `CALL_USED_REGISTERS' except this macro doesn't require that
@@ -693,6 +720,8 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, \
    0, 0						   \
    , 0, 0, 0                                       \
+   /* APPLE LOCAL 3399553 */                       \
+   , 0						   \
 }
 
 #define MQ_REGNO     64
@@ -710,11 +739,14 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
 #define VSCR_REGNO		110
 #define SPE_ACC_REGNO		111
 #define SPEFSCR_REGNO		112
+/* APPLE LOCAL 3399553 */
+#define FPSCR_REGNO		114
 
 #define FIRST_SAVED_ALTIVEC_REGNO (FIRST_ALTIVEC_REGNO+20)
 #define FIRST_SAVED_FP_REGNO    (14+32)
 #define FIRST_SAVED_GP_REGNO 13
 
+/* APPLE LOCAL begin 3399553 */
 /* List the order in which to allocate registers.  Each register must be
    listed once, even those in FIXED_REGISTERS.
 
@@ -745,7 +777,9 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
 	vrsave, vscr	(fixed)
 	spe_acc, spefscr (fixed)
 	sfp		(fixed)
+        fpscr		(fixed)
 */
+/* APPLE LOCAL end 3399553 */
 
 #if FIXED_R2 == 1
 #define MAYBE_R2_AVAILABLE
@@ -776,7 +810,8 @@ extern enum rs6000_nop_insertion rs6000_sched_insert_nops;
    96, 95, 94, 93, 92, 91,					\
    108, 107, 106, 105, 104, 103, 102, 101, 100, 99, 98, 97,	\
    109, 110,							\
-   111, 112, 113						\
+   /* APPLE LOCAL 3399553 */					\
+   111, 112, 113, 114						\
 }
 
 /* True if register is floating-point.  */
@@ -1046,7 +1081,8 @@ enum reg_class
   { 0x00000000, 0x00000000, 0x00000ff0, 0x00000000 }, /* CR_REGS */	     \
   { 0xffffffff, 0x00000000, 0x0000efff, 0x00020000 }, /* NON_FLOAT_REGS */   \
   { 0x00000000, 0x00000000, 0x00001000, 0x00000000 }, /* XER_REGS */	     \
-  { 0xffffffff, 0xffffffff, 0xffffffff, 0x0003ffff }  /* ALL_REGS */	     \
+  /* APPLE LOCAL 3399553 */						     \
+  { 0xffffffff, 0xffffffff, 0xffffffff, 0x0007ffff }  /* ALL_REGS */	     \
 }
 
 /* The same information, inverted:
@@ -1190,6 +1226,10 @@ extern enum rs6000_abi rs6000_current_abi;	/* available for use by subtarget */
 				     plus_constant (stack_pointer_rtx, \
 						    (TARGET_32BIT ? 20 : 40)))
 
+/* APPLE LOCAL begin radar 4859753 */
+/* Make 8-byte structs BLKmode instead of DImode */
+#define RS6000_8BYTE_STRUCT_HACK 0
+/* APPLE LOCAL end radar 4859753 */
 /* Align an address */
 #define RS6000_ALIGN(n,a) (((n) + (a) - 1) & ~((a) - 1))
 
@@ -1374,6 +1414,10 @@ typedef struct rs6000_args
   int sysv_gregno;		/* next available GP register */
   int intoffset;		/* running offset in struct (darwin64) */
   int use_stack;		/* any part of struct on stack (darwin64) */
+  /* APPLE LOCAL begin fix 64-bit varargs 4028089 */
+  int floats_in_gpr;		/* count of SFmode floats taking up
+				   GPR space (darwin64) */
+  /* APPLE LOCAL end fix 64-bit varargs 4028089 */
   int named;			/* false for varargs params */
 } CUMULATIVE_ARGS;
 
@@ -2143,6 +2187,8 @@ extern char rs6000_reg_names[][8];	/* register names (0 vs. %r0).  */
   &rs6000_reg_names[111][0],	/* spe_acc */				\
   &rs6000_reg_names[112][0],	/* spefscr */				\
   &rs6000_reg_names[113][0],	/* sfp  */				\
+  /* APPLE LOCAL 3399553 */						\
+  &rs6000_reg_names[114][0],	/* fpscr */				\
 }
 
 /* Table of additional register names to use in user input.  */
@@ -2204,6 +2250,10 @@ extern char rs6000_reg_names[][8];	/* register names (0 vs. %r0).  */
   if ((LOG) != 0)			\
     fprintf (FILE, "\t.align %d\n", (LOG))
 
+/* APPLE LOCAL begin CW asm blocks */
+#define IASM_REGISTER_NAME(STR, BUF) rs6000_iasm_register_name (STR, BUF)
+/* APPLE LOCAL end CW asm blocks */
+
 /* Pick up the return address upon entry to a procedure. Used for
    dwarf2 unwind information.  This also enables the table driven
    mechanism.  */
@@ -2237,8 +2287,8 @@ extern char rs6000_reg_names[][8];	/* register names (0 vs. %r0).  */
 
 /* General flags.  */
 extern int flag_pic;
-extern int optimize;
-extern int flag_expensive_optimizations;
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
 extern int frame_pointer_needed;
 
 enum rs6000_builtins
@@ -2911,8 +2961,486 @@ enum rs6000_builtins
   SPE_BUILTIN_MFSPEFSCR,
   SPE_BUILTIN_BRINC,
 
+  /* APPLE LOCAL begin AltiVec */
+  /* AltiVec PIM functions, used in Apple AltiVec mode.  */
+  ALTIVEC_PIM__FIRST,
+
+  /* PIM Operations.  */
+  ALTIVEC_PIM_VEC_ABS = ALTIVEC_PIM__FIRST,
+  ALTIVEC_PIM_VEC_ABS_2,
+  ALTIVEC_PIM_VEC_ABS_3,
+  ALTIVEC_PIM_VEC_ABS_4,
+  ALTIVEC_PIM_VEC_ABSS,
+  ALTIVEC_PIM_VEC_ABSS_2,
+  ALTIVEC_PIM_VEC_ABSS_3,
+  ALTIVEC_PIM_VEC_ADD,
+  ALTIVEC_PIM_VEC_ADD_2,
+  ALTIVEC_PIM_VEC_ADD_3,
+  ALTIVEC_PIM_VEC_ADD_4,
+  ALTIVEC_PIM_VEC_ADDC,
+  ALTIVEC_PIM_VEC_ADDS,
+  ALTIVEC_PIM_VEC_ADDS_2,
+  ALTIVEC_PIM_VEC_ADDS_3,
+  ALTIVEC_PIM_VEC_ADDS_4,
+  ALTIVEC_PIM_VEC_ADDS_5,
+  ALTIVEC_PIM_VEC_ADDS_6,
+  ALTIVEC_PIM_VEC_AND,
+  ALTIVEC_PIM_VEC_ANDC,
+  ALTIVEC_PIM_VEC_AVG,
+  ALTIVEC_PIM_VEC_AVG_2,
+  ALTIVEC_PIM_VEC_AVG_3,
+  ALTIVEC_PIM_VEC_AVG_4,
+  ALTIVEC_PIM_VEC_AVG_5,
+  ALTIVEC_PIM_VEC_AVG_6,
+  ALTIVEC_PIM_VEC_CEIL,
+  ALTIVEC_PIM_VEC_CMPB,
+  ALTIVEC_PIM_VEC_CMPEQ,
+  ALTIVEC_PIM_VEC_CMPEQ_2,
+  ALTIVEC_PIM_VEC_CMPEQ_3,
+  ALTIVEC_PIM_VEC_CMPEQ_4,
+  ALTIVEC_PIM_VEC_CMPGE,
+  ALTIVEC_PIM_VEC_CMPGT,
+  ALTIVEC_PIM_VEC_CMPGT_2,
+  ALTIVEC_PIM_VEC_CMPGT_3,
+  ALTIVEC_PIM_VEC_CMPGT_4,
+  ALTIVEC_PIM_VEC_CMPGT_5,
+  ALTIVEC_PIM_VEC_CMPGT_6,
+  ALTIVEC_PIM_VEC_CMPGT_7,
+  ALTIVEC_PIM_VEC_CMPLE,
+  ALTIVEC_PIM_VEC_CMPLT,
+  ALTIVEC_PIM_VEC_CMPLT_2,
+  ALTIVEC_PIM_VEC_CMPLT_3,
+  ALTIVEC_PIM_VEC_CMPLT_4,
+  ALTIVEC_PIM_VEC_CMPLT_5,
+  ALTIVEC_PIM_VEC_CMPLT_6,
+  ALTIVEC_PIM_VEC_CMPLT_7,
+  ALTIVEC_PIM_VEC_CTF,
+  ALTIVEC_PIM_VEC_CTF_2,
+  ALTIVEC_PIM_VEC_CTS,
+  ALTIVEC_PIM_VEC_CTU,
+  ALTIVEC_PIM_VEC_DSS,
+  ALTIVEC_PIM_VEC_DSSALL,
+  ALTIVEC_PIM_VEC_DST,
+  ALTIVEC_PIM_VEC_DSTST,
+  ALTIVEC_PIM_VEC_DSTSTT,
+  ALTIVEC_PIM_VEC_DSTT,
+  ALTIVEC_PIM_VEC_EXPTE,
+  ALTIVEC_PIM_VEC_FLOOR,
+  ALTIVEC_PIM_VEC_LD,
+  ALTIVEC_PIM_VEC_LDE,
+  ALTIVEC_PIM_VEC_LDE_2,
+  ALTIVEC_PIM_VEC_LDE_3,
+  ALTIVEC_PIM_VEC_LDL,
+  ALTIVEC_PIM_VEC_LOGE,
+  ALTIVEC_PIM_VEC_LVEBX,
+  ALTIVEC_PIM_VEC_LVEHX,
+  ALTIVEC_PIM_VEC_LVEWX,
+  ALTIVEC_PIM_VEC_LVSL,
+  ALTIVEC_PIM_VEC_LVSR,
+  ALTIVEC_PIM_VEC_LVX,
+  ALTIVEC_PIM_VEC_LVXL,
+  ALTIVEC_PIM_VEC_MADD,
+  ALTIVEC_PIM_VEC_MADDS,
+  ALTIVEC_PIM_VEC_MAX,
+  ALTIVEC_PIM_VEC_MAX_2,
+  ALTIVEC_PIM_VEC_MAX_3,
+  ALTIVEC_PIM_VEC_MAX_4,
+  ALTIVEC_PIM_VEC_MAX_5,
+  ALTIVEC_PIM_VEC_MAX_6,
+  ALTIVEC_PIM_VEC_MAX_7,
+  ALTIVEC_PIM_VEC_MERGEH,
+  ALTIVEC_PIM_VEC_MERGEH_2,
+  ALTIVEC_PIM_VEC_MERGEH_3,
+  ALTIVEC_PIM_VEC_MERGEL,
+  ALTIVEC_PIM_VEC_MERGEL_2,
+  ALTIVEC_PIM_VEC_MERGEL_3,
+  ALTIVEC_PIM_VEC_MFVSCR,
+  ALTIVEC_PIM_VEC_MIN,
+  ALTIVEC_PIM_VEC_MIN_2,
+  ALTIVEC_PIM_VEC_MIN_3,
+  ALTIVEC_PIM_VEC_MIN_4,
+  ALTIVEC_PIM_VEC_MIN_5,
+  ALTIVEC_PIM_VEC_MIN_6,
+  ALTIVEC_PIM_VEC_MIN_7,
+  ALTIVEC_PIM_VEC_MLADD,
+  ALTIVEC_PIM_VEC_MLADD_2,
+  ALTIVEC_PIM_VEC_MRADDS,
+  ALTIVEC_PIM_VEC_MSUM,
+  ALTIVEC_PIM_VEC_MSUM_2,
+  ALTIVEC_PIM_VEC_MSUM_3,
+  ALTIVEC_PIM_VEC_MSUM_4,
+  ALTIVEC_PIM_VEC_MSUMS,
+  ALTIVEC_PIM_VEC_MSUMS_2,
+  ALTIVEC_PIM_VEC_MTVSCR,
+  ALTIVEC_PIM_VEC_MULE,
+  ALTIVEC_PIM_VEC_MULE_2,
+  ALTIVEC_PIM_VEC_MULE_3,
+  ALTIVEC_PIM_VEC_MULE_4,
+  ALTIVEC_PIM_VEC_MULO,
+  ALTIVEC_PIM_VEC_MULO_2,
+  ALTIVEC_PIM_VEC_MULO_3,
+  ALTIVEC_PIM_VEC_MULO_4,
+  ALTIVEC_PIM_VEC_NMSUB,
+  ALTIVEC_PIM_VEC_NOR,
+  ALTIVEC_PIM_VEC_OR,
+  ALTIVEC_PIM_VEC_PACK,
+  ALTIVEC_PIM_VEC_PACK_2,
+  ALTIVEC_PIM_VEC_PACKPX,
+  ALTIVEC_PIM_VEC_PACKS,
+  ALTIVEC_PIM_VEC_PACKS_2,
+  ALTIVEC_PIM_VEC_PACKS_3,
+  ALTIVEC_PIM_VEC_PACKS_4,
+  ALTIVEC_PIM_VEC_PACKSU,
+  ALTIVEC_PIM_VEC_PACKSU_2,
+  ALTIVEC_PIM_VEC_PACKSU_3,
+  ALTIVEC_PIM_VEC_PACKSU_4,
+  ALTIVEC_PIM_VEC_PERM,
+  ALTIVEC_PIM_VEC_RE,
+  ALTIVEC_PIM_VEC_RL,
+  ALTIVEC_PIM_VEC_RL_2,
+  ALTIVEC_PIM_VEC_RL_3,
+  ALTIVEC_PIM_VEC_ROUND,
+  ALTIVEC_PIM_VEC_RSQRTE,
+  ALTIVEC_PIM_VEC_SEL,
+  ALTIVEC_PIM_VEC_SL,
+  ALTIVEC_PIM_VEC_SL_2,
+  ALTIVEC_PIM_VEC_SL_3,
+  ALTIVEC_PIM_VEC_SLD,
+  ALTIVEC_PIM_VEC_SLL,
+  ALTIVEC_PIM_VEC_SLO,
+  ALTIVEC_PIM_VEC_SPLAT,
+  ALTIVEC_PIM_VEC_SPLAT_2,
+  ALTIVEC_PIM_VEC_SPLAT_3,
+  ALTIVEC_PIM_VEC_SPLAT_S8,
+  ALTIVEC_PIM_VEC_SPLAT_S16,
+  ALTIVEC_PIM_VEC_SPLAT_S32,
+  ALTIVEC_PIM_VEC_SPLAT_U8,
+  ALTIVEC_PIM_VEC_SPLAT_U16,
+  ALTIVEC_PIM_VEC_SPLAT_U32,
+  ALTIVEC_PIM_VEC_SR,
+  ALTIVEC_PIM_VEC_SR_2,
+  ALTIVEC_PIM_VEC_SR_3,
+  ALTIVEC_PIM_VEC_SRA,
+  ALTIVEC_PIM_VEC_SRA_2,
+  ALTIVEC_PIM_VEC_SRA_3,
+  ALTIVEC_PIM_VEC_SRL,
+  ALTIVEC_PIM_VEC_SRO,
+  ALTIVEC_PIM_VEC_ST,
+  ALTIVEC_PIM_VEC_STE,
+  ALTIVEC_PIM_VEC_STE_2,
+  ALTIVEC_PIM_VEC_STE_3,
+  ALTIVEC_PIM_VEC_STL,
+  ALTIVEC_PIM_VEC_STVEBX,
+  ALTIVEC_PIM_VEC_STVEHX,
+  ALTIVEC_PIM_VEC_STVEWX,
+  ALTIVEC_PIM_VEC_STVX,
+  ALTIVEC_PIM_VEC_STVXL,
+  ALTIVEC_PIM_VEC_SUB,
+  ALTIVEC_PIM_VEC_SUB_2,
+  ALTIVEC_PIM_VEC_SUB_3,
+  ALTIVEC_PIM_VEC_SUB_4,
+  ALTIVEC_PIM_VEC_SUBC,
+  ALTIVEC_PIM_VEC_SUBS,
+  ALTIVEC_PIM_VEC_SUBS_2,
+  ALTIVEC_PIM_VEC_SUBS_3,
+  ALTIVEC_PIM_VEC_SUBS_4,
+  ALTIVEC_PIM_VEC_SUBS_5,
+  ALTIVEC_PIM_VEC_SUBS_6,
+  ALTIVEC_PIM_VEC_SUM4S,
+  ALTIVEC_PIM_VEC_SUM4S_2,
+  ALTIVEC_PIM_VEC_SUM4S_3,
+  ALTIVEC_PIM_VEC_SUM2S,
+  ALTIVEC_PIM_VEC_SUMS,
+  ALTIVEC_PIM_VEC_TRUNC,
+  ALTIVEC_PIM_VEC_UNPACKH,
+  ALTIVEC_PIM_VEC_UNPACKH_2,
+  ALTIVEC_PIM_VEC_UNPACKH_3,
+  ALTIVEC_PIM_VEC_UNPACKL,
+  ALTIVEC_PIM_VEC_UNPACKL_2,
+  ALTIVEC_PIM_VEC_UNPACKL_3,
+  ALTIVEC_PIM_VEC_VADDCUW,
+  ALTIVEC_PIM_VEC_VADDFP,
+  ALTIVEC_PIM_VEC_VADDSBS,
+  ALTIVEC_PIM_VEC_VADDSHS,
+  ALTIVEC_PIM_VEC_VADDSWS,
+  ALTIVEC_PIM_VEC_VADDUBM,
+  ALTIVEC_PIM_VEC_VADDUBS,
+  ALTIVEC_PIM_VEC_VADDUHM,
+  ALTIVEC_PIM_VEC_VADDUHS,
+  ALTIVEC_PIM_VEC_VADDUWM,
+  ALTIVEC_PIM_VEC_VADDUWS,
+  ALTIVEC_PIM_VEC_VAND,
+  ALTIVEC_PIM_VEC_VANDC,
+  ALTIVEC_PIM_VEC_VAVGSB,
+  ALTIVEC_PIM_VEC_VAVGSH,
+  ALTIVEC_PIM_VEC_VAVGSW,
+  ALTIVEC_PIM_VEC_VAVGUB,
+  ALTIVEC_PIM_VEC_VAVGUH,
+  ALTIVEC_PIM_VEC_VAVGUW,
+  ALTIVEC_PIM_VEC_VCFSX,
+  ALTIVEC_PIM_VEC_VCFUX,
+  ALTIVEC_PIM_VEC_VCMPBFP,
+  ALTIVEC_PIM_VEC_VCMPEQFP,
+  ALTIVEC_PIM_VEC_VCMPEQUB,
+  ALTIVEC_PIM_VEC_VCMPEQUH,
+  ALTIVEC_PIM_VEC_VCMPEQUW,
+  ALTIVEC_PIM_VEC_VCMPGEFP,
+  ALTIVEC_PIM_VEC_VCMPGTFP,
+  ALTIVEC_PIM_VEC_VCMPGTSB,
+  ALTIVEC_PIM_VEC_VCMPGTSH,
+  ALTIVEC_PIM_VEC_VCMPGTSW,
+  ALTIVEC_PIM_VEC_VCMPGTUB,
+  ALTIVEC_PIM_VEC_VCMPGTUH,
+  ALTIVEC_PIM_VEC_VCMPGTUW,
+  ALTIVEC_PIM_VEC_VCTSXS,
+  ALTIVEC_PIM_VEC_VCTUXS,
+  ALTIVEC_PIM_VEC_VEXPTEFP,
+  ALTIVEC_PIM_VEC_VLOGEFP,
+  ALTIVEC_PIM_VEC_VMADDFP,
+  ALTIVEC_PIM_VEC_VMAXFP,
+  ALTIVEC_PIM_VEC_VMAXSB,
+  ALTIVEC_PIM_VEC_VMAXSH,
+  ALTIVEC_PIM_VEC_VMAXSW,
+  ALTIVEC_PIM_VEC_VMAXUB,
+  ALTIVEC_PIM_VEC_VMAXUH,
+  ALTIVEC_PIM_VEC_VMAXUW,
+  ALTIVEC_PIM_VEC_VMHADDSHS,
+  ALTIVEC_PIM_VEC_VMHRADDSHS,
+  ALTIVEC_PIM_VEC_VMINFP,
+  ALTIVEC_PIM_VEC_VMINSB,
+  ALTIVEC_PIM_VEC_VMINSH,
+  ALTIVEC_PIM_VEC_VMINSW,
+  ALTIVEC_PIM_VEC_VMINUB,
+  ALTIVEC_PIM_VEC_VMINUH,
+  ALTIVEC_PIM_VEC_VMINUW,
+  ALTIVEC_PIM_VEC_VMLADDUHM,
+  ALTIVEC_PIM_VEC_VMRGHB,
+  ALTIVEC_PIM_VEC_VMRGHH,
+  ALTIVEC_PIM_VEC_VMRGHW,
+  ALTIVEC_PIM_VEC_VMRGLB,
+  ALTIVEC_PIM_VEC_VMRGLH,
+  ALTIVEC_PIM_VEC_VMRGLW,
+  ALTIVEC_PIM_VEC_VMSUMMBM,
+  ALTIVEC_PIM_VEC_VMSUMSHM,
+  ALTIVEC_PIM_VEC_VMSUMSHS,
+  ALTIVEC_PIM_VEC_VMSUMUBM,
+  ALTIVEC_PIM_VEC_VMSUMUHM,
+  ALTIVEC_PIM_VEC_VMSUMUHS,
+  ALTIVEC_PIM_VEC_VMULESB,
+  ALTIVEC_PIM_VEC_VMULESH,
+  ALTIVEC_PIM_VEC_VMULEUB,
+  ALTIVEC_PIM_VEC_VMULEUH,
+  ALTIVEC_PIM_VEC_VMULOSB,
+  ALTIVEC_PIM_VEC_VMULOSH,
+  ALTIVEC_PIM_VEC_VMULOUB,
+  ALTIVEC_PIM_VEC_VMULOUH,
+  ALTIVEC_PIM_VEC_VNMSUBFP,
+  ALTIVEC_PIM_VEC_VNOR,
+  ALTIVEC_PIM_VEC_VOR,
+  ALTIVEC_PIM_VEC_VPERM,
+  ALTIVEC_PIM_VEC_VPKPX,
+  ALTIVEC_PIM_VEC_VPKSHSS,
+  ALTIVEC_PIM_VEC_VPKSHUS,
+  ALTIVEC_PIM_VEC_VPKSWSS,
+  ALTIVEC_PIM_VEC_VPKSWUS,
+  ALTIVEC_PIM_VEC_VPKUHUM,
+  ALTIVEC_PIM_VEC_VPKUHUS,
+  ALTIVEC_PIM_VEC_VPKUWUM,
+  ALTIVEC_PIM_VEC_VPKUWUS,
+  ALTIVEC_PIM_VEC_VREFP,
+  ALTIVEC_PIM_VEC_VRFIM,
+  ALTIVEC_PIM_VEC_VRFIN,
+  ALTIVEC_PIM_VEC_VRFIP,
+  ALTIVEC_PIM_VEC_VRFIZ,
+  ALTIVEC_PIM_VEC_VRLB,
+  ALTIVEC_PIM_VEC_VRLH,
+  ALTIVEC_PIM_VEC_VRLW,
+  ALTIVEC_PIM_VEC_VRSQRTEFP,
+  ALTIVEC_PIM_VEC_VSEL,
+  ALTIVEC_PIM_VEC_VSL,
+  ALTIVEC_PIM_VEC_VSLB,
+  ALTIVEC_PIM_VEC_VSLDOI,
+  ALTIVEC_PIM_VEC_VSLH,
+  ALTIVEC_PIM_VEC_VSLO,
+  ALTIVEC_PIM_VEC_VSLW,
+  ALTIVEC_PIM_VEC_VSPLTB,
+  ALTIVEC_PIM_VEC_VSPLTH,
+  ALTIVEC_PIM_VEC_VSPLTISB,
+  ALTIVEC_PIM_VEC_VSPLTISH,
+  ALTIVEC_PIM_VEC_VSPLTISW,
+  ALTIVEC_PIM_VEC_VSPLTW,
+  ALTIVEC_PIM_VEC_VSR,
+  ALTIVEC_PIM_VEC_VSRAB,
+  ALTIVEC_PIM_VEC_VSRAH,
+  ALTIVEC_PIM_VEC_VSRAW,
+  ALTIVEC_PIM_VEC_VSRB,
+  ALTIVEC_PIM_VEC_VSRH,
+  ALTIVEC_PIM_VEC_VSRO,
+  ALTIVEC_PIM_VEC_VSRW,
+  ALTIVEC_PIM_VEC_VSUBCUW,
+  ALTIVEC_PIM_VEC_VSUBFP,
+  ALTIVEC_PIM_VEC_VSUBSBS,
+  ALTIVEC_PIM_VEC_VSUBSHS,
+  ALTIVEC_PIM_VEC_VSUBSWS,
+  ALTIVEC_PIM_VEC_VSUBUBM,
+  ALTIVEC_PIM_VEC_VSUBUBS,
+  ALTIVEC_PIM_VEC_VSUBUHM,
+  ALTIVEC_PIM_VEC_VSUBUHS,
+  ALTIVEC_PIM_VEC_VSUBUWM,
+  ALTIVEC_PIM_VEC_VSUBUWS,
+  ALTIVEC_PIM_VEC_VSUM4SBS,
+  ALTIVEC_PIM_VEC_VSUM4SHS,
+  ALTIVEC_PIM_VEC_VSUM4UBS,
+  ALTIVEC_PIM_VEC_VSUM2SWS,
+  ALTIVEC_PIM_VEC_VSUMSWS,
+  ALTIVEC_PIM_VEC_VUPKHPX,
+  ALTIVEC_PIM_VEC_VUPKHSB,
+  ALTIVEC_PIM_VEC_VUPKHSH,
+  ALTIVEC_PIM_VEC_VUPKLPX,
+  ALTIVEC_PIM_VEC_VUPKLSB,
+  ALTIVEC_PIM_VEC_VUPKLSH,
+  ALTIVEC_PIM_VEC_VXOR,
+  ALTIVEC_PIM_VEC_XOR,
+
+  /* PIM Predicates.  */
+  ALTIVEC_PIM_VEC_ALL_EQ,
+  ALTIVEC_PIM_VEC_ALL_EQ_2,
+  ALTIVEC_PIM_VEC_ALL_EQ_3,
+  ALTIVEC_PIM_VEC_ALL_EQ_4,
+  ALTIVEC_PIM_VEC_ALL_GE,
+  ALTIVEC_PIM_VEC_ALL_GE_2,
+  ALTIVEC_PIM_VEC_ALL_GE_3,
+  ALTIVEC_PIM_VEC_ALL_GE_4,
+  ALTIVEC_PIM_VEC_ALL_GE_5,
+  ALTIVEC_PIM_VEC_ALL_GE_6,
+  ALTIVEC_PIM_VEC_ALL_GE_7,
+  ALTIVEC_PIM_VEC_ALL_GT,
+  ALTIVEC_PIM_VEC_ALL_GT_2,
+  ALTIVEC_PIM_VEC_ALL_GT_3,
+  ALTIVEC_PIM_VEC_ALL_GT_4,
+  ALTIVEC_PIM_VEC_ALL_GT_5,
+  ALTIVEC_PIM_VEC_ALL_GT_6,
+  ALTIVEC_PIM_VEC_ALL_GT_7,
+  ALTIVEC_PIM_VEC_ALL_IN,
+  ALTIVEC_PIM_VEC_ALL_LE,
+  ALTIVEC_PIM_VEC_ALL_LE_2,
+  ALTIVEC_PIM_VEC_ALL_LE_3,
+  ALTIVEC_PIM_VEC_ALL_LE_4,
+  ALTIVEC_PIM_VEC_ALL_LE_5,
+  ALTIVEC_PIM_VEC_ALL_LE_6,
+  ALTIVEC_PIM_VEC_ALL_LE_7,
+  ALTIVEC_PIM_VEC_ALL_LT,
+  ALTIVEC_PIM_VEC_ALL_LT_2,
+  ALTIVEC_PIM_VEC_ALL_LT_3,
+  ALTIVEC_PIM_VEC_ALL_LT_4,
+  ALTIVEC_PIM_VEC_ALL_LT_5,
+  ALTIVEC_PIM_VEC_ALL_LT_6,
+  ALTIVEC_PIM_VEC_ALL_LT_7,
+  ALTIVEC_PIM_VEC_ALL_NAN,
+  ALTIVEC_PIM_VEC_ALL_NE,
+  ALTIVEC_PIM_VEC_ALL_NE_2,
+  ALTIVEC_PIM_VEC_ALL_NE_3,
+  ALTIVEC_PIM_VEC_ALL_NE_4,
+  ALTIVEC_PIM_VEC_ALL_NGE,
+  ALTIVEC_PIM_VEC_ALL_NGT,
+  ALTIVEC_PIM_VEC_ALL_NLE,
+  ALTIVEC_PIM_VEC_ALL_NLT,
+  ALTIVEC_PIM_VEC_ALL_NUMERIC,
+  ALTIVEC_PIM_VEC_ANY_EQ,
+  ALTIVEC_PIM_VEC_ANY_EQ_2,
+  ALTIVEC_PIM_VEC_ANY_EQ_3,
+  ALTIVEC_PIM_VEC_ANY_EQ_4,
+  ALTIVEC_PIM_VEC_ANY_GE,
+  ALTIVEC_PIM_VEC_ANY_GE_2,
+  ALTIVEC_PIM_VEC_ANY_GE_3,
+  ALTIVEC_PIM_VEC_ANY_GE_4,
+  ALTIVEC_PIM_VEC_ANY_GE_5,
+  ALTIVEC_PIM_VEC_ANY_GE_6,
+  ALTIVEC_PIM_VEC_ANY_GE_7,
+  ALTIVEC_PIM_VEC_ANY_GT,
+  ALTIVEC_PIM_VEC_ANY_GT_2,
+  ALTIVEC_PIM_VEC_ANY_GT_3,
+  ALTIVEC_PIM_VEC_ANY_GT_4,
+  ALTIVEC_PIM_VEC_ANY_GT_5,
+  ALTIVEC_PIM_VEC_ANY_GT_6,
+  ALTIVEC_PIM_VEC_ANY_GT_7,
+  ALTIVEC_PIM_VEC_ANY_LE,
+  ALTIVEC_PIM_VEC_ANY_LE_2,
+  ALTIVEC_PIM_VEC_ANY_LE_3,
+  ALTIVEC_PIM_VEC_ANY_LE_4,
+  ALTIVEC_PIM_VEC_ANY_LE_5,
+  ALTIVEC_PIM_VEC_ANY_LE_6,
+  ALTIVEC_PIM_VEC_ANY_LE_7,
+  ALTIVEC_PIM_VEC_ANY_LT,
+  ALTIVEC_PIM_VEC_ANY_LT_2,
+  ALTIVEC_PIM_VEC_ANY_LT_3,
+  ALTIVEC_PIM_VEC_ANY_LT_4,
+  ALTIVEC_PIM_VEC_ANY_LT_5,
+  ALTIVEC_PIM_VEC_ANY_LT_6,
+  ALTIVEC_PIM_VEC_ANY_LT_7,
+  ALTIVEC_PIM_VEC_ANY_NAN,
+  ALTIVEC_PIM_VEC_ANY_NE,
+  ALTIVEC_PIM_VEC_ANY_NE_2,
+  ALTIVEC_PIM_VEC_ANY_NE_3,
+  ALTIVEC_PIM_VEC_ANY_NE_4,
+  ALTIVEC_PIM_VEC_ANY_NGE,
+  ALTIVEC_PIM_VEC_ANY_NGT,
+  ALTIVEC_PIM_VEC_ANY_NLE,
+  ALTIVEC_PIM_VEC_ANY_NLT,
+  ALTIVEC_PIM_VEC_ANY_NUMERIC,
+  ALTIVEC_PIM_VEC_ANY_OUT,
+
+  ALTIVEC_PIM__LAST = ALTIVEC_PIM_VEC_ANY_OUT,
+  /* APPLE LOCAL end AltiVec */
+
+  /* APPLE LOCAL begin constant cfstrings */
+  RS6000_BUILTIN_MAX,
+  TARGET_BUILTIN_MAX = RS6000_BUILTIN_MAX,
+  /* APPLE LOCAL end constant cfstrings */
+
   RS6000_BUILTIN_COUNT
 };
+/* APPLE LOCAL radar 4204303 */
+#define INITIAL_FRAME_ADDRESS_RTX stack_pointer_rtx
+
+/* APPLE LOCAL begin CW asm blocks */
+/* Table of instructions that need extra constraints.  */
+#undef TARGET_IASM_OP_CONSTRAINT
+#define TARGET_IASM_OP_CONSTRAINT \
+  { "la", 2, "m" },	\
+  { "lbz", 2, "m" },	\
+  { "lbzu", 2, "m" },	\
+  { "ld", 2, "m" },	\
+  { "ldu", 2, "m" },	\
+  { "lfd", 2, "m" },	\
+  { "lfdu", 2, "m" },	\
+  { "lfs", 2, "m" },	\
+  { "lfsu", 2, "m" },	\
+  { "lha", 2, "m" },	\
+  { "lhau", 2, "m" },	\
+  { "lhz", 2, "m" },	\
+  { "lhzu", 2, "m" },	\
+  { "lmw", 2, "m" },	\
+  { "lwa", 2, "m" },	\
+  { "lwz", 2, "m" },	\
+  { "lwzu", 2, "m" },	\
+  { "stb", 2, "m" },	\
+  { "stbu", 2, "m" },	\
+  { "std", 2, "m" },	\
+  { "stdu", 2, "m" },	\
+  { "stfd", 2, "m" },	\
+  { "stfdu", 2, "m" },	\
+  { "stfs", 2, "m" },	\
+  { "stfsu", 2, "m" },	\
+  { "sth", 2, "m" },	\
+  { "sthu", 2, "m" },	\
+  { "stmw", 2, "m" },	\
+  { "stw", 2, "m" },	\
+  { "stwu", 2, "m" },
+
+#define IASM_FUNCTION_MODIFIER "z"
+
+/* APPLE LOCAL end CW asm blocks */
 
 enum rs6000_builtin_type_index
 {

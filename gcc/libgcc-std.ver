@@ -274,3 +274,11 @@ GCC_4.2.0 {
   __floatuntitf
   _Unwind_GetIPInfo
 }
+# APPLE LOCAL begin mainline bswap
+%inherit GCC_4.3 GCC_4.2.0
+GCC_4.3.0 {
+  # byte swapping routines
+  __bswapsi2
+  __bswapdi2
+}
+# APPLE LOCAL end mainline bswap

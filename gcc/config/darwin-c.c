@@ -34,6 +34,13 @@ Boston, MA 02110-1301, USA.  */
 #include "tm_p.h"
 #include "cppdefault.h"
 #include "prefix.h"
+/* APPLE LOCAL include options.h */
+#include "options.h"
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+#include "flags.h"
+#include "opts.h"
+#include "varray.h"
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
 
 /* Pragmas.  */
 
@@ -45,32 +52,76 @@ static bool using_frameworks = false;
 /* Maintain a small stack of alignments.  This is similar to pragma
    pack's stack, but simpler.  */
 
-static void push_field_alignment (int);
+/* APPLE LOCAL begin Macintosh alignment 2001-12-17 --ff */
+static void push_field_alignment (int, int, int);
+/* APPLE LOCAL end Macintosh alignment 2001-12-17 --ff */
 static void pop_field_alignment (void);
 static const char *find_subframework_file (const char *, const char *);
-static void add_system_framework_path (char *);
+/* APPLE LOCAL begin iframework for 4.3 4094959 */
+/* Remove add_system_framework_path */
+/* APPLE LOCAL end iframework for 4.3 4094959 */
 static const char *find_subframework_header (cpp_reader *pfile, const char *header,
 					     cpp_dir **dirp);
 
+/* APPLE LOCAL begin Macintosh alignment 2002-1-22 --ff */
+/* There are four alignment modes supported on the Apple Macintosh
+   platform: power, mac68k, natural, and packed.  These modes are
+   identified as follows:
+     if maximum_field_alignment != 0
+       mode = packed
+     else if OPTION_ALIGN_NATURAL
+       mode = natural
+     else if OPTION_ALIGN_MAC68K
+       mode
+     else
+       mode = power
+   These modes are saved on the alignment stack by saving the values
+   of maximum_field_alignment, OPTION_ALIGN_MAC68K, and
+   OPTION_ALIGN_NATURAL.  */
 typedef struct align_stack
 {
   int alignment;
+  unsigned long mac68k;
+  unsigned long natural;
   struct align_stack * prev;
 } align_stack;
+/* APPLE LOCAL end Macintosh alignment 2002-1-22 --ff */
 
 static struct align_stack * field_align_stack = NULL;
 
+/* APPLE LOCAL begin Macintosh alignment 2001-12-17 --ff */
+/* APPLE LOCAL begin radar 4679943 */
+/* natural_alignment == 0 means "off"
+   natural_alignment == 1 means "on"
+   natural_alignment == 2 means "unchanged"  */
+/* APPLE LOCAL end radar 4679943 */
+
 static void
-push_field_alignment (int bit_alignment)
+push_field_alignment (int bit_alignment,
+		      int mac68k_alignment, int natural_alignment)
 {
   align_stack *entry = XNEW (align_stack);
 
   entry->alignment = maximum_field_alignment;
+  entry->mac68k = OPTION_ALIGN_MAC68K;
+  entry->natural = OPTION_ALIGN_NATURAL;
   entry->prev = field_align_stack;
   field_align_stack = entry;
 
   maximum_field_alignment = bit_alignment;
+  if (mac68k_alignment)
+    darwin_alignment_flags |= OPTION_MASK_ALIGN_MAC68K;
+  else
+    darwin_alignment_flags &= ~OPTION_MASK_ALIGN_MAC68K;
+
+  /* APPLE LOCAL begin radar 4679943 */
+  if (natural_alignment == 1)
+    darwin_alignment_flags |= OPTION_MASK_ALIGN_NATURAL;
+  else if (natural_alignment == 0)
+    darwin_alignment_flags &= ~OPTION_MASK_ALIGN_NATURAL;
+  /* APPLE LOCAL end radar 4679943 */
 }
+/* APPLE LOCAL end Macintosh alignment 2001-12-17 --ff */
 
 static void
 pop_field_alignment (void)
@@ -80,6 +131,16 @@ pop_field_alignment (void)
       align_stack *entry = field_align_stack;
 
       maximum_field_alignment = entry->alignment;
+/* APPLE LOCAL begin Macintosh alignment 2001-12-17 --ff */
+      if (entry->mac68k)
+	darwin_alignment_flags |= OPTION_MASK_ALIGN_MAC68K;
+      else
+	darwin_alignment_flags &= ~OPTION_MASK_ALIGN_MAC68K;
+      if (entry->natural)
+	darwin_alignment_flags |= OPTION_MASK_ALIGN_NATURAL;
+      else
+	darwin_alignment_flags &= ~OPTION_MASK_ALIGN_NATURAL;
+/* APPLE LOCAL end Macintosh alignment 2001-12-17 --ff */
       field_align_stack = entry->prev;
       free (entry);
     }
@@ -94,6 +155,20 @@ darwin_pragma_ignore (cpp_reader *pfile ATTRIBUTE_UNUSED)
 {
   /* Do nothing.  */
 }
+
+/* APPLE LOCAL begin pragma fenv */
+/* #pragma GCC fenv
+   This is kept in <fenv.h>.  The point is to allow trapping
+   math to default to off.  According to C99, any program
+   that requires trapping math must include <fenv.h>, so
+   we enable trapping math when that gets included.  */
+
+void
+darwin_pragma_fenv (cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  flag_trapping_math = 1;
+}
+/* APPLE LOCAL end pragma fenv */
 
 /* #pragma options align={mac68k|power|reset} */
 
@@ -117,15 +192,143 @@ darwin_pragma_options (cpp_reader *pfile ATTRIBUTE_UNUSED)
     warning (OPT_Wpragmas, "junk at end of '#pragma options'");
 
   arg = IDENTIFIER_POINTER (t);
+/* APPLE LOCAL begin Macintosh alignment 2002-1-22 --ff */
   if (!strcmp (arg, "mac68k"))
-    push_field_alignment (16);
+    {
+      if (POINTER_SIZE == 64)
+	warning (OPT_Wpragmas, "mac68k alignment pragma is deprecated for 64-bit Darwin");
+      push_field_alignment (0, 1, 0);
+    }
+  else if (!strcmp (arg, "native"))	/* equivalent to power on PowerPC */
+    push_field_alignment (0, 0, 0);
+  else if (!strcmp (arg, "natural"))
+    push_field_alignment (0, 0, 1);
+  else if (!strcmp (arg, "packed"))
+    push_field_alignment (8, 0, 0);
   else if (!strcmp (arg, "power"))
-    push_field_alignment (0);
+    push_field_alignment (0, 0, 0);
   else if (!strcmp (arg, "reset"))
     pop_field_alignment ();
   else
-    BAD ("malformed '#pragma options align={mac68k|power|reset}', ignoring");
+    BAD ("malformed '#pragma options align={mac68k|power|natural|reset}', ignoring");
 }
+/* APPLE LOCAL end Macintosh alignment 2002-1-22 --ff */
+
+/* APPLE LOCAL begin Macintosh alignment 2002-1-22 --ff */
+/* #pragma pack ()
+   #pragma pack (N)
+   #pragma pack (pop[,id])
+   #pragma pack (push[,id],N)
+
+   We have a problem handling the semantics of these directives since,
+   to play well with the Macintosh alignment directives, we want the
+   usual pack(N) form to do a push of the previous alignment state.
+   Do we want pack() to do another push or a pop?  */
+
+void
+darwin_pragma_pack (cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  tree x, id = 0;
+  int align = -1;
+  enum cpp_ttype token;
+  enum { set, push, pop } action;
+
+  if (pragma_lex (&x) != CPP_OPEN_PAREN)
+    BAD ("missing '(' after '#pragma pack' - ignored");
+
+  token = pragma_lex (&x);
+  if (token == CPP_CLOSE_PAREN)
+    {
+      action = pop;
+      align = 0;
+    }
+  else if (token == CPP_NUMBER)
+    {
+      if (TREE_CODE (x) != INTEGER_CST)
+	BAD ("invalid constant in %<#pragma pack%> - ignored");
+      align = TREE_INT_CST_LOW (x);
+      action = push;
+      if (pragma_lex (&x) != CPP_CLOSE_PAREN)
+	BAD ("malformed '#pragma pack' - ignored");
+    }
+  else if (token == CPP_NAME)
+    {
+#define GCC_BAD_ACTION do { if (action == push) \
+	  BAD ("malformed '#pragma pack(push[, id], <n>)' - ignored"); \
+	else \
+	  BAD ("malformed '#pragma pack(pop[, id])' - ignored"); \
+	} while (0)
+
+      const char *op = IDENTIFIER_POINTER (x);
+      if (!strcmp (op, "push"))
+	action = push;
+      else if (!strcmp (op, "pop"))
+	action = pop;
+      else
+	BAD2 ("unknown action '%s' for '#pragma pack' - ignored", op);
+
+      while ((token = pragma_lex (&x)) == CPP_COMMA)
+        {
+          token = pragma_lex (&x);
+          if (token == CPP_NAME && id == 0)
+            {
+              id = x;
+            }
+          else if (token == CPP_NUMBER && action == push && align == -1)
+            {
+              if (TREE_CODE (x) != INTEGER_CST)
+                BAD ("invalid constant in %<#pragma pack%> - ignored");
+              align = TREE_INT_CST_LOW (x);
+              if (align == -1)
+                action = set;
+            }
+          else
+            GCC_BAD_ACTION;
+        }
+
+      if (token != CPP_CLOSE_PAREN)
+	GCC_BAD_ACTION;
+#undef GCC_BAD_ACTION
+    }
+else
+  BAD ("malformed '#pragma pack' - ignored");
+
+  if (pragma_lex (&x) != CPP_EOF)
+    warning (OPT_Wpragmas, "junk at end of '#pragma pack'");
+
+  if (action != pop)
+    {
+      switch (align)
+	{
+	  case 0:
+	  case 1:
+	  case 2:
+	  case 4:
+	  case 8:
+	  case 16:
+	    align *= BITS_PER_UNIT;
+	    break;
+	  case -1:
+	    if (action == push)
+              {
+		align = maximum_field_alignment;
+		break;
+	      }
+	  default:
+	    BAD2 ("alignment must be a small power of two, not %d", align);
+	}
+    }
+
+  switch (action)
+    {
+    case pop:   pop_field_alignment ();		      break;
+    /* APPLE LOCAL begin radar 4679943 */
+    case push:  push_field_alignment (align, 0, 2);   break;
+    /* APPLE LOCAL end radar 4679943 */
+    case set:                                         break;
+    }
+}
+/* APPLE LOCAL end Macintosh alignment 2002-1-22 --ff */
 
 /* #pragma unused ([var {, var}*]) */
 
@@ -135,10 +338,12 @@ darwin_pragma_unused (cpp_reader *pfile ATTRIBUTE_UNUSED)
   tree decl, x;
   int tok;
 
-  if (pragma_lex (&x) != CPP_OPEN_PAREN)
+  /* APPLE LOCAL 5979888 */
+  if ((tok=pragma_lex (&x)) != CPP_OPEN_PAREN)
     BAD ("missing '(' after '#pragma unused', ignoring");
 
-  while (1)
+  /* APPLE LOCAL 5979888 */
+  while (tok != CPP_EOF && tok != CPP_CLOSE_PAREN)
     {
       tok = pragma_lex (&decl);
       if (tok == CPP_NAME && decl)
@@ -181,6 +386,161 @@ darwin_pragma_ms_struct (cpp_reader *pfile ATTRIBUTE_UNUSED)
   if (pragma_lex (&t) != CPP_EOF)
     BAD ("junk at end of '#pragma ms_struct'");
 }
+
+/* APPLE LOCAL begin pragma reverse_bitfields */
+/* Handle the reverse_bitfields pragma.  */
+
+void
+darwin_pragma_reverse_bitfields (cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  const char* arg;
+  tree t;
+
+  if (pragma_lex (&t) != CPP_NAME)
+    BAD ("malformed '#pragma reverse_bitfields', ignoring");
+  arg = IDENTIFIER_POINTER (t);
+
+  if (!strcmp (arg, "on"))
+    darwin_reverse_bitfields = true;
+  else if (!strcmp (arg, "off") || !strcmp (arg, "reset"))
+    darwin_reverse_bitfields = false;
+  else
+    BAD ("malformed '#pragma reverse_bitfields {on|off|reset}', ignoring");
+  if (pragma_lex (&t) != CPP_EOF)
+    BAD ("junk at end of '#pragma reverse_bitfields'");
+}
+/* APPLE LOCAL end pragma reverse_bitfields */
+
+/* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+varray_type va_opt;
+
+static void
+push_opt_level (int level, int size)
+{
+  if (!va_opt)
+    VARRAY_INT_INIT (va_opt, 5, "va_opt");
+  VARRAY_PUSH_INT (va_opt, size << 16 | level);
+}
+
+static void
+pop_opt_level (void)
+{
+  int level;
+  if (!va_opt)
+    VARRAY_INT_INIT (va_opt, 5, "va_opt");
+  if (!VARRAY_ACTIVE_SIZE (va_opt))
+    BAD ("optimization pragma stack underflow");
+  level = VARRAY_TOP_INT (va_opt);
+  VARRAY_POP (va_opt);
+
+  optimize_size = level >> 16;
+  optimize = level & 0xffff;
+}
+
+/* APPLE LOCAL begin 4760857 optimization pragmas */
+/* Set the global flags as required by #pragma optimization_level or
+   #pragma optimize_size.  */
+
+static void darwin_set_flags_from_pragma (void)
+{
+  set_flags_from_O (false);
+
+  /* MERGE FIXME 5416402 flag_loop_optimize2 is gone now */
+#if 0
+  /* Enable new loop optimizer pass if any of its optimizations is called.  */
+  if (flag_move_loop_invariants
+      || flag_unswitch_loops
+      || flag_peel_loops
+      || flag_unroll_loops
+      || flag_branch_on_count_reg)
+    flag_loop_optimize2 = 1;
+#endif
+
+  /* This is expected to be defined in each target.   Should contain
+     any snippets from OPTIMIZATION_OPTIONS and OVERRIDE_OPTIONS that
+     set per-func flags on the basis of -O level. */
+  reset_optimization_options (optimize, optimize_size);
+
+  if (align_loops <= 0) align_loops = 1;
+  if (align_loops_max_skip > align_loops || !align_loops)
+    align_loops_max_skip = align_loops - 1;
+  if (align_jumps <= 0) align_jumps = 1;
+  if (align_jumps_max_skip > align_jumps || !align_jumps)
+    align_jumps_max_skip = align_jumps - 1;
+  if (align_labels <= 0) align_labels = 1;
+}
+/* APPLE LOCAL end 4760857 optimization pragmas */
+
+void
+darwin_pragma_opt_level  (cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  tree t;
+  enum cpp_ttype argtype = pragma_lex (&t);
+
+  if (argtype == CPP_NAME)
+    {
+      const char* arg = IDENTIFIER_POINTER (t);
+      if (strcmp (arg, "reset") != 0)
+	BAD ("malformed '#pragma optimization_level [GCC] {0|1|2|3|reset}', ignoring");
+      pop_opt_level ();
+    }
+  else if (argtype == CPP_NUMBER)
+    {
+      if (TREE_CODE (t) != INTEGER_CST
+	  || INT_CST_LT (t, integer_zero_node)
+	  || TREE_INT_CST_HIGH (t) != 0)
+	BAD ("malformed '#pragma optimization_level [GCC] {0|1|2|3|reset}', ignoring");
+
+      push_opt_level (optimize, optimize_size);
+      optimize = TREE_INT_CST_LOW (t);
+      if (optimize > 3)
+	optimize = 3;
+      optimize_size = 0;
+    }
+  else
+    BAD ("malformed '#pragma optimization_level [GCC] {0|1|2|3|reset}', ignoring");
+
+  /* APPLE LOCAL begin 4760857 optimization pragmas */
+  darwin_set_flags_from_pragma ();
+  /* APPLE LOCAL end 4760857 optimization pragmas */
+
+  if (pragma_lex (&t) != CPP_EOF)
+    BAD ("junk at end of '#pragma optimization_level'");
+}
+
+void
+darwin_pragma_opt_size  (cpp_reader *pfile ATTRIBUTE_UNUSED)
+{
+  const char* arg;
+  tree t;
+
+  if (pragma_lex (&t) != CPP_NAME)
+    BAD ("malformed '#pragma optimize_for_size { on | off | reset}', ignoring");
+  arg = IDENTIFIER_POINTER (t);
+
+  if (!strcmp (arg, "on"))
+    {
+      push_opt_level (optimize, optimize_size);
+      optimize_size = 1;
+      optimize = 2;
+    }
+  else if (!strcmp (arg, "off"))
+    /* Not clear what this should do exactly.  CW does not do a pop so
+       we don't either.  */
+    optimize_size = 0;
+  else if (!strcmp (arg, "reset"))
+    pop_opt_level ();
+  else
+    BAD ("malformed '#pragma optimize_for_size { on | off | reset }', ignoring");
+
+  /* APPLE LOCAL begin 4760857 optimization pragmas */
+  darwin_set_flags_from_pragma ();
+  /* APPLE LOCAL end 4760857 optimization pragmas */
+
+  if (pragma_lex (&t) != CPP_EOF)
+    BAD ("junk at end of '#pragma optimize_for_size'");
+}
+/* APPLE LOCAL end optimization pragmas 3124235/3420242 */
 
 static struct {
   size_t len;
@@ -572,7 +932,8 @@ find_subframework_header (cpp_reader *pfile, const char *header, cpp_dir **dirp)
    so '10.4.2' becomes 1042.
    Print a warning if the version number is not known.  */
 static const char *
-version_as_macro (void)
+/* APPLE LOCAL ARM 5683689 */
+macosx_version_as_macro (void)
 {
   static char result[] = "1000";
 
@@ -602,6 +963,81 @@ version_as_macro (void)
   return "1000";
 }
 
+/* APPLE LOCAL begin ARM 5683689 */
+/* Return the value of darwin_iphoneos_version_min suitable for the
+   __ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__ macro.  Unlike the
+   __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ macros, minor version
+   numbers are left-zero-padded.  e.g., '1.2.3' becomes 10203.
+   The last/third version number (patch level?) is optional, and
+   defaults to '00' if not specified.  In the case of a parse error,
+   print a warning and return 10200.  */
+static const char *
+iphoneos_version_as_macro (void)
+{
+  static char result[sizeof ("99.99.99") + 1];
+  const char *src_ptr = darwin_iphoneos_version_min;
+  char *result_ptr = &result[0];
+
+  if (! darwin_iphoneos_version_min)
+    goto fail;
+
+  if (! ISDIGIT (*src_ptr))
+    goto fail;
+
+  /* Copy over the major version number.  */
+  *result_ptr++ = *src_ptr++;
+
+  if (ISDIGIT (*src_ptr))
+    *result_ptr++ = *src_ptr++;
+
+  if (*src_ptr != '.')
+    goto fail;
+
+  src_ptr++;
+
+  /* Start parsing the minor version number.  */
+  if (! ISDIGIT (*src_ptr))
+    goto fail;
+
+  /* Zero-pad a single-digit value, or copy a two-digit value.  */
+  *result_ptr++ = ISDIGIT (*(src_ptr + 1)) ? *src_ptr++ : '0';
+  *result_ptr++ = *src_ptr++;
+
+  /* Parse the third version number (patch level?)  */
+  if (*src_ptr == '\0')
+    {
+      /* Not present -- default to zeroes.  */
+      *result_ptr++ = '0';
+      *result_ptr++ = '0';
+    }
+  else if (*src_ptr == '.')
+    {
+      src_ptr++;
+
+      if (! ISDIGIT (*src_ptr))
+	goto fail;
+
+      /* Zero-pad a single-digit value, or copy a two-digit value.  */
+      *result_ptr++ = ISDIGIT (*(src_ptr + 1)) ? *src_ptr++ : '0';
+      *result_ptr++ = *src_ptr++;
+    }
+  else
+    goto fail;
+
+  /* Verify and copy the terminating NULL.  */
+  if (*src_ptr != '\0')
+    goto fail;
+ 
+  *result_ptr++ = '\0'; 
+  return result;
+  
+ fail:
+  error ("Unknown value %qs of -miphoneos-version-min",
+	 darwin_iphoneos_version_min);
+  return "10200";
+}
+/* APPLE LOCAL end ARM 5683689 */
+
 /* Define additional CPP flags for Darwin.   */
 
 #define builtin_define(TXT) cpp_define (pfile, TXT)
@@ -612,11 +1048,203 @@ darwin_cpp_builtins (cpp_reader *pfile)
   builtin_define ("__MACH__");
   builtin_define ("__APPLE__");
 
-  /* __APPLE_CC__ is defined as some old Apple include files expect it
-     to be defined and won't work if it isn't.  */
-  builtin_define_with_value ("__APPLE_CC__", "1", false);
+  /* APPLE LOCAL Apple version */
+  /* Don't define __APPLE_CC__ here.  */
 
+  /* APPLE LOCAL begin ARM 5683689 */
   if (darwin_macosx_version_min)
     builtin_define_with_value ("__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__",
-			       version_as_macro(), false);
+			       macosx_version_as_macro(), false);
+  else
+    builtin_define_with_value ("__ENVIRONMENT_IPHONE_OS_VERSION_MIN_REQUIRED__",
+			       iphoneos_version_as_macro(), false);
+  /* APPLE LOCAL end ARM 5683689 */
+
+  /* APPLE LOCAL begin constant cfstrings */
+  if (darwin_constant_cfstrings)
+    builtin_define ("__CONSTANT_CFSTRINGS__");
+  /* APPLE LOCAL end constant cfstrings */
+  /* APPLE LOCAL begin pascal strings */
+  if (darwin_pascal_strings)
+    {
+      builtin_define ("__PASCAL_STRINGS__");
+    }
+  /* APPLE LOCAL end pascal strings */
+  /* APPLE LOCAL begin ObjC GC */
+  /* APPLE LOCAL radar 5914395 */
+  if (flag_objc_gc || flag_objc_gc_only)
+    {
+      builtin_define ("__strong=__attribute__((objc_gc(strong)))");
+      builtin_define ("__weak=__attribute__((objc_gc(weak)))");
+      builtin_define ("__OBJC_GC__");
+    }
+  else
+    {
+      builtin_define ("__strong=");
+      /* APPLE LOCAL radar 5847976 */
+      builtin_define ("__weak=__attribute__((objc_gc(weak)))");
+    }
+  /* APPLE LOCAL end ObjC GC */
+  /* APPLE LOCAL begin radar 5932809 - copyable byref blocks */
+  if (flag_blocks) {
+    builtin_define ("__block=__attribute__((__blocks__(byref)))");
+  }
+  /* APPLE LOCAL radar 6230656 */
+  /* code removed */
+  /* APPLE LOCAL end radar 5932809 - copyable byref blocks */
+
+  /* APPLE LOCAL begin C* warnings to easy porting to new abi */
+  if (flag_objc_abi == 2)
+    builtin_define ("__OBJC2__");
+  /* APPLE LOCAL end C* warnings to easy porting to new abi */
+  /* APPLE LOCAL begin radar 5072864 */
+  if (flag_objc_zerocost_exceptions)
+    builtin_define ("OBJC_ZEROCOST_EXCEPTIONS");
+  /* APPLE LOCAL radar 4899595 */
+  builtin_define ("OBJC_NEW_PROPERTIES");
+  /* APPLE LOCAL end radar 5072864 */
+/* APPLE LOCAL begin confused diff */
 }
+/* APPLE LOCAL end confused diff */
+/* APPLE LOCAL begin iframework for 4.3 4094959 */
+bool
+darwin_handle_c_option (size_t code, const char *arg, int value ATTRIBUTE_UNUSED)
+{
+  switch (code)
+    {
+    default:
+      /* Options with a flag are otherwise assumed to be handled.  */
+      if (cl_options[code].flag_var)
+	break;
+
+      /* Unrecognized options that we said we'd handle turn into
+	 errors if not listed here if they don't have a flag.  */
+      return false;
+
+    case OPT_iframework:
+      add_system_framework_path (xstrdup (arg));
+      break;
+    }
+  return true;
+}
+/* APPLE LOCAL end iframework for 4.3 4094959 */
+
+/* APPLE LOCAL begin radar 4985544 - radar 5096648 - radar 5195402 */
+/* Check that TYPE is CFStringRef type. */
+bool
+objc_check_cfstringref_type (tree type)
+{
+   tree CFStringRef_decl = lookup_name (get_identifier ("CFStringRef"));
+   if (!CFStringRef_decl || TREE_CODE (CFStringRef_decl) != TYPE_DECL)
+     return false;
+   return type == TREE_TYPE (CFStringRef_decl);
+}
+
+/* This routine checks that FORMAT_NUM'th argument ARGUMENT has the 'CFStringRef' type. */
+bool
+objc_check_format_cfstring (tree argument,
+                            unsigned HOST_WIDE_INT format_num,
+                            bool *no_add_attrs)
+{
+  unsigned HOST_WIDE_INT i;
+  /* APPLE LOCAL begin 6212507 */
+  if (format_num < 1)
+    {
+      error ("argument number of CFString format cannot be less than one");
+      return false;
+    }
+  /* APPLE LOCAL end 6212507 */
+  for (i = 1; i != format_num; i++)
+    {
+      if (argument == 0)
+        break;
+       argument = TREE_CHAIN (argument);
+    }
+
+  if (!objc_check_cfstringref_type (TREE_VALUE (argument)))
+    {
+      error ("format CFString argument not an 'CFStringRef' type");
+      *no_add_attrs = true;
+      return false;
+    }
+  return true;
+}
+/* APPLE LOCAL end radar 4985544 - radar 5096648 - radar 5195402 */
+
+/* APPLE LOCAL begin radar 2996215 - 6068877 */
+/* wrapper to call libcpp's conversion routine. */
+bool
+cvt_utf8_utf16 (const unsigned char *inbuf, size_t length, 
+		     unsigned char **uniCharBuf, size_t *numUniChars)
+{
+  return cpp_utf8_utf16 (parse_in, inbuf, length, uniCharBuf, numUniChars);
+}
+/* This routine declares static char __utf16_string [numUniChars] in __TEXT,__ustring
+   section and initializes it with uniCharBuf[numUniChars] characters.
+*/ 
+tree
+create_init_utf16_var (const unsigned char *inbuf, size_t length, size_t *numUniChars)
+{
+  size_t l;
+  tree decl, type, init;
+  tree initlist = NULL_TREE;
+  tree attribute; 
+  const char *section_name = "__TEXT,__ustring";
+  int len = strlen (section_name);
+  unsigned char *uniCharBuf;
+  static int num;
+  const char *name_prefix = "__utf16_string_";
+  char *name;
+  int embedNull = 0;
+
+  if (!cvt_utf8_utf16 (inbuf, length, &uniCharBuf, numUniChars))
+    return NULL_TREE;
+
+  /* APPLE LOCAL begin 7589850 */
+  /* ustring with embedded null should go into __const. It should not be forced
+     into "__TEXT,__ustring" section. */
+  for (l = 0; l < length; l++) {
+    if (!inbuf[l]) {
+      embedNull = 1;
+      break;
+    }
+  }
+  /* APPLE LOCAL end 7589850 */
+
+  for (l = 0; l < *numUniChars; l++)
+    initlist = tree_cons (NULL_TREE, build_int_cst (char_type_node, uniCharBuf[l]), initlist);
+  type = build_array_type (char_type_node,
+                           build_index_type (build_int_cst (NULL_TREE, *numUniChars)));
+  name = (char *)alloca (strlen (name_prefix) + 10);
+  sprintf (name, "%s%d", name_prefix, ++num);
+  decl = build_decl (VAR_DECL, get_identifier (name), type);
+  TREE_STATIC (decl) = 1;
+  DECL_INITIAL (decl) = error_mark_node;  /* A real initializer is coming... */
+  DECL_IGNORED_P (decl) = 1;
+  DECL_ARTIFICIAL (decl) = 1;
+  DECL_CONTEXT (decl) = NULL_TREE;
+
+  /* APPLE LOCAL begin 7589850 */
+  if (!embedNull) {
+    attribute = tree_cons (NULL_TREE, build_string (len, section_name), NULL_TREE);
+    attribute = tree_cons (get_identifier ("section"), attribute, NULL_TREE);
+    decl_attributes (&decl, attribute, 0);
+  }
+  /* APPLE LOCAL end 7589850 */
+  attribute = tree_cons (NULL_TREE, build_int_cst (NULL_TREE, 2), NULL_TREE);
+  attribute = tree_cons (get_identifier ("aligned"), attribute, NULL_TREE);
+  decl_attributes (&decl, attribute, 0);
+  init = build_constructor_from_list (type, nreverse (initlist));
+  TREE_CONSTANT (init) = 1;
+  TREE_STATIC (init) = 1;
+  TREE_READONLY (init) = 1;
+  if (c_dialect_cxx ())
+    TREE_TYPE (init) = NULL_TREE;
+  finish_decl (decl, init, NULL_TREE);
+  /* Ensure that the variable actually gets output.  */
+  mark_decl_referenced (decl);
+  /* Mark the decl to avoid "defined but not used" warning.  */
+  TREE_USED (decl) = 1;
+  return decl;
+}
+/* APPLE LOCAL end radar 2996215 - 6068877 */

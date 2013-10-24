@@ -37,17 +37,18 @@
 #error Use the "-maltivec" flag to enable PowerPC AltiVec support
 #endif
 
-/* If __APPLE_ALTIVEC__ is defined, the compiler supports 'vector',
-   'pixel' and 'bool' as context-sensitive AltiVec keywords (in 
-   non-AltiVec contexts, they revert to their original meanings,
-   if any), so we do not need to define them as macros.  */
+/* APPLE LOCAL begin AltiVec */
+/* If __APPLE_ALTIVEC__ is defined, the compiler has internally
+   synthesized the definitions contained in this header.  */
 
-#if !defined(__APPLE_ALTIVEC__)
+#if defined(__APPLE_ALTIVEC__)
+#warning Ignoring <altivec.h> because "-faltivec" specified
+#else
 /* You are allowed to undef these for C++ compatibility.  */
 #define vector __vector
 #define pixel __pixel
 #define bool __bool
-#endif
+/* APPLE LOCAL end AltiVec */
 
 /* Condition register codes for AltiVec predicates. */
 
@@ -458,4 +459,6 @@ __altivec_scalar_pred(vec_any_nle,
    to #define vec_step to __builtin_vec_step.  */
 #define vec_step(x) __builtin_vec_step (* (__typeof__ (x) *) 0)
 
+/* APPLE LOCAL AltiVec */
+#endif /* __APPLE_ALTIVEC__ */
 #endif /* _ALTIVEC_H */

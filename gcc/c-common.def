@@ -25,6 +25,15 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 /* Tree nodes used in the C frontend.  These are also shared with the
    C++ and Objective C frontends.  */
 
+/* APPLE LOCAL radar 4278774 */
+DEFTREECODE (AT_ENCODE_EXPR, "at_encode_expr", tcc_unary, 1)
+
+/* APPLE LOCAL begin CW asm blocks */
+/* Tree nodes for CW asm block.  */
+/* Use to represent [x].  */
+DEFTREECODE (BRACKET_EXPR, "bracket_expr", tcc_unary, 2)
+/* APPLE LOCAL end CW asm blocks */
+
 /* A COMPOUND_LITERAL_EXPR represents a C99 compound literal.  The
    COMPOUND_LITERAL_EXPR_DECL_STMT is the a DECL_STMT containing the decl
    for the anonymous object represented by the COMPOUND_LITERAL;

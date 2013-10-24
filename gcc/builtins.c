@@ -196,6 +196,8 @@ static tree fold_builtin_sprintf_chk (tree, enum built_in_function);
 static tree fold_builtin_printf (tree, tree, bool, enum built_in_function);
 static tree fold_builtin_fprintf (tree, tree, bool, enum built_in_function);
 static bool init_target_chars (void);
+/* APPLE LOCAL 3399553 */
+static rtx expand_builtin_flt_rounds (void);
 
 static unsigned HOST_WIDE_INT target_newline;
 static unsigned HOST_WIDE_INT target_percent;
@@ -315,9 +317,9 @@ get_pointer_alignment (tree exp, unsigned int max_align)
 	      else if (offset)
 		inner = MIN (inner, BITS_PER_UNIT);
 	    }
-	  if (TREE_CODE (exp) == FUNCTION_DECL)
-	    align = FUNCTION_BOUNDARY;
-	  else if (DECL_P (exp))
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  if (DECL_P (exp))
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	    align = MIN (inner, DECL_ALIGN (exp));
 #ifdef CONSTANT_ALIGNMENT
 	  else if (CONSTANT_CLASS_P (exp))
@@ -591,14 +593,21 @@ expand_builtin_return_addr (enum built_in_function fndecl_code, int count)
       tem = copy_to_reg (tem);
     }
 
+  /* APPLE LOCAL begin ARM reliable backtraces */
   /* For __builtin_frame_address, return what we've got.  But, on
      the SPARC for example, we may have to add a bias.  */
   if (fndecl_code == BUILT_IN_FRAME_ADDRESS)
+    {
+      current_function_calls_builtin_frame_addr = 1;
 #ifdef FRAME_ADDR_RTX
-    return FRAME_ADDR_RTX (tem);
+      return FRAME_ADDR_RTX (tem);
 #else
-    return tem;
+      return tem;
 #endif
+    }
+  else
+    current_function_calls_builtin_ret_addr = 1;
+  /* APPLE LOCAL end ARM reliable backtraces */
 
   /* For __builtin_return_address, get the return address from that frame.  */
 #ifdef RETURN_ADDR_RTX
@@ -686,12 +695,18 @@ expand_builtin_setjmp_receiver (rtx receiver_label ATTRIBUTE_UNUSED)
 #ifdef HAVE_nonlocal_goto
   if (! HAVE_nonlocal_goto)
 #endif
+/* APPLE LOCAL begin ARM reliable backtraces */
+/* If we have chosen a different definition of
+   builtin_setjmp_frame_value, then it's up to us to manually restore
+   it as needed in builtin_setjmp_receiver.  */
+  if (targetm.builtin_setjmp_frame_value () == virtual_stack_vars_rtx)
     {
       emit_move_insn (virtual_stack_vars_rtx, hard_frame_pointer_rtx);
       /* This might change the hard frame pointer in ways that aren't
 	 apparent to early optimization passes, so force a clobber.  */
       emit_insn (gen_rtx_CLOBBER (VOIDmode, hard_frame_pointer_rtx));
     }
+/* APPLE LOCAL end ARM reliable backtraces */
 
 #if ARG_POINTER_REGNUM != HARD_FRAME_POINTER_REGNUM
   if (fixed_regs[ARG_POINTER_REGNUM])
@@ -4268,8 +4283,10 @@ std_gimplify_va_arg_expr (tree valist, tree type, tree *pre_p, tree *post_p)
 
   /* va_list pointer is aligned to PARM_BOUNDARY.  If argument actually
      requires greater alignment, we must perform dynamic alignment.  */
+  /* APPLE LOCAL begin unbreak ppc64 abi 5103220 */
   if (boundary > align
-      && !integer_zerop (TYPE_SIZE (type)))
+      /* && !integer_zerop (TYPE_SIZE (type)) */)
+  /* APPLE LOCAL end unbreak ppc64 abi 5103220 */
     {
       t = fold_convert (TREE_TYPE (valist), size_int (boundary - 1));
       t = build2 (MODIFY_EXPR, TREE_TYPE (valist), valist_tmp,
@@ -4586,9 +4603,38 @@ expand_builtin_alloca (tree arglist, rtx target)
   result = allocate_dynamic_stack_space (op0, target, BITS_PER_UNIT);
   result = convert_memory_address (ptr_mode, result);
 
+  /* APPLE LOCAL begin ARM 5051776 */
+  /* EH with sjlj needs to know when the stack layout has changed.  */
+  emit_note (NOTE_INSN_ALLOCA);
+  /* APPLE LOCAL end ARM 5051776 */
+
   return result;
 }
+/* APPLE LOCAL begin mainline bswap */
+/* Expand a call to a bswap builtin.  The arguments are in ARGLIST.  MODE
+   is the mode to expand with.  */
 
+static rtx
+expand_builtin_bswap (tree arglist, rtx target, rtx subtarget)
+{
+  enum machine_mode mode;
+  tree arg;
+  rtx op0;
+
+  if (!validate_arglist (arglist, INTEGER_TYPE, VOID_TYPE))
+    return 0;
+
+  arg = TREE_VALUE (arglist);
+  mode = TYPE_MODE (TREE_TYPE (arg));
+  op0 = expand_expr (arg, subtarget, VOIDmode, 0);
+
+  target = expand_unop (mode, bswap_optab, op0, target, 1);
+
+  gcc_assert (target);
+
+  return convert_to_mode (mode, target, 0);
+}
+/* APPLE LOCAL end mainline bswap */
 /* Expand a call to a unary builtin.  The arguments are in ARGLIST.
    Return 0 if a normal call should be emitted rather than expanding the
    function in-line.  If convenient, the result should be placed in TARGET.
@@ -5596,8 +5642,10 @@ expand_builtin_synchronize (void)
 
   /* If no explicit memory barrier instruction is available, create an
      empty asm stmt with a memory clobber.  */
-  x = build4 (ASM_EXPR, void_type_node, build_string (0, ""), NULL, NULL,
-	      tree_cons (NULL, build_string (6, "memory"), NULL));
+  /* APPLE LOCAL begin CW asm blocks */
+  x = build5 (ASM_EXPR, void_type_node, build_string (0, ""), NULL, NULL,
+	      tree_cons (NULL, build_string (6, "memory"), NULL), NULL);
+  /* APPLE LOCAL end CW asm blocks */
   ASM_VOLATILE_P (x) = 1;
   expand_asm_expr (x);
 }
@@ -5877,6 +5925,16 @@ expand_builtin (tree exp, rtx target, rtx subtarget, enum machine_mode mode,
       expand_stack_restore (TREE_VALUE (arglist));
       return const0_rtx;
 
+    /* APPLE LOCAL begin mainline bswap */
+    case BUILT_IN_BSWAP32:
+    case BUILT_IN_BSWAP64:
+      target = expand_builtin_bswap (arglist, target, subtarget);
+
+      if (target)
+        return target;
+      break;
+
+    /* APPLE LOCAL end mainline bswap */
     CASE_INT_FN (BUILT_IN_FFS):
     case BUILT_IN_FFSIMAX:
       target = expand_builtin_unop (target_mode, arglist, target,
@@ -6474,6 +6532,11 @@ expand_builtin (tree exp, rtx target, rtx subtarget, enum machine_mode mode,
     case BUILT_IN_VSPRINTF_CHK:
       maybe_emit_sprintf_chk_warning (exp, fcode);
       break;
+
+    /* APPLE LOCAL begin 3399553 */
+    case BUILT_IN_FLT_ROUNDS:
+      return expand_builtin_flt_rounds ();
+    /* APPLE LOCAL end 3399553 */
 
     default:	/* just do library call, if unknown builtin */
       break;
@@ -7538,7 +7601,69 @@ fold_builtin_bitop (tree fndecl, tree arglist)
 
   return NULL_TREE;
 }
+/* APPLE LOCAL begin mainline bswap */
+/* Fold function call to builtin_bswap and the long and long long
+   variants.  Return NULL_TREE if no simplification can be made.  */
+static tree
+fold_builtin_bswap (tree fndecl, tree arglist)
+{
+  tree arg;
 
+  if (! validate_arglist (arglist, INTEGER_TYPE, VOID_TYPE))
+    return 0;
+
+  /* Optimize constant value.  */
+  arg = TREE_VALUE (arglist);
+  if (TREE_CODE (arg) == INTEGER_CST && ! TREE_CONSTANT_OVERFLOW (arg))
+    {
+      HOST_WIDE_INT hi, width, r_hi = 0;
+      unsigned HOST_WIDE_INT lo, r_lo = 0;
+      tree type;
+
+      type = TREE_TYPE (arg);
+      width = TYPE_PRECISION (type);
+      lo = TREE_INT_CST_LOW (arg);
+      hi = TREE_INT_CST_HIGH (arg);
+
+      switch (DECL_FUNCTION_CODE (fndecl))
+        {
+          case BUILT_IN_BSWAP32:
+          case BUILT_IN_BSWAP64:
+            {
+              int s;
+
+              for (s = 0; s < width; s += 8)
+                {
+                  int d = width - s - 8;
+                  unsigned HOST_WIDE_INT byte;
+
+                  if (s < HOST_BITS_PER_WIDE_INT)
+                    byte = (lo >> s) & 0xff;
+                  else
+                    byte = (hi >> (s - HOST_BITS_PER_WIDE_INT)) & 0xff;
+
+                  if (d < HOST_BITS_PER_WIDE_INT)
+                    r_lo |= byte << d;
+                  else
+                    r_hi |= byte << (d - HOST_BITS_PER_WIDE_INT);
+                }
+            }
+
+            break;
+
+        default:
+          gcc_unreachable ();
+        }
+
+      if (width < HOST_BITS_PER_WIDE_INT)
+        return build_int_cst (TREE_TYPE (TREE_TYPE (fndecl)), r_lo);
+      else
+        return build_int_cst_wide (TREE_TYPE (TREE_TYPE (fndecl)), r_lo, r_hi);
+    }
+
+  return NULL_TREE;
+}
+/* APPLE LOCAL end mainline bswap */
 /* Return true if EXPR is the real constant contained in VALUE.  */
 
 static bool
@@ -8720,7 +8845,8 @@ fold_builtin_classify (tree fndecl, tree arglist, int builtin_index)
   switch (builtin_index)
     {
     case BUILT_IN_ISINF:
-      if (!MODE_HAS_INFINITIES (TYPE_MODE (TREE_TYPE (arg))))
+      /* APPLE LOCAL mainline 5675014 */
+      if (!HONOR_INFINITIES (TYPE_MODE (TREE_TYPE (arg))))
 	return omit_one_operand (type, integer_zero_node, arg);
 
       if (TREE_CODE (arg) == REAL_CST)
@@ -8736,9 +8862,12 @@ fold_builtin_classify (tree fndecl, tree arglist, int builtin_index)
       return NULL_TREE;
 
     case BUILT_IN_FINITE:
-      if (!MODE_HAS_NANS (TYPE_MODE (TREE_TYPE (arg)))
-	  && !MODE_HAS_INFINITIES (TYPE_MODE (TREE_TYPE (arg))))
-	return omit_one_operand (type, integer_zero_node, arg);
+      /* APPLE LOCAL begin mainline 5675014 */
+      if (!HONOR_NANS (TYPE_MODE (TREE_TYPE (arg)))
+	  && !HONOR_INFINITIES (TYPE_MODE (TREE_TYPE (arg))))
+	/* APPLE LOCAL 6119849 */
+	return omit_one_operand (type, integer_one_node, arg);
+      /* APPLE LOCAL end mainline 5675014 */
 
       if (TREE_CODE (arg) == REAL_CST)
 	{
@@ -8750,7 +8879,8 @@ fold_builtin_classify (tree fndecl, tree arglist, int builtin_index)
       return NULL_TREE;
 
     case BUILT_IN_ISNAN:
-      if (!MODE_HAS_NANS (TYPE_MODE (TREE_TYPE (arg))))
+      /* APPLE LOCAL mainline 5675014 */
+      if (!HONOR_NANS (TYPE_MODE (TREE_TYPE (arg))))
 	return omit_one_operand (type, integer_zero_node, arg);
 
       if (TREE_CODE (arg) == REAL_CST)
@@ -8833,12 +8963,14 @@ fold_builtin_unordered_cmp (tree fndecl, tree arglist,
 
   if (unordered_code == UNORDERED_EXPR)
     {
-      if (!MODE_HAS_NANS (TYPE_MODE (TREE_TYPE (arg0))))
+      /* APPLE LOCAL mainline 5675014 */
+      if (!HONOR_NANS (TYPE_MODE (TREE_TYPE (arg0))))
 	return omit_two_operands (type, integer_zero_node, arg0, arg1);
       return fold_build2 (UNORDERED_EXPR, type, arg0, arg1);
     }
 
-  code = MODE_HAS_NANS (TYPE_MODE (TREE_TYPE (arg0))) ? unordered_code
+  /* APPLE LOCAL mainline 5675014 */
+  code = HONOR_NANS (TYPE_MODE (TREE_TYPE (arg0))) ? unordered_code
 						      : ordered_code;
   return fold_build1 (TRUTH_NOT_EXPR, type,
 		      fold_build2 (code, type, arg0, arg1));
@@ -8852,9 +8984,18 @@ fold_builtin_unordered_cmp (tree fndecl, tree arglist,
 static tree
 fold_builtin_1 (tree fndecl, tree arglist, bool ignore)
 {
-  tree type = TREE_TYPE (TREE_TYPE (fndecl));
+  /* APPLE LOCAL begin radar 4629695 */
+  tree type;
+  /* APPLE LOCAL end radar 4629695 */
   enum built_in_function fcode;
 
+  /* APPLE LOCAL begin radar 4629695 */
+  /* If there is a type cast when calling a builtin function, it is possible that
+     its callee declaration is not available. */
+  if (fndecl == 0)
+    return NULL_TREE;
+  type = TREE_TYPE (TREE_TYPE (fndecl));
+  /* APPLE LOCAL end radar 4629695 */
   if (DECL_BUILT_IN_CLASS (fndecl) == BUILT_IN_MD)
     return targetm.fold_builtin (fndecl, arglist, ignore);
 
@@ -9052,7 +9193,12 @@ fold_builtin_1 (tree fndecl, tree arglist, bool ignore)
     CASE_FLT_FN (BUILT_IN_LRINT):
     CASE_FLT_FN (BUILT_IN_LLRINT):
       return fold_fixed_mathfn (fndecl, arglist);
+    /* APPLE LOCAL begin mainline bswap */
+    case BUILT_IN_BSWAP32:
+    case BUILT_IN_BSWAP64:
+      return fold_builtin_bswap (fndecl, arglist);
 
+    /* APPLE LOCAL end mainline bswap */
     CASE_INT_FN (BUILT_IN_FFS):
     CASE_INT_FN (BUILT_IN_CLZ):
     CASE_INT_FN (BUILT_IN_CTZ):
@@ -9172,7 +9318,11 @@ fold_builtin_1 (tree fndecl, tree arglist, bool ignore)
 				   DECL_FUNCTION_CODE (fndecl));
 
     default:
-      break;
+      /* APPLE LOCAL begin constant cfstrings */
+      /* Don't just do the library call if it's unknown, try using
+	 our target version, then call the library call if that doesn't work. */
+      return (*targetm.expand_tree_builtin) (fndecl, arglist,NULL_TREE);
+      /* APPLE LOCAL end constant cfstrings */
     }
 
   return 0;
@@ -9246,6 +9396,12 @@ validate_arglist (tree arglist, ...)
 	      if (! POINTER_TYPE_P (TREE_TYPE (TREE_VALUE (arglist))))
 		goto end;
 	    }
+	  /* APPLE LOCAL begin 5813921 */
+	  else if (code == INTEGER_TYPE
+		   && (TREE_CODE (TREE_TYPE (TREE_VALUE (arglist)))
+		       == ENUMERAL_TYPE))
+	    /* Allow ENUMERAL_TYPE to match INTEGER_TYPE.  */ ;
+	  /* APPLE LOCAL end 5813921 */
 	  else if (code != TREE_CODE (TREE_TYPE (TREE_VALUE (arglist))))
 	    goto end;
 	  break;
@@ -11198,3 +11354,24 @@ init_target_chars (void)
     }
   return true;
 }
+
+/* APPLE LOCAL begin 3399553 */
+/* Evaluate FLT_ROUNDS, whose value is dependent upon the current
+   rounding mode and which may be changed by a call to fesetround.  */
+
+static rtx
+expand_builtin_flt_rounds (void)
+{
+#ifdef HAVE_flt_rounds
+  if (HAVE_flt_rounds)
+    {
+      rtx target = gen_reg_rtx (TYPE_MODE (integer_type_node));
+      emit_insn (gen_flt_rounds (target));
+      return target;
+    }
+  else
+#endif
+  /* Default: round to nearest.  */
+  return const1_rtx;
+}
+/* APPLE LOCAL end 3399553 */

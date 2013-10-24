@@ -735,6 +735,9 @@
 /* Define if your assembler and linker support .hidden. */
 #undef HAVE_GAS_HIDDEN
 
+/* Define if your assembler supports .literal16. */
+#undef HAVE_GAS_LITERAL16
+
 /* Define if your assembler supports specifying the maximum number of bytes to
    skip when using the GAS .p2align command. */
 #ifndef USED_FOR_TARGET
@@ -929,6 +932,12 @@
 /* Define to 1 if the system has the type `long long'. */
 #ifndef USED_FOR_TARGET
 #undef HAVE_LONG_LONG
+#endif
+
+
+/* Define to 1 if you have the <mach/mach_time.h> header file. */
+#ifndef USED_FOR_TARGET
+#undef HAVE_MACH_MACH_TIME_H
 #endif
 
 

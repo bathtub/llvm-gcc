@@ -146,6 +146,10 @@ enum optab_index
   /* Abs value */
   OTI_abs,
   OTI_absv,
+  /* APPLE LOCAL begin mainline bswap */
+  /* Byteswap */
+  OTI_bswap,
+  /* APPLE LOCAL end mainline bswap */
   /* Bitwise not */
   OTI_one_cmpl,
   /* Bit scanning and counting */
@@ -314,6 +318,8 @@ extern GTY(()) optab optab_table[OTI_MAX];
 #define negv_optab (optab_table[OTI_negv])
 #define abs_optab (optab_table[OTI_abs])
 #define absv_optab (optab_table[OTI_absv])
+/* APPLE LOCAL mainline bswap */
+#define bswap_optab (optab_table[OTI_bswap])
 #define one_cmpl_optab (optab_table[OTI_one_cmpl])
 #define ffs_optab (optab_table[OTI_ffs])
 #define clz_optab (optab_table[OTI_clz])

@@ -90,6 +90,15 @@ static bitmap needs_copy_in;
 static bitmap sra_type_decomp_cache;
 static bitmap sra_type_inst_cache;
 
+/* APPLE LOCAL begin 4158356 PR 22156/22157 */
+enum copy_how
+{
+  element_copy,
+  block_copy,
+  integer_copy
+};
+/* APPLE LOCAL end 4158356 PR 22156/22157 */
+
 /* One of these structures is created for each candidate aggregate and
    each (accessed) member or group of members of such an aggregate.  */
 struct sra_elt
@@ -134,7 +143,8 @@ struct sra_elt
 
   /* True if we've decided that structure-to-structure assignment
      should happen via memcpy and not per-element.  */
-  bool use_block_copy;
+  /* APPLE LOCAL 4158356 PR 22156/22157 */
+  enum copy_how how_to_copy;
 
   /* True if everything under this element has been marked TREE_NO_WARNING.  */
   bool all_no_warning;
@@ -1218,6 +1228,59 @@ instantiate_element (struct sra_elt *elt)
     }
 }
 
+/* APPLE LOCAL begin 4158356 PR 22156/22157 */
+/* Instantiate an element as an integer variable.  */
+
+static void
+instantiate_element_integer (struct sra_elt *elt)
+{
+  tree var, base;
+  tree new_type;
+  
+  new_type = lang_hooks.types.type_for_mode (TYPE_MODE (elt->type), 1);
+  base = elt->element;
+  
+
+  elt->replacement = var = make_rename_temp (new_type, "SR");
+  DECL_SOURCE_LOCATION (var) = DECL_SOURCE_LOCATION (base);
+  DECL_ARTIFICIAL (var) = 1;
+
+  if (TREE_THIS_VOLATILE (elt->type))
+    {
+      TREE_THIS_VOLATILE (var) = 1;
+      TREE_SIDE_EFFECTS (var) = 1;
+    }
+
+  if (DECL_NAME (base) && !DECL_IGNORED_P (base))
+    {
+      char *pretty_name = build_element_name (elt);
+      DECL_NAME (var) = get_identifier (pretty_name);
+      obstack_free (&sra_obstack, pretty_name);
+
+      SET_DECL_DEBUG_EXPR (var, generate_element_ref (elt));
+      DECL_DEBUG_EXPR_IS_FROM (var) = 1;
+      
+      DECL_IGNORED_P (var) = 0;
+      TREE_NO_WARNING (var) = TREE_NO_WARNING (base);
+    }
+  else
+    {
+      DECL_IGNORED_P (var) = 1;
+      /* ??? We can't generate any warning that would be meaningful.  */
+      TREE_NO_WARNING (var) = 1;
+    }
+
+  if (dump_file)
+    {
+      fputs ("  ", dump_file);
+      dump_sra_elt_name (dump_file, elt);
+      fputs (" -> ", dump_file);
+      print_generic_expr (dump_file, var, dump_flags);
+      fputc ('\n', dump_file);
+    }
+}
+/* APPLE LOCAL end 4158356 PR 22156/22157 */
+
 /* Make one pass across an element tree deciding whether or not it's
    profitable to instantiate individual leaf scalars.
 
@@ -1386,7 +1449,8 @@ decide_block_copy (struct sra_elt *elt)
   /* If scalarization is disabled, respect it.  */
   if (elt->cannot_scalarize)
     {
-      elt->use_block_copy = 1;
+      /* APPLE LOCAL 4158356 PR 22156/22157 */
+      elt->how_to_copy = block_copy;
 
       if (dump_file)
 	{
@@ -1406,7 +1470,8 @@ decide_block_copy (struct sra_elt *elt)
       for (c = elt->groups; c; c = c->sibling)
 	{
 	  c->cannot_scalarize = 1;
-	  c->use_block_copy = 1;
+	  /* APPLE LOCAL 4158356 PR 22156/22157 */
+	  c->how_to_copy = block_copy;
 	}
 
       return false;
@@ -1419,12 +1484,14 @@ decide_block_copy (struct sra_elt *elt)
   else if (!elt->is_scalar)
     {
       tree size_tree = TYPE_SIZE_UNIT (elt->type);
-      bool use_block_copy = true;
+      /* APPLE LOCAL 4158356 PR 22156/22157 */
+      enum copy_how how_to_copy = block_copy;
 
       /* Tradeoffs for COMPLEX types pretty much always make it better
 	 to go ahead and split the components.  */
       if (TREE_CODE (elt->type) == COMPLEX_TYPE)
-	use_block_copy = false;
+        /* APPLE LOCAL 4158356 PR 22156/22157 */
+	how_to_copy = element_copy;
 
       /* Don't bother trying to figure out the rest if the structure is
 	 so large we can't do easy arithmetic.  This also forces block
@@ -1458,38 +1525,82 @@ decide_block_copy (struct sra_elt *elt)
 	  if (full_size <= max_size
 	      && (full_count - inst_count) <= max_count
 	      && elt->n_copies > elt->n_uses)
-	    use_block_copy = false;
+            /* APPLE LOCAL 4158356 PR 22156/22157 */
+	    how_to_copy = element_copy;
 	  else if (inst_count * 100 >= full_count * SRA_FIELD_STRUCTURE_RATIO
 		   && inst_size * 100 >= full_size * SRA_FIELD_STRUCTURE_RATIO)
-	    use_block_copy = false;
+                /* APPLE LOCAL 4158356 PR 22156/22157 */
+		how_to_copy = element_copy;
 
 	  /* In order to avoid block copy, we have to be able to instantiate
 	     all elements of the type.  See if this is possible.  */
-	  if (!use_block_copy
+          /* APPLE LOCAL 4158356 PR 22156/22157 */
+	  if ((how_to_copy != block_copy)
 	      && (!can_completely_scalarize_p (elt)
 		  || !type_can_instantiate_all_elements (elt->type)))
-	    use_block_copy = true;
+            /* APPLE LOCAL begin 4158356 4875151 PR 22156/22157 */
+	    how_to_copy = block_copy;
+	  /* If the type fits in a mode other than BLK_MODE, we don't really
+	     need to do a block copy or an element copy but we can use V_C_E
+	     and create an integer variable which has the same mode as the
+	     struct and this is only a copy.
+	     Copies bigger than DImode create problems later, so disallow them.
+	     Using a DImode copy for two word-size fields has nothing to gain,
+	     and may interfere with later optimizations, so don't do it.
+	     (As done above for COMPLEX.)  */
+	  if (!elt->is_scalar && TYPE_MODE (elt->type) != BLKmode
+	      && elt->n_uses == 0 && elt->children == NULL
+	      && full_size <= GET_MODE_SIZE (DImode)
+	      && (full_size != 2 * UNITS_PER_WORD || full_count != 2))
+	    how_to_copy = integer_copy;
+          /* APPLE LOCAL end 4158356 4875151 PR 22156/22157 */
 	}
 
-      elt->use_block_copy = use_block_copy;
+      /* APPLE LOCAL 4158356 PR 22156/22157 */
+      elt->how_to_copy = how_to_copy;
 
       /* Groups behave like their parent.  */
       for (c = elt->groups; c; c = c->sibling)
-	c->use_block_copy = use_block_copy;
+	/* APPLE LOCAL 4158356 PR 22156/22157 */
+	c->how_to_copy = how_to_copy;
 
       if (dump_file)
 	{
-	  fprintf (dump_file, "Using %s for ",
-		   use_block_copy ? "block-copy" : "element-copy");
+          /* APPLE LOCAL begin 4158356 PR 22156/22157 */
+	  const char *which;
+	  switch (how_to_copy)
+	  {
+	    case element_copy:
+	      which = "element-copy";
+	    break;
+	    case block_copy:
+	      which = "block-copy";
+	    break;
+	    case integer_copy:
+	      which = "integer-copy";
+	    break;
+	    default:
+	      abort ();
+	  }
+	  fprintf (dump_file, "Using %s for ", which);
+          /* APPLE LOCAL end 4158356 PR 22156/22157 */
 	  dump_sra_elt_name (dump_file, elt);
 	  fputc ('\n', dump_file);
 	}
 
-      if (!use_block_copy)
+      /* APPLE LOCAL 4158356 PR 22156/22157 */
+      if (how_to_copy == element_copy)
 	{
 	  instantiate_missing_elements (elt);
 	  return true;
 	}
+      /* APPLE LOCAL begin 4158356 PR 22156/22157 */
+      if (how_to_copy == integer_copy)
+        {
+	  instantiate_element_integer (elt);
+	  return true;
+	}
+      /* APPLE LOCAL end 4158356 PR 22156/22157 */
     }
 
   any_inst = elt->replacement != NULL;
@@ -1692,9 +1803,20 @@ generate_copy_inout (struct sra_elt *elt, bool copy_out, tree expr,
   else if (elt->replacement)
     {
       if (copy_out)
-	t = sra_build_assignment (elt->replacement, expr);
-      else
-	t = sra_build_assignment (expr, elt->replacement);
+      /* APPLE LOCAL begin 4158356 PR 22156/22157 */
+        {
+	  if (elt->how_to_copy == integer_copy)
+	    expr = build1 (VIEW_CONVERT_EXPR, TREE_TYPE (elt->replacement), expr);
+	  t = sra_build_assignment (elt->replacement, expr);
+	}
+        else
+        {
+	  tree expr1 = elt->replacement;
+	  if (elt->how_to_copy == integer_copy)
+	    expr1 = build1 (VIEW_CONVERT_EXPR, elt->type, expr1);
+	  t = sra_build_assignment (expr, expr1);
+	}
+      /* APPLE LOCAL end 4158356 PR 22156/22157 */
       append_to_statement_list (t, list_p);
     }
   else
@@ -1753,12 +1875,28 @@ generate_element_zero (struct sra_elt *elt, tree *list_p)
   FOR_EACH_ACTUAL_CHILD (c, elt)
     generate_element_zero (c, list_p);
 
+  /* APPLE LOCAL begin 4158356 PR 22156/22157 */
+  if (!elt->is_scalar && elt->how_to_copy == integer_copy)
+    gcc_assert (elt->replacement);
+  else if (elt->replacement)
+    gcc_assert (elt->is_scalar);
+  else
+    return;
+  /* APPLE LOCAL end 4158356 PR 22156/22157 */
+  
   if (elt->replacement)
     {
       tree t;
 
-      gcc_assert (elt->is_scalar);
-      t = fold_convert (elt->type, integer_zero_node);
+      /* APPLE LOCAL begin 5591491, 4158356 PR 22156/22157 */
+      if (elt->how_to_copy == integer_copy)
+        t = build1 (VIEW_CONVERT_EXPR, elt->type, integer_zero_node);
+      else
+      {
+        gcc_assert (elt->is_scalar);
+        t = fold_convert (elt->type, integer_zero_node);
+      }
+      /* APPLE LOCAL end 5591491, 4158356 PR 22156/22157 */
 
       t = sra_build_assignment (elt->replacement, t);
       append_to_statement_list (t, list_p);
@@ -2025,7 +2163,10 @@ scalarize_copy (struct sra_elt *lhs_elt, struct sra_elt *rhs_elt,
       TREE_OPERAND (stmt, 1) = rhs_elt->replacement;
       update_stmt (stmt);
     }
-  else if (lhs_elt->use_block_copy || rhs_elt->use_block_copy)
+/* APPLE LOCAL begin 4158356 PR 22156/22157 */
+  else if (lhs_elt->how_to_copy != element_copy
+           || rhs_elt->how_to_copy != element_copy)
+/* APPLE LOCAL end 4158356 PR 22156/22157 */
     {
       /* If either side requires a block copy, then sync the RHS back
 	 to the original structure, leave the original assignment
@@ -2091,9 +2232,12 @@ scalarize_init (struct sra_elt *lhs_elt, tree rhs, block_stmt_iterator *bsi)
 
   /* CONSTRUCTOR is defined such that any member not mentioned is assigned
      a zero value.  Initialize the rest of the instantiated elements.  */
-  generate_element_zero (lhs_elt, &list);
+  /* APPLE LOCAL begin 4216812 */
+  if (lhs_elt->how_to_copy != integer_copy)
+    generate_element_zero (lhs_elt, &list);
 
-  if (!result)
+  if (!result || lhs_elt->how_to_copy == integer_copy)
+  /* APPLE LOCAL end 4216812 */
     {
       /* If we failed to convert the entire initializer, then we must
 	 leave the structure assignment in place and must load values
@@ -2108,7 +2252,8 @@ scalarize_init (struct sra_elt *lhs_elt, tree rhs, block_stmt_iterator *bsi)
       list = list0;
     }
 
-  if (lhs_elt->use_block_copy || !result)
+  /* APPLE LOCAL 4158356 PR 22156/22157 */
+  if (lhs_elt->how_to_copy != element_copy || !result)
     {
       /* Since LHS is not fully instantiated, we must leave the structure
 	 assignment in place.  Treating this case differently from a USE
@@ -2157,10 +2302,36 @@ static void
 scalarize_ldst (struct sra_elt *elt, tree other,
 		block_stmt_iterator *bsi, bool is_output)
 {
+/* APPLE LOCAL begin 4158356 PR 22156/22157 */
+  /* Handle integer based loading/storing. */
+  if (elt->how_to_copy == integer_copy)
+    {
+      tree expr = bsi_stmt(*bsi);
+      if (is_output)
+	{
+	  tree old_right = TREE_OPERAND (expr, 1);
+	  tree repl = elt->replacement;
+	  tree type = TREE_TYPE (repl);
+	  tree new_right = build1 (VIEW_CONVERT_EXPR, type, old_right);
+	  TREE_OPERAND (expr, 0) = elt->replacement;
+	  TREE_OPERAND (expr, 1) = new_right;
+	  mark_all_v_defs (expr);
+	  update_stmt (expr);
+	}
+      else
+        {
+	  tree new_tree = build1 (VIEW_CONVERT_EXPR, elt->type, elt->replacement);
+	  TREE_OPERAND (expr, 1) = new_tree;
+	  update_stmt (expr);
+	}
+      return;
+    }
+/* APPLE LOCAL end 4158356 PR 22156/22157 */
   /* Shouldn't have gotten called for a scalar.  */
   gcc_assert (!elt->replacement);
 
-  if (elt->use_block_copy)
+  /* APPLE LOCAL 4158356 PR 22156/22157 */
+  if (elt->how_to_copy != element_copy)
     {
       /* Since ELT is not fully instantiated, we have to leave the
 	 block copy in place.  Treat this as a USE.  */

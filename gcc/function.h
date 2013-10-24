@@ -264,6 +264,21 @@ struct function GTY(())
      needed by inner routines.  */
   rtx x_arg_pointer_save_area;
 
+  /* APPLE LOCAL begin CW asm blocks */
+  /* Nonzero if this is an all-assembly function.  */
+  unsigned int iasm_asm_function : 1;
+  /* Nonzero if we don't want to emit any return instructions. */
+  unsigned int iasm_noreturn : 1;
+  /* If nonzero, use this as the explicitly-defined frame size.  */
+  int iasm_frame_size;
+  /* APPLE LOCAL end CW asm blocks */
+
+  /* APPLE LOCAL begin radar 6411649 */
+  /* Holds a unique number for this function. It is used to
+     generate block number for block names. */
+  int unqiue_block_number;
+  /* APPLE LOCAL end radar 6411649 */
+
   /* Offset to end of allocated area of stack frame.
      If stack grows down, this is the address of the last stack slot allocated.
      If stack grows up, this is the address for the next slot.  */
@@ -333,6 +348,10 @@ struct function GTY(())
   /* Maximal number of entities in the single jumptable.  Used to estimate
      final flowgraph size.  */
   int max_jumptable_ents;
+
+  /* APPLE LOCAL begin sibcall optimization stomped CW frames (radar 3007352) */
+  int unrounded_args_size;
+  /* APPLE LOCAL end sibcall optimization stomped CW frames (radar 3007352) */
 
   /* UIDs for LABEL_DECLs.  */
   int last_label_uid;
@@ -443,6 +462,19 @@ struct function GTY(())
   /* Nonzero if code to initialize arg_pointer_save_area has been emitted.  */
   unsigned int arg_pointer_save_area_init : 1;
 
+  /* APPLE LOCAL begin 3837835  */
+  unsigned int uses_vector : 1;
+  /* APPLE LOCAL end 3837835  */
+
+  /* APPLE LOCAL begin ARM compact switch tables */
+  unsigned int needs_4byte_alignment : 1;
+  /* APPLE LOCAL end ARM compact switch tables */
+
+  /* APPLE LOCAL begin ARM reliable backtraces */
+  unsigned int calls_builtin_ret_addr : 1;
+  unsigned int calls_builtin_frame_addr : 1;
+  /* APPLE LOCAL end ARM reliable backtraces */
+
   unsigned int after_inlining : 1;
 
   /* Set when the call to function itself has been emit.  */
@@ -508,6 +540,10 @@ extern int trampolines_created;
 #define current_function_epilogue_delay_list (cfun->epilogue_delay_list)
 #define current_function_has_nonlocal_label (cfun->has_nonlocal_label)
 #define current_function_has_nonlocal_goto (cfun->has_nonlocal_goto)
+/* APPLE LOCAL begin ARM reliable backtraces */
+#define current_function_calls_builtin_ret_addr (cfun->calls_builtin_ret_addr)
+#define current_function_calls_builtin_frame_addr (cfun->calls_builtin_frame_addr)
+/* APPLE LOCAL end ARM reliable backtraces */
 
 #define return_label (cfun->x_return_label)
 #define naked_return_label (cfun->x_naked_return_label)
@@ -579,4 +615,6 @@ extern bool reference_callee_copied (CUMULATIVE_ARGS *, enum machine_mode,
 
 extern void used_types_insert (tree);
 
+/* APPLE LOCAL radar 5732232 - blocks */
+extern struct block_sema_info *cur_block;
 #endif  /* GCC_FUNCTION_H */

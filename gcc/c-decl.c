@@ -66,6 +66,8 @@ Software Foundation, 51 Franklin Street, Fifth Floor, Boston, MA
 enum decl_context
 { NORMAL,			/* Ordinary declaration */
   FUNCDEF,			/* Function definition */
+  /* APPLE LOCAL blocks 6339747 */
+  BLOCKDEF,			/* Block literal declaration */
   PARM,				/* Declaration of parm before function body */
   FIELD,			/* Declaration inside struct or union */
   TYPENAME};			/* Typename (inside cast or sizeof)  */
@@ -154,10 +156,8 @@ int current_function_returns_abnormally;
 
 static int warn_about_return_type;
 
-/* Nonzero when starting a function declared `extern inline'.  */
-
-static int current_extern_inline;
-
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 /* Nonzero when the current toplevel function contains a declaration
    of a nested function which is never defined.  */
 
@@ -452,10 +452,17 @@ add_stmt (tree t)
    with __attribute__((deprecated)).  An object declared as
    __attribute__((deprecated)) suppresses warnings of uses of other
    deprecated items.  */
+/* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+/* Also add an __attribute__((unavailable)).  An object declared as
+   __attribute__((unavailable)) suppresses any reports of being
+   declared with unavailable or deprecated items.  */
+/* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
 
 enum deprecated_states {
   DEPRECATED_NORMAL,
   DEPRECATED_SUPPRESS
+  /* APPLE LOCAL "unavailable" attribute (radar 2809697) */
+  , DEPRECATED_UNAVAILABLE_SUPPRESS
 };
 
 static enum deprecated_states deprecated_state = DEPRECATED_NORMAL;
@@ -796,12 +803,25 @@ pop_scope (void)
 	      && DECL_ABSTRACT_ORIGIN (p) != 0
 	      && DECL_ABSTRACT_ORIGIN (p) != p)
 	    TREE_ADDRESSABLE (DECL_ABSTRACT_ORIGIN (p)) = 1;
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
 	  if (!DECL_EXTERNAL (p)
-	      && DECL_INITIAL (p) == 0)
+	      && !DECL_INITIAL (p)
+	      && scope != file_scope
+	      && scope != external_scope)
 	    {
 	      error ("nested function %q+D declared but never defined", p);
 	      undef_nested_function = true;
 	    }
+	  /* C99 6.7.4p6: "a function with external linkage... declared
+	     with an inline function specifier ... shall also be defined in the
+	     same translation unit."  */
+	  else if (DECL_DECLARED_INLINE_P (p)
+		   && TREE_PUBLIC (p)
+		   && !DECL_INITIAL (p)
+		   && !flag_gnu89_inline)
+	    pedwarn ("%Jinline function %qD declared but never defined", p, p);
+
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 	  goto common_symbol;
 
 	case VAR_DECL:
@@ -1267,12 +1287,71 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
 	}
       else
 	{
+	  /* APPLE LOCAL begin disable typechecking for SPEC --dbj */
+	  /* Accept incompatible function declarations, and incompatible
+	     global variables provided they are in different files.
+	     (Would be nice to check this for functions also, but
+	     context is not set for them.)  */
+	  bool warn = false;
+	  if (disable_typechecking_for_spec_flag
+	      && TREE_PUBLIC (olddecl)
+	      && TREE_PUBLIC (newdecl)
+	      && ((TREE_CODE (olddecl) == VAR_DECL
+	            && TREE_CODE (newdecl) == VAR_DECL
+		    && !same_translation_unit_p (olddecl, newdecl))
+	          || (TREE_CODE (olddecl) == FUNCTION_DECL
+		      && TREE_CODE (newdecl) == FUNCTION_DECL)))
+	    warn = true;
 	  if (TYPE_QUALS (newtype) != TYPE_QUALS (oldtype))
-	    error ("conflicting type qualifiers for %q+D", newdecl);
+	    if (warn)
+	      warning (0, "conflicting type qualifiers for %q+D", newdecl);
+	    else
+	      error ("conflicting type qualifiers for %q+D", newdecl);
 	  else
-	    error ("conflicting types for %q+D", newdecl);
+	    if (warn)
+	      warning (0, "conflicting types for %q+D", newdecl);
+	    else
+	      error ("conflicting types for %q+D", newdecl);
 	  diagnose_arglist_conflict (newdecl, olddecl, newtype, oldtype);
-	  locate_old_decl (olddecl, error);
+	  locate_old_decl (olddecl, warn ? warning0 : error);
+	  /* In the case where we're being lenient, two trees will
+	     continue to exist, which represent the same variable.
+	     These are currently never used in the same function, but
+	     watch out for inlining.  */
+	  if (warn && TREE_CODE (olddecl) == VAR_DECL)
+	    {
+	      HOST_WIDE_INT newalias;
+	      /* To prevent aliasing problems, 
+	         make both of them have the same alias class right now.  */
+	      if (TYPE_ALIAS_SET_KNOWN_P (oldtype))
+		{
+		  newalias = TYPE_ALIAS_SET (oldtype);
+		  if (TYPE_ALIAS_SET_KNOWN_P (newtype)
+		      && newalias != TYPE_ALIAS_SET (oldtype))
+		    internal_error ("%Jalias set conflict for '%D'", 
+				newdecl, newdecl);
+		}
+	      else if (TYPE_ALIAS_SET_KNOWN_P (newtype))
+		newalias = TYPE_ALIAS_SET (newtype);
+	      else
+		newalias = new_alias_set ();
+	      TYPE_ALIAS_SET (oldtype) = newalias;
+	      TYPE_ALIAS_SET (newtype) = newalias;
+	      /* Set a marker bit so that only one of them gets emitted
+		 to the output file.  I think this only matters if the 
+		 sizes are different, in which case we must emit the larger.
+		 If a size is unknown, we can mark that one.  */
+	      if (!DECL_SIZE (newdecl))
+		DECL_DUPLICATE_DECL (newdecl) = 1;
+	      else if (!DECL_SIZE (olddecl))
+		DECL_DUPLICATE_DECL (olddecl) = 1;
+	      else if (tree_int_cst_lt (DECL_SIZE (newdecl), 
+					DECL_SIZE (olddecl)))
+		DECL_DUPLICATE_DECL (newdecl) = 1;
+	      else
+		DECL_DUPLICATE_DECL (olddecl) = 1;
+	    }
+	  /* APPLE LOCAL end disable typechecking for SPEC --dbj */
 	  return false;
 	}
     }
@@ -1290,12 +1369,15 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
       return false;
     }
 
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
   /* Function declarations can either be 'static' or 'extern' (no
      qualifier is equivalent to 'extern' - C99 6.2.2p5) and therefore
-     can never conflict with each other on account of linkage (6.2.2p4).
-     Multiple definitions are not allowed (6.9p3,5) but GCC permits
-     two definitions if one is 'extern inline' and one is not.  The non-
-     extern-inline definition supersedes the extern-inline definition.  */
+     can never conflict with each other on account of linkage
+     (6.2.2p4).  Multiple definitions are not allowed (6.9p3,5) but
+     gnu89 mode permits two definitions if one is 'extern inline' and
+     one is not.  The non- extern-inline definition supersedes the
+     extern-inline definition.  */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 
   else if (TREE_CODE (newdecl) == FUNCTION_DECL)
     {
@@ -1319,19 +1401,23 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
 	{
 	  if (DECL_INITIAL (olddecl))
 	    {
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
 	      /* If both decls are in the same TU and the new declaration
 		 isn't overriding an extern inline reject the new decl.
-		 When we handle c99 style inline rules we'll want to reject
-		 the following:
-
-		 DECL_EXTERN_INLINE (olddecl)
-		 && !DECL_EXTERN_INLINE (newdecl)
-
-		 if they're in the same translation unit. Until we implement
-		 the full semantics we accept the construct.  */
-	      if (!(DECL_EXTERN_INLINE (olddecl)
-		    && !DECL_EXTERN_INLINE (newdecl))
+		 In c99, no overriding is allowed in the same translation
+		 unit.  */
+	      if ((!DECL_EXTERN_INLINE (olddecl)
+		   || DECL_EXTERN_INLINE (newdecl)
+		   || (!flag_gnu89_inline
+		       && (!DECL_DECLARED_INLINE_P (olddecl)
+			   || !lookup_attribute ("gnu_inline",
+						 DECL_ATTRIBUTES (olddecl)))
+		       && (!DECL_DECLARED_INLINE_P (newdecl)
+			   || !lookup_attribute ("gnu_inline",
+						 DECL_ATTRIBUTES (newdecl))))
+		  )
 		  && same_translation_unit_p (newdecl, olddecl))
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 		{
 		  error ("redefinition of %q+D", newdecl);
 		  locate_old_decl (olddecl, error);
@@ -1517,13 +1603,19 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
 	  warned = true;
 	}
 
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
       /* Inline declaration after use or definition.
 	 ??? Should we still warn about this now we have unit-at-a-time
 	 mode and can get it right?
 	 Definitely don't complain if the decls are in different translation
-	 units.  */
+	 units.
+         C99 permits this, so don't warn in that case.  (The function
+         may not be inlined everywhere in function-at-a-time mode, but
+         we still shouldn't warn.)  */
       if (DECL_DECLARED_INLINE_P (newdecl) && !DECL_DECLARED_INLINE_P (olddecl)
-	  && same_translation_unit_p (olddecl, newdecl))
+	  && same_translation_unit_p (olddecl, newdecl)
+	  && flag_gnu89_inline)
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 	{
 	  if (TREE_USED (olddecl))
 	    {
@@ -1600,13 +1692,16 @@ diagnose_mismatched_decls (tree newdecl, tree olddecl,
 static void
 merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
 {
-  int new_is_definition = (TREE_CODE (newdecl) == FUNCTION_DECL
-			   && DECL_INITIAL (newdecl) != 0);
-  int new_is_prototype = (TREE_CODE (newdecl) == FUNCTION_DECL
-			  && TYPE_ARG_TYPES (TREE_TYPE (newdecl)) != 0);
-  int old_is_prototype = (TREE_CODE (olddecl) == FUNCTION_DECL
-			  && TYPE_ARG_TYPES (TREE_TYPE (olddecl)) != 0);
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+  bool new_is_definition = (TREE_CODE (newdecl) == FUNCTION_DECL
+			    && DECL_INITIAL (newdecl) != 0);
+  bool new_is_prototype = (TREE_CODE (newdecl) == FUNCTION_DECL
+			   && TYPE_ARG_TYPES (TREE_TYPE (newdecl)) != 0);
+  bool old_is_prototype = (TREE_CODE (olddecl) == FUNCTION_DECL
+			   && TYPE_ARG_TYPES (TREE_TYPE (olddecl)) != 0);
+  bool extern_changed = false;
 
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
   /* For real parm decl following a forward decl, rechain the old decl
      in its new location and clear TREE_ASM_WRITTEN (it's not a
      forward decl anymore).  */
@@ -1653,12 +1748,13 @@ merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
       DECL_SIZE (newdecl) = DECL_SIZE (olddecl);
       DECL_SIZE_UNIT (newdecl) = DECL_SIZE_UNIT (olddecl);
       DECL_MODE (newdecl) = DECL_MODE (olddecl);
-      if (TREE_CODE (olddecl) != FUNCTION_DECL)
-	if (DECL_ALIGN (olddecl) > DECL_ALIGN (newdecl))
-	  {
-	    DECL_ALIGN (newdecl) = DECL_ALIGN (olddecl);
-	    DECL_USER_ALIGN (newdecl) |= DECL_ALIGN (olddecl);
-	  }
+      /* APPLE LOCAL begin mainline aligned functions 5933878 */
+      if (DECL_ALIGN (olddecl) > DECL_ALIGN (newdecl))
+	{
+	  DECL_ALIGN (newdecl) = DECL_ALIGN (olddecl);
+	  DECL_USER_ALIGN (newdecl) |= DECL_ALIGN (olddecl);
+	}
+      /* APPLE LOCAL end mainline aligned functions 5933878 */
     }
 
 
@@ -1672,6 +1768,12 @@ merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
   /* Merge deprecatedness.  */
   if (TREE_DEPRECATED (newdecl))
     TREE_DEPRECATED (olddecl) = 1;
+
+  /* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+  /* Merge unavailableness.  */
+  if (TREE_UNAVAILABLE (newdecl))
+    TREE_UNAVAILABLE (olddecl) = 1;
+  /* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
 
   /* Keep source location of definition rather than declaration and of
      prototype rather than non-prototype unless that prototype is
@@ -1734,6 +1836,24 @@ merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
 
       /* Merge the storage class information.  */
       merge_weak (newdecl, olddecl);
+
+      /* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+      /* APPLE LOCAL begin extern inline ubgfix 4336222 */
+      /* In c99, 'extern' declaration before (or after) 'inline' means this
+	 function is not DECL_EXTERNAL.  */
+      if (TREE_CODE (newdecl) == FUNCTION_DECL
+	  && !flag_gnu89_inline
+	  && current_scope == file_scope
+	  && (DECL_DECLARED_INLINE_P (newdecl) 
+	      || DECL_DECLARED_INLINE_P (olddecl))
+	  && (!DECL_DECLARED_INLINE_P (newdecl) 
+	      || !DECL_DECLARED_INLINE_P (olddecl)
+	      || !DECL_EXTERNAL (olddecl))
+	  && DECL_EXTERNAL (newdecl)
+	  && !lookup_attribute ("gnu_inline", DECL_ATTRIBUTES (newdecl)))
+	DECL_EXTERNAL (newdecl) = 0;
+      /* APPLE LOCAL end extern inline ubgfix 4336222 */
+      /* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 
       /* For functions, static overrides non-static.  */
       if (TREE_CODE (newdecl) == FUNCTION_DECL)
@@ -1840,6 +1960,10 @@ merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
 	}
     }
 
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+   extern_changed = DECL_EXTERNAL (olddecl) && !DECL_EXTERNAL (newdecl);
+
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
   /* Copy most of the decl-specific fields of NEWDECL into OLDDECL.
      But preserve OLDDECL's DECL_UID and DECL_CONTEXT.  */
   {
@@ -1882,6 +2006,15 @@ merge_decls (tree newdecl, tree olddecl, tree newtype, tree oldtype)
 	  || (TREE_CODE (olddecl) == VAR_DECL
 	      && TREE_STATIC (olddecl))))
     make_decl_rtl (olddecl);
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+
+  /* If we changed a function from DECL_EXTERNAL to !DECL_EXTERNAL,
+     and the definition is coming from the old version, cgraph needs
+     to be called again.  */
+  if (extern_changed && !new_is_definition 
+      && TREE_CODE (olddecl) == FUNCTION_DECL && DECL_INITIAL (olddecl))
+    cgraph_finalize_function (olddecl, false);
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 }
 
 /* Handle when a new declaration NEWDECL has the same name as an old
@@ -2374,7 +2507,8 @@ implicitly_declare (tree functionid)
 	      implicit_decl_warning (functionid, decl);
 	      C_DECL_IMPLICIT (decl) = 1;
 	    }
-	  if (DECL_BUILT_IN (decl))
+	  /* APPLE LOCAL disable typechecking for SPEC --dbj */
+	  if (DECL_BUILT_IN (decl) || disable_typechecking_for_spec_flag)
 	    {
 	      newtype = build_type_attribute_variant (newtype,
 						      TYPE_ATTRIBUTES
@@ -2448,7 +2582,10 @@ undeclared_variable (tree id, location_t loc)
     }
   else
     {
-      error ("%H%qE undeclared (first use in this function)", &loc, id);
+      /* APPLE LOCAL begin radar 4133425 */
+      if (!objc_diagnose_private_ivar (id))
+        error ("%H%qE undeclared (first use in this function)", &loc, id);
+      /* APPLE LOCAL end radar 4133425 */
 
       if (!already)
 	{
@@ -2840,7 +2977,17 @@ builtin_function (const char *name, tree type, int function_code,
 
   /* Builtins in the implementation namespace are made visible without
      needing to be explicitly declared.  See push_file_scope.  */
-  if (name[0] == '_' && (name[1] == '_' || ISUPPER (name[1])))
+  /* APPLE LOCAL begin AltiVec */
+  if ((name[0] == '_' && (name[1] == '_' || ISUPPER (name[1])))
+#ifdef TARGET_POWERPC
+      /* AltiVec PIM builtins, even though they do not begin with
+	 underscores, need not be declared either.  */
+      || (cl == BUILT_IN_MD
+	  && function_code >= ALTIVEC_PIM__FIRST
+	  && function_code <= ALTIVEC_PIM__LAST)
+#endif /* TARGET_POWERPC */
+      )
+  /* APPLE LOCAL end AltiVec */
     {
       TREE_CHAIN (decl) = visible_builtins;
       visible_builtins = decl;
@@ -3085,6 +3232,12 @@ struct c_declarator *
 set_array_declarator_inner (struct c_declarator *decl,
 			    struct c_declarator *inner, bool abstract_p)
 {
+  /* APPLE LOCAL begin mainline rewrite 2006-05-20 4336222 */
+#if 0
+  if (decl == 0)
+    return decl;
+#endif
+  /* APPLE LOCAL end mainline rewrite 2006-05-20 4336222 */
   decl->declarator = inner;
   if (abstract_p && (decl->u.array.quals != TYPE_UNQUALIFIED
 		     || decl->u.array.attrs != NULL_TREE
@@ -3120,6 +3273,27 @@ add_flexible_array_elts_to_size (tree decl, tree init)
     }
 }
 
+/* APPLE LOCAL begin blocks 6339747 */
+/* Decode a block literal type, such as "int **", returning a ...FUNCTION_DECL node.  */
+
+tree
+grokblockdecl (struct c_declspecs *specs, struct c_declarator *declarator)
+{
+  tree decl;
+  tree attrs = specs->attrs;
+
+  specs->attrs = NULL_TREE;
+
+  decl = grokdeclarator (declarator, specs, BLOCKDEF,
+			 false, NULL);
+
+  /* Apply attributes.  */
+  decl_attributes (&decl, attrs, 0);
+
+  return decl;
+}
+/* APPLE LOCAL end blocks 6339747 */
+
 /* Decode a "typename", such as "int **", returning a ..._TYPE node.  */
 
 tree
@@ -3163,8 +3337,37 @@ start_decl (struct c_declarator *declarator, struct c_declspecs *declspecs,
 
   /* An object declared as __attribute__((deprecated)) suppresses
      warnings of uses of other deprecated items.  */
+
+  /* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+  /* An object declared as __attribute__((unavailable)) suppresses
+     any reports of being declared with unavailable or deprecated
+     items.  An object declared as __attribute__((deprecated))
+     suppresses warnings of uses of other deprecated items.  */
+#ifdef A_LESS_INEFFICENT_WAY /* which I really don't want to do!  */
   if (lookup_attribute ("deprecated", attributes))
     deprecated_state = DEPRECATED_SUPPRESS;
+  else if (lookup_attribute ("unavailable", attributes))
+    deprecated_state = DEPRECATED_UNAVAILABLE_SUPPRESS;
+#else /* a more efficient way doing what lookup_attribute would do */
+  tree a;
+
+  for (a = attributes; a; a = TREE_CHAIN (a))
+    {
+      tree name = TREE_PURPOSE (a);
+      if (TREE_CODE (name) == IDENTIFIER_NODE)
+        if (is_attribute_p ("deprecated", name))
+	  {
+	    deprecated_state = DEPRECATED_SUPPRESS;
+	    break;
+	  }
+        if (is_attribute_p ("unavailable", name))
+	  {
+	    deprecated_state = DEPRECATED_UNAVAILABLE_SUPPRESS;
+	    break;
+	  }
+    }
+#endif
+  /* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
 
   decl = grokdeclarator (declarator, declspecs,
 			 NORMAL, initialized, NULL);
@@ -3271,6 +3474,24 @@ start_decl (struct c_declarator *declarator, struct c_declspecs *declspecs,
 
   /* Set attributes here so if duplicate decl, will have proper attributes.  */
   decl_attributes (&decl, attributes, 0);
+  /* APPLE LOCAL begin radar 4592503 */
+  if (c_dialect_objc ())
+    objc_checkon_weak_attribute (decl);
+  /* APPLE LOCAL end radar 4592503 */
+
+  /* APPLE LOCAL begin mainline */
+  /* Handle gnu_inline attribute.  */
+  if (declspecs->inline_p
+      && !flag_gnu89_inline
+      && TREE_CODE (decl) == FUNCTION_DECL
+      && lookup_attribute ("gnu_inline", DECL_ATTRIBUTES (decl)))
+    {
+      if (declspecs->storage_class == csc_auto && current_scope != file_scope)
+	;
+      else if (declspecs->storage_class != csc_static)
+	DECL_EXTERNAL (decl) = !DECL_EXTERNAL (decl);
+    }
+  /* APPLE LOCAL end mainline */
 
   if (TREE_CODE (decl) == FUNCTION_DECL
       && targetm.calls.promote_prototypes (TREE_TYPE (decl)))
@@ -3299,6 +3520,29 @@ start_decl (struct c_declarator *declarator, struct c_declspecs *declspecs,
     warning (OPT_Wattributes, "inline function %q+D given attribute noinline",
 	     decl);
 
+    
+  /* APPLE LOCAL begin radar 4281748 */
+  if (c_dialect_objc ()
+      && (TREE_CODE (decl) == VAR_DECL
+          || TREE_CODE (decl) == FUNCTION_DECL))
+      objc_check_global_decl (decl);
+  /* APPLE LOCAL end radar 4281748 */
+
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+  /* C99 6.7.4p3: An inline definition of a function with external
+     linkage shall not contain a definition of a modifiable object
+     with static storage duration...  */
+  if (TREE_CODE (decl) == VAR_DECL
+      && current_scope != file_scope
+      && TREE_STATIC (decl)
+      /* APPLE LOCAL inline fixups 5580320 */
+      && !TREE_READONLY (decl)
+      && DECL_DECLARED_INLINE_P (current_function_decl)
+      && DECL_EXTERNAL (current_function_decl))
+    pedwarn ("%J%qD is static but declared in inline function %qD "
+	     "which is not static", decl, decl, current_function_decl);
+
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
   /* Add this decl to the current scope.
      TEM may equal DECL or it may be a previous decl of the same name.  */
   tem = pushdecl (decl);
@@ -3329,6 +3573,322 @@ c_maybe_initialize_eh (void)
   using_eh_for_cleanups ();
 }
 
+/* APPLE LOCAL begin radar 5932809 - copyable byref blocks (C++ cr) */
+#define BLOCK_ALIGN_MAX 18
+static tree block_byref_id_object_copy[BLOCK_BYREF_CURRENT_MAX*(BLOCK_ALIGN_MAX+1)];
+static tree block_byref_id_object_dispose[BLOCK_BYREF_CURRENT_MAX*(BLOCK_ALIGN_MAX+1)];
+
+/**
+ This routine builds:
+
+ void __Block_byref_id_object_copy(struct Block_byref_id_object *dst,
+				   struct Block_byref_id_object *src) {
+   _Block_object_assign (&_dest->object, _src->object, BLOCK_FIELD_IS_OBJECT[|BLOCK_FIELD_IS_WEAK]) // objects
+   _Block_object_assign(&_dest->object, _src->object, BLOCK_FIELD_IS_BLOCK[|BLOCK_FIELD_IS_WEAK])  // blocks
+ }  */
+static void
+synth_block_byref_id_object_copy_func (int flag, int kind)
+{
+  tree stmt, fnbody;
+  tree dst_arg, src_arg;
+  tree dst_obj, src_obj;
+  struct c_arg_info * arg_info;
+  tree call_exp;
+  gcc_assert (block_byref_id_object_copy[kind]);
+  /* Set up: (void* _dest, void*_src) parameters. */
+  dst_arg = build_decl (PARM_DECL, get_identifier ("_dst"),
+                        ptr_type_node);
+  TREE_USED (dst_arg) = 1;
+  DECL_ARG_TYPE (dst_arg) = ptr_type_node;
+  src_arg = build_decl (PARM_DECL, get_identifier ("_src"),
+                        ptr_type_node);
+  TREE_USED (src_arg) = 1;
+  DECL_ARG_TYPE (src_arg) = ptr_type_node;
+  arg_info = xcalloc (1, sizeof (struct c_arg_info));
+  TREE_CHAIN (dst_arg) = src_arg;
+  arg_info->parms = dst_arg;
+  arg_info->types = tree_cons (NULL_TREE, ptr_type_node,
+                               tree_cons (NULL_TREE,
+                                          ptr_type_node,
+                                          NULL_TREE));
+  /* function header synthesis. */
+  push_function_context ();
+  start_block_helper_function (block_byref_id_object_copy[kind]);
+  store_parm_decls_from (arg_info);
+
+  /* Body of the function. */
+  stmt = c_begin_compound_stmt (true);
+  /* Build dst->object */
+  dst_obj = build_indirect_object_id_exp (dst_arg);
+
+
+  /* src_obj is: _src->object. */
+  src_obj = build_indirect_object_id_exp (src_arg);
+
+  /* APPLE LOCAL begin radar 6180456 */
+  /* _Block_object_assign (&_dest->object, _src->object, BLOCK_FIELD_IS_OBJECT) or :
+     _Block_object_assign (&_dest->object, _src->object, BLOCK_FIELD_IS_BLOCK) */
+  /* APPLE LOCAL begin radar 6573923 */
+  /* Also add the new flag when calling _Block_object_dispose
+     from byref dispose helper. */
+  flag |= BLOCK_BYREF_CALLER;
+ /* APPLE LOCAL end radar 6573923 */
+  call_exp = build_block_object_assign_call_exp (build_fold_addr_expr (dst_obj), src_obj, flag);
+  add_stmt (call_exp);
+  /* APPLE LOCAL end radar 6180456 */
+
+  fnbody = c_end_compound_stmt (stmt, true);
+  add_stmt (fnbody);
+  finish_function ();
+  pop_function_context ();
+  free (arg_info);
+}
+
+/**
+  This routine builds:
+
+  void __Block_byref_id_object_dispose(struct Block_byref_id_object *_src) {
+    _Block_object_dispose(_src->object, BLOCK_FIELD_IS_OBJECT[|BLOCK_FIELD_IS_WEAK]) // object
+    _Block_object_dispose(_src->object, BLOCK_FIELD_IS_BLOCK[|BLOCK_FIELD_IS_WEAK]) // block
+  }  */
+static void
+synth_block_byref_id_object_dispose_func (int flag, int kind)
+{
+  tree stmt, fnbody;
+  tree src_arg, src_obj, rel_exp;
+  struct c_arg_info * arg_info;
+  gcc_assert (block_byref_id_object_dispose[kind]);
+  /* Set up: (void *_src) parameter. */
+  src_arg = build_decl (PARM_DECL, get_identifier ("_src"),
+                        ptr_type_node);
+  TREE_USED (src_arg) = 1;
+  DECL_ARG_TYPE (src_arg) = ptr_type_node;
+  arg_info = xcalloc (1, sizeof (struct c_arg_info));
+  arg_info->parms = src_arg;
+  arg_info->types = tree_cons (NULL_TREE, ptr_type_node,
+                               NULL_TREE);
+  /* function header synthesis. */
+  push_function_context ();
+  start_block_helper_function (block_byref_id_object_dispose[kind]);
+  store_parm_decls_from (arg_info);
+
+  /* Body of the function. */
+  stmt = c_begin_compound_stmt (true);
+  src_obj = build_indirect_object_id_exp (src_arg);
+
+  /* APPLE LOCAL begin radar 6180456 */
+  /* _Block_object_dispose(_src->object, BLOCK_FIELD_IS_OBJECT) : or
+     _Block_object_dispose(_src->object, BLOCK_FIELD_IS_BLOCK) */
+  /* APPLE LOCAL begin radar 6573923 */
+  /* Also add the new flag when calling _Block_object_dispose
+     from byref dispose helper. */
+  flag |= BLOCK_BYREF_CALLER;
+  /* APPLE LOCAL end radar 6573923 */
+  rel_exp = build_block_object_dispose_call_exp (src_obj, flag);
+  /* APPLE LOCAL end radar 6180456 */
+  add_stmt (rel_exp);
+
+  fnbody = c_end_compound_stmt (stmt, true);
+  add_stmt (fnbody);
+  finish_function ();
+  pop_function_context ();
+  free (arg_info);
+}
+
+/* new_block_byref_decl - This routine changes a 'typex x' declared variable into:
+
+  struct __Block_byref_x {
+    // APPLE LOCAL radar 6244520
+    void *__isa;			// NULL for everything except __weak pointers
+    struct Block_byref_x *__forwarding;
+    int32_t __flags;
+    int32_t __size;
+    void *__ByrefKeepFuncPtr;    // Only if variable is __block ObjC object
+    void *__ByrefDestroyFuncPtr; // Only if variable is __block ObjC object
+    typex x;
+  } x;
+*/
+
+static tree
+new_block_byref_decl (tree decl)
+{
+  static int unique_count;
+  /* APPLE LOCAL radar 5847976 */
+  int save_flag_objc_gc;
+  tree Block_byref_type;
+  tree field_decl_chain, field_decl;
+  const char *prefix = "__Block_byref_";
+  char *string = alloca (strlen (IDENTIFIER_POINTER (DECL_NAME (decl))) +
+                         strlen (prefix) + 8 /* to hold the count */);
+
+  sprintf (string, "%s%d_%s", prefix, ++unique_count,
+           IDENTIFIER_POINTER (DECL_NAME (decl)));
+
+  push_to_top_level ();
+  Block_byref_type = start_struct (RECORD_TYPE, get_identifier (string));
+
+  /* APPLE LOCAL begin radar 6244520 */
+  /* void *__isa; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("__isa"), ptr_type_node);
+  field_decl_chain = field_decl;
+  /* APPLE LOCAL end radar 6244520 */
+
+  /* struct Block_byref_x *__forwarding; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("__forwarding"),
+                           build_pointer_type (Block_byref_type));
+  /* APPLE LOCAL radar 6244520 */
+  chainon (field_decl_chain, field_decl);
+
+  /* int32_t __flags; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("__flags"),
+                           unsigned_type_node);
+  chainon (field_decl_chain, field_decl);
+
+  /* int32_t __size; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("__size"),
+                           unsigned_type_node);
+  chainon (field_decl_chain, field_decl);
+
+  if (COPYABLE_BYREF_LOCAL_NONPOD (decl))
+    {
+      /* void *__ByrefKeepFuncPtr; */
+      field_decl = build_decl (FIELD_DECL, get_identifier ("__ByrefKeepFuncPtr"),
+			       ptr_type_node);
+      chainon (field_decl_chain, field_decl);
+
+      /* void *__ByrefDestroyFuncPtr; */
+      field_decl = build_decl (FIELD_DECL, get_identifier ("__ByrefDestroyFuncPtr"),
+			       ptr_type_node);
+      chainon (field_decl_chain, field_decl);
+  }
+
+  /* typex x; */
+  field_decl = build_decl (FIELD_DECL, DECL_NAME (decl), TREE_TYPE (decl));
+  chainon (field_decl_chain, field_decl);
+
+  pop_from_top_level ();
+  /* APPLE LOCAL begin radar 5847976 */
+  /* Hack so we don't issue warning on a field_decl having __weak attribute */
+  save_flag_objc_gc = flag_objc_gc;
+  flag_objc_gc = 0;
+  finish_struct (Block_byref_type, field_decl_chain, NULL_TREE);
+  flag_objc_gc = save_flag_objc_gc;
+  /* APPLE LOCAL end radar 5847976 */
+
+  TREE_TYPE (decl) = Block_byref_type;
+  /* Force layout_decl to recompute these fields. */
+  DECL_SIZE (decl) = DECL_SIZE_UNIT (decl) = 0;
+  layout_decl (decl, 0);
+  return decl;
+}
+
+/* init_byref_decl - This routine builds the initializer for the __Block_byref_x
+   type in the form of:
+   { NULL, &x, 0, sizeof(struct __Block_byref_x), initializer-expr};
+
+   or:
+   { NULL, &x, 0, sizeof(struct __Block_byref_x)};
+   when INIT is NULL_TREE
+
+   For __block ObjC objects, it also adds "byref_keep" and "byref_destroy"
+   Funtion pointers. So the most general initializers would be:
+
+   { NULL, &x, 0, sizeof(struct __Block_byref_x), &byref_keep, &byref_destroy,
+     &initializer-expr};
+*/
+static tree
+/* APPLE LOCAL radar 5847976 */
+init_byref_decl (tree decl, tree init, int flag)
+{
+  tree initlist;
+  tree block_byref_type = TREE_TYPE (decl);
+  int size = TREE_INT_CST_LOW (TYPE_SIZE_UNIT (block_byref_type));
+  unsigned flags = 0;
+  tree fields;
+
+  if (COPYABLE_BYREF_LOCAL_NONPOD (decl))
+    flags = BLOCK_HAS_COPY_DISPOSE;
+
+  fields = TYPE_FIELDS (block_byref_type);
+  /* APPLE LOCAL begin radar 6244520 */
+  /* APPLE LOCAL begin radar 5847976 */
+  initlist = tree_cons (fields, fold_convert (ptr_type_node, ((flag & BLOCK_FIELD_IS_WEAK) != 0) ? integer_one_node 
+									        : integer_zero_node), 0);
+  /* APPLE LOCAL end radar 5847976 */
+  fields = TREE_CHAIN (fields);
+
+  initlist = tree_cons (fields,
+                        build_unary_op (ADDR_EXPR, decl, 0), initlist);
+   /* APPLE LOCAL end radar 6244520 */
+  fields = TREE_CHAIN (fields);
+
+  initlist = tree_cons (fields, build_int_cst (TREE_TYPE (fields), flags),
+                        initlist);
+  fields = TREE_CHAIN (fields);
+  initlist = tree_cons (fields, build_int_cst (TREE_TYPE (fields), size),
+                        initlist);
+  fields = TREE_CHAIN (fields);
+
+  if (COPYABLE_BYREF_LOCAL_NONPOD (decl))
+    {
+      char name[64];
+      int align = exact_log2 ((DECL_ALIGN (decl)+TYPE_ALIGN (ptr_type_node)-1) / TYPE_ALIGN (ptr_type_node));
+      int kind;
+      if (align == -1 || align > BLOCK_ALIGN_MAX) {
+	error ("invalid alignment for __block variable");
+	kind = 0;
+      } else
+	kind = align*BLOCK_BYREF_CURRENT_MAX + flag;
+      /* Add &__Block_byref_id_object_copy, &__Block_byref_id_object_dispose
+	 initializers. */
+      if (!block_byref_id_object_copy[kind])
+	{
+	  /* Build a void __Block_byref_id_object_copy(void*, void*) type. */
+	  tree func_type =
+	    build_function_type (void_type_node,
+				 tree_cons (NULL_TREE, ptr_type_node,
+					    tree_cons (NULL_TREE, ptr_type_node,
+						       void_list_node)));
+	  sprintf (name, "__Block_byref_id_object_copy%d", kind);
+	  block_byref_id_object_copy[kind] = build_helper_func_decl (get_identifier (name),
+								     func_type);
+	  /* Synthesize function definition. */
+	  synth_block_byref_id_object_copy_func (flag, kind);
+	}
+      initlist = tree_cons (fields,
+			    build_fold_addr_expr (block_byref_id_object_copy[kind]),
+			    initlist);
+      fields = TREE_CHAIN (fields);
+
+      if (!block_byref_id_object_dispose[kind])
+	{
+	  /* Synthesize void __Block_byref_id_object_dispose (void*) and
+	     build &__Block_byref_id_object_dispose. */
+	  tree func_type =
+	    build_function_type (void_type_node,
+				 tree_cons (NULL_TREE, ptr_type_node, void_list_node));
+	  sprintf (name, "__Block_byref_id_object_dispose%d", kind);
+	  block_byref_id_object_dispose[kind] = build_helper_func_decl (get_identifier (name),
+									func_type);
+	  /* Synthesize function definition. */
+	  synth_block_byref_id_object_dispose_func (flag, kind);
+	}
+      initlist = tree_cons (fields,
+			    build_fold_addr_expr (block_byref_id_object_dispose[kind]),
+			    initlist);
+      fields = TREE_CHAIN (fields);
+    }
+
+  if (init)
+    {
+      init = do_digest_init (TREE_TYPE (fields), init);
+      initlist = tree_cons (fields, init, initlist);
+    }
+  init =  build_constructor_from_list (block_byref_type, nreverse (initlist));
+  return init;
+}
+/* APPLE LOCAL end radar 5932809 - copyable byref blocks (C++ cr) */
+
 /* Finish processing of a declaration;
    install its initial value.
    If the length of an array type is not known before,
@@ -3355,7 +3915,44 @@ finish_decl (tree decl, tree init, tree asmspec_tree)
   /* Don't crash if parm is initialized.  */
   if (TREE_CODE (decl) == PARM_DECL)
     init = 0;
-
+  /* APPLE LOCAL begin radar 5932809 - copyable byref blocks (C++ cq) */
+  /* We build a new type for each local variable declared as __block
+     and initialize it to a list of initializers. */
+  else if (TREE_CODE (decl) == VAR_DECL && COPYABLE_BYREF_LOCAL_VAR (decl))
+    {
+      if (DECL_EXTERNAL (decl) || TREE_STATIC (decl))
+	{
+	  error ("__block attribute on %q+D not allowed, only allowed on local variables", decl);
+	  COPYABLE_BYREF_LOCAL_VAR (decl) = 0;
+	  COPYABLE_BYREF_LOCAL_NONPOD (decl) = 0;
+	}
+      else
+	{
+          int flag = 0;
+          if (objc_is_gcable_type (TREE_TYPE (decl)) == -1)
+	    flag = BLOCK_FIELD_IS_WEAK;
+	  if (block_requires_copying (decl))
+	    {
+	      if (TREE_CODE (TREE_TYPE (decl)) == BLOCK_POINTER_TYPE)
+		flag |= BLOCK_FIELD_IS_BLOCK;
+	      else 
+		flag |= BLOCK_FIELD_IS_OBJECT;
+	    }
+	  decl = new_block_byref_decl (decl);
+	  /* APPLE LOCAL begin radar 6289031 */
+	  if (! flag_objc_gc_only)
+	    {
+              push_cleanup (decl, build_block_byref_release_exp (decl), false);
+	    }
+	  /* APPLE LOCAL end radar 6289031 */
+          /* APPLE LOCAL begin radar 5847976 */
+	  COPYABLE_WEAK_BLOCK (decl) = ((flag & BLOCK_FIELD_IS_WEAK) != 0);
+	  init = init_byref_decl (decl, init, flag);
+          /* APPLE LOCAL end radar 5847976 */
+	}
+    }
+  /* APPLE LOCAL end radar 5932809 - copyable byref blocks (C++ cq) */
+  
   if (init)
     store_init_value (decl, init);
 
@@ -3918,6 +4515,8 @@ grokdeclarator (const struct c_declarator *declarator,
 	case cdk_function:
 	case cdk_array:
 	case cdk_pointer:
+        /* APPLE LOCAL radar 5732232 - blocks */
+	case cdk_block_pointer:
 	  funcdef_syntax = (decl->kind == cdk_function);
 	  decl = decl->declarator;
 	  break;
@@ -3946,12 +4545,23 @@ grokdeclarator (const struct c_declarator *declarator,
   if (funcdef_flag && !funcdef_syntax)
     return 0;
 
+  /* APPLE LOCAL begin mainline rewrite 2006-05-20 4336222 */
+#if 0
+  if (! declarator)
+    return 0;
+#endif
+  /* APPLE LOCAL end mainline rewrite 2006-05-20 4336222 */
   /* If this looks like a function definition, make it one,
      even if it occurs where parms are expected.
      Then store_parm_decls will reject it and not use it as a parm.  */
   if (decl_context == NORMAL && !funcdef_flag && current_scope->parm_flag)
     decl_context = PARM;
 
+  /* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+  if (declspecs->unavailable_p)
+    error_unavailable_use (declspecs->type);
+  else
+  /* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
   if (declspecs->deprecated_p && deprecated_state != DEPRECATED_SUPPRESS)
     warn_deprecated_use (declspecs->type);
 
@@ -4066,6 +4676,8 @@ grokdeclarator (const struct c_declarator *declarator,
     }
   else if (storage_class == csc_extern
 	   && initialized
+	   /* APPLE LOCAL private extern */
+	   && !declspecs->private_extern_p
 	   && !funcdef_flag)
     {
       /* 'extern' with initialization is invalid if not at file scope.  */
@@ -4529,6 +5141,29 @@ grokdeclarator (const struct c_declarator *declarator,
 	    declarator = declarator->declarator;
 	    break;
 	  }
+
+        /* APPLE LOCAL begin radar 5732232 - blocks (C++ cj) */
+	case cdk_block_pointer:
+	  {
+	    if (TREE_CODE (type) != FUNCTION_TYPE)
+	      {
+		error ("block pointer to non-function type is invalid");
+		type = error_mark_node;
+	      }
+	    else
+	      {
+		type = build_block_pointer_type (type);
+		/* APPLE LOCAL begin radar 5814025 (C++ cj) */
+		/* Process type qualifiers (such as const or volatile)
+		   that were given inside the `^'.  */
+		type_quals = declarator->u.pointer_quals;
+		/* APPLE LOCAL end radar 5814025 (C++ cj) */
+		declarator = declarator->declarator;
+	      }
+	    break;
+	  }
+	  /* APPLE LOCAL end radar 5732232 - blocks (C++ cj) */
+
 	default:
 	  gcc_unreachable ();
 	}
@@ -4553,6 +5188,41 @@ grokdeclarator (const struct c_declarator *declarator,
 	 crash in tree_low_cst().  */
       type = error_mark_node;
     }
+
+  /* APPLE LOCAL begin blocks 6339747 */
+  if (decl_context == BLOCKDEF)
+    {
+      tree decl;
+
+      if (type == error_mark_node)
+	return error_mark_node;
+
+      if (TREE_CODE (type) != FUNCTION_TYPE)
+	{
+	  tree arg_types;
+
+	  if (TREE_CODE (type) == ARRAY_TYPE)
+	    {
+	      error ("block declared as returning an array");
+	      return error_mark_node;
+	    }
+
+	  arg_info = XOBNEW (&parser_obstack, struct c_arg_info);
+	  arg_info->parms = 0;
+	  arg_info->tags = 0;
+	  arg_info->types = 0;
+	  arg_info->others = 0;
+	  arg_info->pending_sizes = 0;
+	  arg_info->had_vla_unspec = 0;
+	  arg_types = grokparms (arg_info, false);
+	  type_quals = TYPE_UNQUALIFIED;
+	  type = build_function_type (type, arg_types);
+	}
+      decl = build_decl (FUNCTION_DECL, NULL_TREE, type);
+      DECL_ARGUMENTS (decl) = arg_info ? arg_info->parms : NULL_TREE;
+      return decl;
+    }
+  /* APPLE LOCAL end blocks 6339747 */
 
   /* If this is declaring a typedef name, return a TYPE_DECL.  */
 
@@ -4753,9 +5423,19 @@ grokdeclarator (const struct c_declarator *declarator,
 	   GCC to signify a forward declaration of a nested function.  */
 	if (storage_class == csc_auto && current_scope != file_scope)
 	  DECL_EXTERNAL (decl) = 0;
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+	/* In C99, a function which is declared 'inline' with 'extern'
+	   is not an external reference (which is confusing).  It
+	   means that the later definition of the function must be output
+	   in this file, C99 6.7.4p6.  In GNU C89, a function declared
+	   'extern inline' is an external reference.  */
+	else if (declspecs->inline_p && storage_class != csc_static)
+	  DECL_EXTERNAL (decl) = ((storage_class == csc_extern)
+				  == flag_gnu89_inline);
 	else
-	  DECL_EXTERNAL (decl) = 1;
+	  DECL_EXTERNAL (decl) = !initialized;
 
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 	/* Record absence of global scope for `static' or `auto'.  */
 	TREE_PUBLIC (decl)
 	  = !(storage_class == csc_static || storage_class == csc_auto);
@@ -4767,6 +5447,14 @@ grokdeclarator (const struct c_declarator *declarator,
 
 	if (declspecs->default_int_p)
 	  C_FUNCTION_IMPLICIT_INT (decl) = 1;
+
+	/* APPLE LOCAL begin private extern */
+        if (declspecs->private_extern_p)
+	  {
+	    DECL_VISIBILITY (decl) = VISIBILITY_HIDDEN;
+	    DECL_VISIBILITY_SPECIFIED (decl) = 1;
+	  }
+	/* APPLE LOCAL end private extern */
 
 	/* Record presence of `inline', if it is reasonable.  */
 	if (flag_hosted && MAIN_NAME_P (declarator->u.id))
@@ -4784,11 +5472,9 @@ grokdeclarator (const struct c_declarator *declarator,
 	       the abstract origin pointing between the declarations,
 	       which will confuse dwarf2out.  */
 	    if (initialized)
-	      {
-		DECL_INLINE (decl) = 1;
-		if (storage_class == csc_extern)
-		  current_extern_inline = 1;
-	      }
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+	      DECL_INLINE (decl) = 1;
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 	  }
 	/* If -finline-functions, assume it can be inlined.  This does
 	   two things: let the function be deferred until it is actually
@@ -4836,6 +5522,14 @@ grokdeclarator (const struct c_declarator *declarator,
 	   reset later in start_decl.  */
 	DECL_EXTERNAL (decl) = (storage_class == csc_extern);
 
+	/* APPLE LOCAL begin private extern */
+	if (declspecs->private_extern_p)
+	  {
+	    DECL_VISIBILITY (decl) = VISIBILITY_HIDDEN;
+	    DECL_VISIBILITY_SPECIFIED (decl) = 1;
+	  }
+	/* APPLE LOCAL end private extern */
+
 	/* At file scope, the presence of a `static' or `register' storage
 	   class specifier, or the absence of all storage class specifiers
 	   makes this declaration a definition (perhaps tentative).  Also,
@@ -4878,6 +5572,21 @@ grokdeclarator (const struct c_declarator *declarator,
 	C_DECL_REGISTER (decl) = 1;
 	DECL_REGISTER (decl) = 1;
       }
+
+    /* APPLE LOCAL begin CW asm blocks */
+    if (declspecs->iasm_asm_specbit)
+      {
+	/* Record that this is a decl of a CW-style asm function.  */
+	if (flag_iasm_blocks)
+	  {
+	    DECL_IASM_ASM_FUNCTION (decl) = 1;
+	    DECL_IASM_NORETURN (decl) = 0;
+	    DECL_IASM_FRAME_SIZE (decl) = -2;
+	  }
+	else
+	  error ("asm functions not enabled, use `-fasm-blocks'");
+      }
+    /* APPLE LOCAL end CW asm blocks */
 
     /* Record constancy and volatility.  */
     c_apply_type_quals_to_decl (type_quals, decl);
@@ -5286,12 +5995,20 @@ start_struct (enum tree_code code, tree name)
 	    error ("nested redefinition of %<union %E%>", name);
 	  else
 	    error ("nested redefinition of %<struct %E%>", name);
+            /* APPLE LOCAL begin mainline 2006-10-31 PR 23067, radar 4869885 */
+            /* Don't create structures that contain themselves.  */
+            ref = NULL_TREE;
+            /* APPLE LOCAL end mainline 2006-10-31 PR 23067, radar 4869885 */
 	}
     }
-  else
-    {
-      /* Otherwise create a forward-reference just so the tag is in scope.  */
+  /* APPLE LOCAL begin mainline 2006-10-31 PR 23067, radar 4869885 */
+  /* Otherwise create a forward-reference just so the tag is in scope.  */
+  /* APPLE LOCAL end mainline 2006-10-31 PR 23067, radar 4869885 */
 
+  /* APPLE LOCAL begin mainline 2006-10-31 PR 23067, radar 4869885 */
+  if (ref == NULL_TREE || TREE_CODE (ref) != code)
+    {
+  /* APPLE LOCAL end mainline 2006-10-31 PR 23067, radar 4869885 */
       ref = make_node (code);
       pushtag (name, ref);
     }
@@ -5550,9 +6267,19 @@ finish_struct (tree t, tree fieldlist, tree attributes)
 
       if (DECL_NAME (x))
 	saw_named_field = 1;
+
+      /* APPLE LOCAL begin radar 4592503 */
+      if (c_dialect_objc ())
+        objc_checkon_weak_attribute (x);
+      /* APPLE LOCAL end radar 4592503 */
     }
 
-  detect_field_duplicates (fieldlist);
+  /* APPLE LOCAL begin radar 4291785 */
+  if (c_dialect_objc ())
+    objc_detect_field_duplicates (objc_get_interface_ivars (fieldlist));
+  else
+    detect_field_duplicates (fieldlist);
+  /* APPLE LOCAL end radar 4291785 */
 
   /* Now we have the nearly final fieldlist.  Record it,
      then lay out the structure or union (including the fields).  */
@@ -5983,7 +6710,8 @@ start_function (struct c_declspecs *declspecs, struct c_declarator *declarator,
   current_function_returns_null = 0;
   current_function_returns_abnormally = 0;
   warn_about_return_type = 0;
-  current_extern_inline = 0;
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
   c_switch_stack = NULL;
 
   nstack_se = XOBNEW (&parser_obstack, struct c_label_context_se);
@@ -6022,6 +6750,18 @@ start_function (struct c_declspecs *declspecs, struct c_declarator *declarator,
       && lookup_attribute ("noinline", DECL_ATTRIBUTES (decl1)))
     warning (OPT_Wattributes, "inline function %q+D given attribute noinline",
 	     decl1);
+
+  /* APPLE LOCAL begin mainline */
+  /* Handle gnu_inline attribute.  */
+  if (declspecs->inline_p
+      && !flag_gnu89_inline
+      && TREE_CODE (decl1) == FUNCTION_DECL
+      && lookup_attribute ("gnu_inline", DECL_ATTRIBUTES (decl1)))
+    {
+      if (declspecs->storage_class != csc_static)
+	DECL_EXTERNAL (decl1) = !DECL_EXTERNAL (decl1);
+    }
+  /* APPLE LOCAL end mainline */
 
   announce_function (decl1);
 
@@ -6135,36 +6875,8 @@ start_function (struct c_declspecs *declspecs, struct c_declarator *declarator,
     warning (OPT_Wmissing_declarations,
 	     "%q+D was used with no declaration before its definition", decl1);
 
-  /* This is a definition, not a reference.
-     So normally clear DECL_EXTERNAL.
-     However, `extern inline' acts like a declaration
-     except for defining how to inline.  So set DECL_EXTERNAL in that case.  */
-  DECL_EXTERNAL (decl1) = current_extern_inline;
-
-  /* C99 specified different behaviour for non-static inline
-     functions, compared with the traditional GNU behaviour.  We don't
-     support the C99 behaviour, but we do warn about non-static inline
-     functions here.  The warning can be disabled via an explicit use
-     of -fgnu89-inline, or by using the gnu_inline attribute.  */
-  if (DECL_DECLARED_INLINE_P (decl1)
-      && TREE_PUBLIC (decl1)
-      && flag_isoc99
-      && flag_gnu89_inline != 1
-      && !lookup_attribute ("gnu_inline", DECL_ATTRIBUTES (decl1))
-      && diagnostic_report_warnings_p ())
-    {
-      static bool info = false;
-
-      warning (0, "C99 inline functions are not supported; using GNU89");
-      if (!info)
-	{
-	  warning (0,
-		   "to disable this warning use -fgnu89-inline or "
-		   "the gnu_inline function attribute");
-	  info = true;
-	}
-    }
-
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
   /* This function exists in static storage.
      (This does not mean `static' in the C sense!)  */
   TREE_STATIC (decl1) = 1;
@@ -6243,6 +6955,13 @@ start_function (struct c_declspecs *declspecs, struct c_declarator *declarator,
 
   current_function_decl = pushdecl (decl1);
 
+  /* APPLE LOCAL begin optimization pragmas 3124235/3420242 */
+  /* Build a mapping between this decl and the per-function options in
+     effect at this point.  */
+
+  record_func_cl_pf_opts_mapping (current_function_decl);
+  /* APPLE LOCAL end optimization pragmas 3124235/3420242 */
+
   push_scope ();
   declare_parm_level ();
 
@@ -6264,6 +6983,18 @@ start_function (struct c_declspecs *declspecs, struct c_declarator *declarator,
   DECL_IGNORED_P (resdecl) = 1;
   DECL_RESULT (current_function_decl) = resdecl;
 
+  /* APPLE LOCAL begin CW asm blocks */
+  /* If this was a function declared as an assembly function, change
+     the state to expect to see C decls, possibly followed by assembly
+     code.  */
+  if (DECL_IASM_ASM_FUNCTION (current_function_decl))
+    {
+      iasm_state = iasm_decls;
+      iasm_in_decl = false;
+      current_function_returns_abnormally = 1;
+      TREE_NO_WARNING (current_function_decl) = 1;
+    }
+  /* APPLE LOCAL end CW asm blocks */
   start_fname_decls ();
 
   return 1;
@@ -6909,6 +7640,13 @@ check_for_loop_decls (void)
 	  error ("%<enum %E%> declared in %<for%> loop initial declaration",
 		 id);
 	  break;
+        /* APPLE LOCAL begin radar 6268817 */
+        case FUNCTION_DECL:
+        /* Block helper function can be declared in the statement block
+           for the for-loop declarations. */
+          if (BLOCK_SYNTHESIZED_FUNC (decl))
+            break;
+        /* APPLE LOCAL end radar 6268817 */
 	default:
 	  error ("declaration of non-variable %q+D in %<for%> loop "
 		 "initial declaration", decl);
@@ -6940,7 +7678,8 @@ c_push_function_context (struct function *f)
   p->returns_null = current_function_returns_null;
   p->returns_abnormally = current_function_returns_abnormally;
   p->warn_about_return_type = warn_about_return_type;
-  p->extern_inline = current_extern_inline;
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 }
 
 /* Restore the variables used during compilation of a C function.  */
@@ -6950,7 +7689,10 @@ c_pop_function_context (struct function *f)
 {
   struct language_function *p = f->language;
 
-  if (DECL_STRUCT_FUNCTION (current_function_decl) == 0
+  /* APPLE LOCAL begin blocks 6040305 */
+  if (current_function_decl
+      && DECL_STRUCT_FUNCTION (current_function_decl) == 0
+  /* APPLE LOCAL end blocks 6040305 */
       && DECL_SAVED_TREE (current_function_decl) == NULL_TREE)
     {
       /* Stop pointing to the local nodes about to be freed.  */
@@ -6969,7 +7711,8 @@ c_pop_function_context (struct function *f)
   current_function_returns_null = p->returns_null;
   current_function_returns_abnormally = p->returns_abnormally;
   warn_about_return_type = p->warn_about_return_type;
-  current_extern_inline = p->extern_inline;
+/* APPLE LOCAL begin mainline 4.3 2006-10-31 4134307 */
+/* APPLE LOCAL end mainline 4.3 2006-10-31 4134307 */
 
   f->language = NULL;
 }
@@ -7134,6 +7877,541 @@ make_pointer_declarator (struct c_declspecs *type_quals_attrs,
   return ret;
 }
 
+/* APPLE LOCAL begin radar 5932809 - copyable byref blocks (C++ ch) */
+/* build_byref_local_var_access - converts EXPR to:
+   EXPR.__forwarding-><decl-name>.
+*/
+tree
+build_byref_local_var_access (tree expr, tree decl_name)
+{
+  tree exp = build_component_ref (expr, get_identifier ("__forwarding"));
+  exp = build_indirect_ref (exp, "unary *");
+  exp = build_component_ref (exp, decl_name);
+  return exp;
+}
+/* APPLE LOCAL end radar 5932809 - copyable byref blocks (C++ ch) */
+/* APPLE LOCAL begin radar 5732232 - blocks (C++ ch) */
+/**
+  build_block_byref_decl - This routine inserts a variable declared as a
+  'byref' variable using the |...| syntax in helper function's outer-most scope.
+*/
+tree
+build_block_byref_decl (tree name, tree decl, tree exp)
+{
+  struct c_scope *scope = current_scope;
+  tree ptr_type, byref_decl;
+  /* APPLE LOCAL begin radar 6225809 */
+  if (cur_block->prev_block_info) {
+    /* Traverse enclosing blocks. Insert a __block variable in
+     each enclosing block which has no declaration of this
+     variable. This is to ensure that the current (inner) block
+     gets the __block version of the variable; */
+    struct block_sema_info *cb = cur_block->prev_block_info;
+    while (cb) {
+      struct c_binding *b = I_SYMBOL_BINDING (name);
+      /* Find the first declaration not in current block. */
+      while (b && b->decl
+             && (TREE_CODE (b->decl) == VAR_DECL
+                 || TREE_CODE (b->decl) == PARM_DECL)
+             && b->depth >= cur_block->the_scope->depth)
+        b = b->shadowed;
+      
+      /* Is the next declaration not in enclosing block? */
+      if (b && b->decl
+          && (TREE_CODE (b->decl) == VAR_DECL
+              || TREE_CODE (b->decl) == PARM_DECL)
+          && b->depth < cb->the_scope->depth) {
+        /* No declaration of variable seen in the block. Must insert one. */
+        struct c_scope *save_scope = current_scope;
+        struct block_sema_info *save_current_block = cur_block;
+        current_scope = cb->the_scope;
+        cur_block = cb;
+        decl = build_block_byref_decl (name, decl, exp);
+        cur_block = save_current_block;
+        current_scope = save_scope;
+      }
+      cb = cb->prev_block_info;
+    }
+  }
+  /* APPLE LOCAL end radar 6225809 */
+  
+  /* If it is already a byref declaration, do not add the pointer type
+     because such declarations already have the pointer type
+     added. This happens when we have two nested byref declarations in
+     nested blocks. */
+  ptr_type = (TREE_CODE (decl) == VAR_DECL && BLOCK_DECL_BYREF (decl))
+              ? TREE_TYPE (decl) : build_pointer_type (TREE_TYPE (decl));
+  byref_decl = build_decl (VAR_DECL, name, ptr_type);
+  /* APPLE LOCAL begin radars 6144664 & 6145471  */
+  DECL_SOURCE_LOCATION (byref_decl) = DECL_SOURCE_LOCATION 
+                                               (cur_block->helper_func_decl);
+  /* APPLE LOCAL end radars 6144664 & 6145471  */
+  BLOCK_DECL_BYREF (byref_decl) = 1;
+
+  /* APPLE LOCAL begin radar 5932809 - copyable byref blocks (C++ ch) */
+  if (TREE_CODE (decl) == VAR_DECL && COPYABLE_BYREF_LOCAL_VAR (decl))
+    {
+      COPYABLE_BYREF_LOCAL_VAR (byref_decl) = 1;
+      COPYABLE_BYREF_LOCAL_NONPOD (byref_decl) = COPYABLE_BYREF_LOCAL_NONPOD (decl);
+      /* APPLE LOCAL radar 5847976 */
+      COPYABLE_WEAK_BLOCK (byref_decl) = COPYABLE_WEAK_BLOCK (decl);
+    }
+  /* APPLE LOCAL end radar 5932809 - copyable byref blocks (C++ ch) */
+
+  /* In the presence of nested "{" 
+     move up the scope chain until reaching the main function body's scope.
+  */
+  while (scope && !scope->function_body)
+    scope = scope->outer;
+  /* Current scope must be that of the main function body. */
+  gcc_assert (scope && scope->function_body);
+  bind (name, byref_decl,
+        scope, /*invisible=*/false, /*nested=*/false);
+  cur_block->block_byref_decl_list =
+    tree_cons (NULL_TREE, byref_decl, cur_block->block_byref_decl_list);
+  /* APPLE LOCAL radar 5847213 - building block_original_byref_decl_list list removed. */
+  /* APPLE LOCAL begin radar 6289031 */
+  if (! flag_objc_gc_only)
+    push_cleanup (byref_decl, build_block_byref_release_exp (byref_decl), false);
+  /* APPLE LOCAL end radar 6289031 */
+
+  return byref_decl;
+}
+
+/**
+  build_block_ref_decl - This routine inserts a copied-in variable (a variable
+  referenced in the block but whose scope is outside the block) in helper
+  function's outer-most scope. It also sets its type to 'const' as such
+  variables are read-only.
+*/
+tree
+build_block_ref_decl (tree name, tree decl)
+{
+  struct c_scope *scope = current_scope;
+  tree ref_decl;
+  /* APPLE LOCAL radar 6212722 */
+  tree type, exp;
+  /* APPLE LOCAL begin radar 5932809 - copyable byref blocks (C++ ch) */
+  /* 'decl' was previously declared as __block. Simply, copy the value
+     embedded in the above variable. */
+  if (TREE_CODE (decl) == VAR_DECL && COPYABLE_BYREF_LOCAL_VAR (decl))
+    decl = build_byref_local_var_access (decl, DECL_NAME (decl));
+  else {
+    /* APPLE LOCAL begin radar 5988451 (C++ ch) */
+    if (cur_block->prev_block_info) {
+      /* Traverse enclosing blocks. Insert a copied-in variable in
+         each enclosing block which has no declaration of this
+         variable. This is to ensure that the current (inner) block
+         has the 'frozen' value of the copied-in variable; which means
+         the value of the copied in variable is at the point of the
+         block declaration and *not* when the inner block is
+         invoked.  */
+      struct block_sema_info *cb = cur_block->prev_block_info;
+      while (cb) {
+        struct c_binding *b = I_SYMBOL_BINDING (name);
+        /* Find the first declaration not in current block. */
+        while (b && b->decl
+               && (TREE_CODE (b->decl) == VAR_DECL
+                   || TREE_CODE (b->decl) == PARM_DECL)
+               && b->depth >= cur_block->the_scope->depth)
+          b = b->shadowed;
+
+        /* Is the next declaration not in enclosing block? */
+        if (b && b->decl
+            && (TREE_CODE (b->decl) == VAR_DECL
+                || TREE_CODE (b->decl) == PARM_DECL)
+            && b->depth < cb->the_scope->depth) {
+          /* No declaration of variable seen in the block. Must insert one,
+             so it 'freezes' the variable in this block. */
+          struct c_scope *save_scope = current_scope;
+          struct block_sema_info *save_current_block = cur_block;
+          current_scope = cb->the_scope;
+          cur_block = cb;
+          decl = build_block_ref_decl (name, decl);
+          cur_block = save_current_block;
+          current_scope = save_scope;
+        }
+        cb = cb->prev_block_info;
+      }
+    }
+    /* APPLE LOCAL end radar 5988451 (C++ ch) */
+  }
+  /* APPLE LOCAL end radar 5932809 - copyable byref blocks (C++ ch) */
+  /* APPLE LOCAL begin radar 6212722 */
+  exp = decl;
+  type = TREE_TYPE (exp);
+  if (TREE_CODE (type) == ARRAY_TYPE) {
+    exp = array_to_pointer_conversion (decl);
+    type = TREE_TYPE (exp);
+  }
+  else if (TREE_CODE (type) == FUNCTION_TYPE) {
+    exp = function_to_pointer_conversion (exp);
+    type = TREE_TYPE (exp);
+  }
+  ref_decl = build_decl (VAR_DECL, name,
+                         build_qualified_type (type, TYPE_QUAL_CONST));
+  /* APPLE LOCAL end radar 6212722 */
+  /* APPLE LOCAL begin radars 6144664 & 6145471  */
+  DECL_SOURCE_LOCATION (ref_decl) = DECL_SOURCE_LOCATION 
+                                               (cur_block->helper_func_decl);
+  /* APPLE LOCAL end radars 6144664 & 6145471  */
+  DECL_INITIAL (ref_decl) = error_mark_node;
+  /* APPLE LOCAL radar 5805175 - blocks (C++ ch) */
+  c_apply_type_quals_to_decl (TYPE_QUAL_CONST, ref_decl);
+  BLOCK_DECL_COPIED (ref_decl) = 1;
+
+  /* Find the scope for function body (outer-most scope) and insert
+     this variable in that scope. This is to avoid duplicate
+     declaration of the save variable. */
+  while (scope && !scope->function_body)
+    scope = scope->outer;
+  /* We are enterring the copied-in variable in helper function's
+     outer scope; that of its main body. */
+  gcc_assert (scope);
+  bind (name, ref_decl,
+        scope, /*invisible=*/false, /*nested=*/false);
+  cur_block->block_ref_decl_list =
+    tree_cons (NULL_TREE, ref_decl, cur_block->block_ref_decl_list);
+  cur_block->block_original_ref_decl_list =
+    /* APPLE LOCAL radar 6212722 */
+    tree_cons (NULL_TREE, exp, cur_block->block_original_ref_decl_list);
+  return ref_decl;
+}
+
+/* APPLE LOCAL begin radar 5847213 - radar 6329245 */
+static GTY (())  tree descriptor_ptr_type;
+static GTY (())  tree descriptor_ptr_type_with_copydispose;
+/** build_block_descriptor_type - This routine builds following internal type:
+ struct __block_descriptor {
+ unsigned long int reserved;     // NULL
+ unsigned long int Size;  // sizeof(struct Block_literal_1)
+ 
+ // optional helper functions
+ void *CopyFuncPtr; // When BLOCK_HAS_COPY_DISPOSE is set (withCopyDispose true)
+ void *DestroyFuncPtr; // When BLOCK_HAS_COPY_DISPOSE is set (withCopyDispose true)
+} *descriptor_ptr_type;
+
+Objects of this type will always be static. This is one main component of abi change.
+*/
+tree
+build_block_descriptor_type (bool withCopyDispose)
+{
+  tree field_decl_chain, field_decl;
+  tree main_type;
+  
+  if (withCopyDispose && descriptor_ptr_type_with_copydispose)
+    return descriptor_ptr_type_with_copydispose;
+  if (!withCopyDispose && descriptor_ptr_type)
+    return descriptor_ptr_type;
+  
+  main_type = 
+    withCopyDispose ? 
+      start_struct (RECORD_TYPE, get_identifier ("__block_descriptor_withcopydispose"))
+      : start_struct (RECORD_TYPE, get_identifier ("__block_descriptor"));
+  
+  /* unsigned long int reserved; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("reserved"), long_unsigned_type_node);
+  field_decl_chain = field_decl;
+  
+  /* unsigned long int Size; */
+  field_decl = build_decl (FIELD_DECL, get_identifier ("Size"), long_unsigned_type_node);
+  chainon (field_decl_chain, field_decl);
+  
+  if (withCopyDispose)
+  {
+    /* void *CopyFuncPtr; */
+    field_decl = build_decl (FIELD_DECL, get_identifier ("CopyFuncPtr"), ptr_type_node);
+    chainon (field_decl_chain, field_decl);
+    /* void *DestroyFuncPtr; */
+    field_decl = build_decl (FIELD_DECL, get_identifier ("DestroyFuncPtr"), ptr_type_node);
+    chainon (field_decl_chain, field_decl);
+  }
+  
+   /* Mark this struct as being a block struct rather than a 'normal'
+      struct.  */
+  TYPE_BLOCK_IMPL_STRUCT (main_type) = 1;
+  finish_struct (main_type, field_decl_chain, NULL_TREE);
+
+  main_type = build_pointer_type (main_type);
+  if (withCopyDispose)
+    descriptor_ptr_type_with_copydispose = main_type;
+  else
+    descriptor_ptr_type = main_type;
+  return main_type;
+}
+/* APPLE LOCAL end radar 5847213 - radar 6329245 */
+
+/* APPLE LOCAL begin radar 5814025 (C++ ch) */
+struct c_declarator *
+make_block_pointer_declarator (struct c_declspecs *type_quals_attrs,
+                                 struct c_declarator *target)
+{
+  int quals = 0;
+  struct c_declarator *itarget = target;
+  struct c_declarator *ret = XOBNEW (&parser_obstack, struct c_declarator);
+
+  if (type_quals_attrs)
+  {
+    tree attrs = type_quals_attrs->attrs;
+    quals = quals_from_declspecs (type_quals_attrs);
+    if (attrs != NULL_TREE)
+      itarget = build_attrs_declarator (attrs, target);
+  }
+  ret->kind = cdk_block_pointer;
+  /* APPLE LOCAL radar 5882266 (C++ ch) */
+  ret->declarator = itarget;
+  ret->u.pointer_quals = quals;
+  return ret;
+}
+/* APPLE LOCAL end radar 5814025 (C++ ch) */
+
+tree
+begin_block (void)
+{
+  struct block_sema_info *csi;
+#if 0
+  push_scope ();
+#endif
+  csi = (struct block_sema_info*)xcalloc (1, sizeof (struct block_sema_info));
+  csi->prev_block_info = cur_block;
+  cur_block = csi;
+  return NULL_TREE;
+}
+
+struct block_sema_info *
+finish_block (tree block __attribute__ ((__unused__)))
+{
+  struct block_sema_info *csi = cur_block;
+  cur_block = cur_block->prev_block_info;
+#if 0
+  pop_scope ();
+#endif
+  return csi;
+}
+
+bool
+in_imm_block (void)
+{
+  /* APPLE LOCAL radar 5988451 (C++ ch) */
+  return (cur_block && cur_block->the_scope == current_scope);
+}
+
+/* This routine returns 'true' if 'name' has a declaration inside the
+   current block, 'false' otherwise.  If 'name' has no declaration in
+   the current block, it returns in DECL the user declaration for
+   'name' found in the enclosing scope.  Note that if it is declared
+   in current declaration, it can be either a user declaration or a
+   byref/copied-in declaration added in current block's scope by the
+   compiler.  */
+bool
+lookup_name_in_block (tree name, tree *decl)
+{
+  if (cur_block)
+    {
+      struct c_binding *b = I_SYMBOL_BINDING (name);
+      if (b->depth >= cur_block->the_scope->depth)
+	return true;
+
+      /* Check for common case of block nested inside a non-block. */
+      if (!cur_block->prev_block_info)
+	return false;
+      /* Check for less common case of nested blocks. */
+      /* Declaration not in current block. Find the first user
+	 declaration of 'name' in outer scope. */
+      /* APPLE LOCAL begin radar 5988451 (C++ ch) */
+      /* Check for variables only, as we may have parameters, such as
+	 'self' */
+      /* Note that if a copied-in variable (BLOCK_DECL_COPIED) in the
+         enclosing block is found, it must be returned as this is
+         where the variable in current (nested block) will have to get
+         its value. */
+      while (b && b->decl
+	     && (TREE_CODE (b->decl) == VAR_DECL)
+             && BLOCK_DECL_BYREF (b->decl))
+        b = b->shadowed;
+	/* APPLE LOCAL end radar 5988451 (C++ ch) */
+      if (b && b->decl)
+	*decl = b->decl;
+    }
+  return false;
+}
+
+static struct c_scope *save_current_scope;
+static tree save_current_function_decl;
+void
+push_to_top_level (void)
+{
+  save_current_scope = current_scope;
+  save_current_function_decl = current_function_decl;
+  current_scope = file_scope;
+  current_function_decl = NULL_TREE;
+}
+
+void
+pop_from_top_level (void)
+{
+  current_scope = save_current_scope;
+  current_function_decl = save_current_function_decl;
+}
+
+/**
+  build_helper_func_decl - This routine builds a FUNCTION_DECL for
+  a block helper function.
+*/
+tree
+build_helper_func_decl (tree ident, tree type)
+{
+  tree func_decl = build_decl (FUNCTION_DECL, ident, type);
+  DECL_EXTERNAL (func_decl) = 0;
+  TREE_PUBLIC (func_decl) = 0;
+  TREE_USED (func_decl) = 1;
+  TREE_NOTHROW (func_decl) = 0;
+  /* APPLE LOCAL radar 6172148 */
+  BLOCK_SYNTHESIZED_FUNC (func_decl) = 1;
+  return func_decl;
+}
+
+/**
+ start_block_helper_function - This is a light-weight version of start_function().
+ It has removed all the fuss in the start_function().
+ */
+void
+start_block_helper_function (tree decl1)
+{
+  struct c_label_context_se *nstack_se;
+  struct c_label_context_vm *nstack_vm;
+  tree restype, resdecl;
+
+  current_function_returns_value = 0;  /* Assume, until we see it does.  */
+  current_function_returns_null = 0;
+  current_function_returns_abnormally = 0;
+  warn_about_return_type = 0;
+  c_switch_stack = NULL;
+
+  nstack_se = XOBNEW (&parser_obstack, struct c_label_context_se);
+  nstack_se->labels_def = NULL;
+  nstack_se->labels_used = NULL;
+  nstack_se->next = label_context_stack_se;
+  label_context_stack_se = nstack_se;
+
+  nstack_vm = XOBNEW (&parser_obstack, struct c_label_context_vm);
+  nstack_vm->labels_def = NULL;
+  nstack_vm->labels_used = NULL;
+  nstack_vm->scope = 0;
+  nstack_vm->next = label_context_stack_vm;
+  label_context_stack_vm = nstack_vm;
+
+  /* Indicate no valid break/continue context by setting these variables
+   to some non-null, non-label value.  We'll notice and emit the proper
+   error message in c_finish_bc_stmt.  */
+  c_break_label = c_cont_label = size_zero_node;
+
+  announce_function (decl1);
+
+  /* Make the init_value nonzero so pushdecl knows this is not tentative.
+   error_mark_node is replaced below (in pop_scope) with the BLOCK.  */
+  DECL_INITIAL (decl1) = error_mark_node;
+
+  current_function_prototype_locus = UNKNOWN_LOCATION;
+  current_function_prototype_built_in = false;
+  current_function_prototype_arg_types = NULL_TREE;
+
+  /* This function exists in static storage.
+   (This does not mean `static' in the C sense!)  */
+  TREE_STATIC (decl1) = 1;
+  /* A helper function is not global */
+  TREE_PUBLIC (decl1) = 0;
+
+  /* This is the earliest point at which we might know the assembler
+   name of the function.  Thus, if it's set before this, die horribly.  */
+  gcc_assert (!DECL_ASSEMBLER_NAME_SET_P (decl1));
+  current_function_decl = pushdecl (decl1);
+
+  /* APPLE LOCAL begin optimization pragmas 3124235/3420242 (C++ ch) */
+  /* Build a mapping between this decl and the per-function options in
+   effect at this point.  */
+
+  record_func_cl_pf_opts_mapping (current_function_decl);
+  /* APPLE LOCAL end optimization pragmas 3124235/3420242 (C++ ch) */
+
+  push_scope ();
+  declare_parm_level ();
+
+  restype = TREE_TYPE (TREE_TYPE (current_function_decl));
+  resdecl = build_decl (RESULT_DECL, NULL_TREE, restype);
+  DECL_ARTIFICIAL (resdecl) = 1;
+  DECL_IGNORED_P (resdecl) = 1;
+  DECL_RESULT (current_function_decl) = resdecl;
+
+  start_fname_decls ();
+}
+
+/**
+ declare_block_prologue_local_vars - utility routine to do the actual
+ declaration and initialization for each referecned block variable.
+*/
+static void
+declare_block_prologue_local_vars (tree self_parm, tree component,
+				   tree stmt)
+{
+  tree decl, block_component;
+  tree_stmt_iterator i;
+  tree decl_stmt;
+
+  decl = component;
+  block_component = build_component_ref (build_indirect_ref (self_parm, "->"),
+					 DECL_NAME (component));
+  gcc_assert (block_component);
+  DECL_EXTERNAL (decl) = 0;
+  TREE_STATIC (decl) = 0;
+  TREE_USED (decl) = 1;
+  DECL_CONTEXT (decl) = current_function_decl;
+  DECL_ARTIFICIAL (decl) = 1;
+  DECL_INITIAL (decl) = block_component;
+  /* Prepend a DECL_EXPR statement to the statement list. */
+  i = tsi_start (stmt);
+  decl_stmt = build_stmt (DECL_EXPR, decl);
+  /* APPLE LOCAL Radar 5811961, Fix location of block prologue vars (C++ ch) */
+  SET_EXPR_LOCATION (decl_stmt, DECL_SOURCE_LOCATION (decl));
+  /* APPLE LOCAL begin radar 6163705, Blocks prologues  */
+  /* Give the prologue statements a line number of one before the beginning of
+     the function, to make them easily identifiable later.  */
+  EXPR_LINENO (decl_stmt) =  DECL_SOURCE_LINE (decl) - 1;
+  /* APPLE LOCAL end radar 6163705, Blocks prologues  */
+  tsi_link_before (&i, decl_stmt, TSI_SAME_STMT);
+}
+
+/**
+ block_build_prologue
+ - This routine builds the declarations for the
+ variables referenced in the block; as in:
+ int *y = .block_descriptor->y;
+ int x = .block_descriptor->x;
+
+ The decl_expr declaration for each initialization is enterred at the
+ beginning of the helper function's statement-list which is passed
+ in block_impl->block_body.
+*/
+void
+block_build_prologue (struct block_sema_info *block_impl)
+{
+  tree chain;
+  /* APPLE LOCAL radar 6404979 */
+  tree self_parm = lookup_name (get_identifier (".block_descriptor"));
+  gcc_assert (self_parm);
+
+  for (chain = block_impl->block_ref_decl_list; chain;
+       chain = TREE_CHAIN (chain))
+    declare_block_prologue_local_vars (self_parm, TREE_VALUE (chain),
+				       block_impl->block_body);
+
+  for (chain = block_impl->block_byref_decl_list; chain;
+       chain = TREE_CHAIN (chain))
+    declare_block_prologue_local_vars (self_parm, TREE_VALUE (chain),
+				       block_impl->block_body);
+}
+/* APPLE LOCAL end radar 5732232 - blocks (C++ ch) */
+
 /* Return a pointer to a structure for an empty list of declaration
    specifiers.  */
 
@@ -7153,6 +8431,8 @@ build_null_declspecs (void)
   ret->tag_defined_p = false;
   ret->explicit_signed_p = false;
   ret->deprecated_p = false;
+  /* APPLE LOCAL "unavailable" attribute (radar 2809697) */
+  ret->unavailable_p = false;
   ret->default_int_p = false;
   ret->long_p = false;
   ret->long_long_p = false;
@@ -7165,6 +8445,10 @@ build_null_declspecs (void)
   ret->const_p = false;
   ret->volatile_p = false;
   ret->restrict_p = false;
+  /* APPLE LOCAL CW asm blocks */
+  ret->iasm_asm_specbit = false;
+  /* APPLE LOCAL private extern */
+  ret->private_extern_p = false;
   return ret;
 }
 
@@ -7215,6 +8499,11 @@ declspecs_add_type (struct c_declspecs *specs, struct c_typespec spec)
   specs->type_seen_p = true;
   if (TREE_DEPRECATED (type))
     specs->deprecated_p = true;
+
+  /* APPLE LOCAL begin "unavailable" attribute (radar 2809697) */
+  if (TREE_UNAVAILABLE (type))
+    specs->unavailable_p = true;
+  /* APPLE LOCAL end "unavailable" attribute (radar 2809697) */
 
   /* Handle type specifier keywords.  */
   if (TREE_CODE (type) == IDENTIFIER_NODE && C_IS_RESERVED_WORD (type))
@@ -7600,6 +8889,12 @@ declspecs_add_scspec (struct c_declspecs *specs, tree scspec)
     warning (OPT_Wextra, "%qE is not at beginning of declaration", scspec);
   switch (i)
     {
+      /* APPLE LOCAL begin CW asm blocks */
+    case RID_ASM:
+      dupe = specs->iasm_asm_specbit;
+      specs->iasm_asm_specbit = true;
+      break;
+      /* APPLE LOCAL end CW asm blocks */
     case RID_INLINE:
       /* C99 permits duplicate inline.  Although of doubtful utility,
 	 it seems simplest to permit it in gnu89 mode as well, as
@@ -7628,6 +8923,15 @@ declspecs_add_scspec (struct c_declspecs *specs, tree scspec)
       if (specs->thread_p)
 	error ("%<__thread%> before %<extern%>");
       break;
+      /* APPLE LOCAL begin private extern */
+    case RID_PRIVATE_EXTERN:
+      specs->private_extern_p = true;
+      n = csc_extern;
+      /* Diagnose "__thread extern".  */
+      if (specs->thread_p)
+	error ("%<__thread%> before %<private_extern%>");
+      break;
+      /* APPLE LOCAL end private extern */
     case RID_REGISTER:
       n = csc_register;
       break;
@@ -7963,5 +9267,52 @@ c_write_global_declarations (void)
 
   ext_block = NULL;
 }
+/* APPLE LOCAL begin CW asm blocks */
+/* Look for a struct or union tag, but quietly; don't complain if neither
+   is found, and don't autocreate. Used to identify struct/union tags
+   mentioned in CW asm operands.  */
+tree
+lookup_struct_or_union_tag (tree typename)
+{
+  tree rslt = lookup_tag (RECORD_TYPE, typename, 0);
+
+  pending_invalid_xref = 0;
+  if (!rslt)
+    rslt = lookup_tag (UNION_TYPE, typename, 0);
+  pending_invalid_xref = 0;
+  return rslt;
+}
+/* APPLE LOCAL end CW asm blocks */
+
+/* APPLE LOCAL begin radar 5741070  */
+
+/* Given an IDENTIFIER tree for a class interface, find (if possible) and
+   return the record type for the class interface.  */
+
+tree
+c_return_interface_record_type (tree typename)
+{
+  enum tree_code_class class;
+  enum tree_code code;
+  tree retval = NULL;
+
+  if (typename == NULL)
+    return retval;
+
+  code = TREE_CODE (typename);
+  class = TREE_CODE_CLASS (code);
+
+  if (code != IDENTIFIER_NODE
+      || class != tcc_exceptional)
+    return retval;
+
+  retval = I_TAG_DECL (typename);
+
+  if (TREE_CODE (retval) != RECORD_TYPE)
+    retval = NULL;
+
+  return retval;
+}
+/* APPLE LOCAL end radar 5741070  */
 
 #include "gt-c-decl.h"

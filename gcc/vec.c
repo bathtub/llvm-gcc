@@ -225,6 +225,18 @@ vec_heap_o_reserve_exact (void *vec, int reserve, size_t vec_offset,
 			       PASS_MEM_STAT);
 }
 
+/* APPLE LOCAL begin vec checking */
+/* necessary for apple fat builds as we use vec in genautomata and
+   genextract on the host, and these two use auto-build.h to enable
+   build checking because we configured it in build_gcc, but vec.c is
+   built without checking as we don't want to slowdown release-style
+   builds.  */
+void vec_assert_fail (const char *, const char *,
+		      const char *, unsigned int, const char *);
+#undef ENABLE_CHECKING
+#define ENABLE_CHECKING 1
+/* APPLE LOCAL end vec checking, necessary for apple fat builds  */
+
 #if ENABLE_CHECKING
 /* Issue a vector domain error, and then fall over.  */
 

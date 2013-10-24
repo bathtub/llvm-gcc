@@ -1384,7 +1384,9 @@ assemble_start_function (tree decl, const char *fnname)
   if (flag_reorder_blocks_and_partition)
     {
       switch_to_section (unlikely_text_section ());
-      assemble_align (FUNCTION_BOUNDARY);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+      assemble_align (DECL_ALIGN (decl));
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
       ASM_OUTPUT_LABEL (asm_out_file, cfun->cold_section_label);
 
       /* When the function starts with a cold section, we need to explicitly
@@ -1394,7 +1396,9 @@ assemble_start_function (tree decl, const char *fnname)
 	  && BB_PARTITION (ENTRY_BLOCK_PTR->next_bb) == BB_COLD_PARTITION)
 	{
 	  switch_to_section (text_section);
-	  assemble_align (FUNCTION_BOUNDARY);
+/* APPLE LOCAL begin for-fsf-4_4 3274130 5295549 */ \
+	  assemble_align (DECL_ALIGN (decl));
+/* APPLE LOCAL end for-fsf-4_4 3274130 5295549 */ \
 	  ASM_OUTPUT_LABEL (asm_out_file, cfun->hot_section_label);
 	  hot_label_written = true;
 	  first_function_block_is_cold = true;
@@ -1424,19 +1428,19 @@ assemble_start_function (tree decl, const char *fnname)
       && !hot_label_written)
     ASM_OUTPUT_LABEL (asm_out_file, cfun->hot_section_label);
 
+  /* APPLE LOCAL begin mainline aligned functions 5933878 */
   /* Tell assembler to move to target machine's alignment for functions.  */
-  align = floor_log2 (FUNCTION_BOUNDARY / BITS_PER_UNIT);
-  if (align < force_align_functions_log)
-    align = force_align_functions_log;
+  align = floor_log2 (DECL_ALIGN (decl) / BITS_PER_UNIT);
   if (align > 0)
     {
       ASM_OUTPUT_ALIGN (asm_out_file, align);
     }
 
   /* Handle a user-specified function alignment.
-     Note that we still need to align to FUNCTION_BOUNDARY, as above,
+     Note that we still need to align to DECL_ALIGN, as above,
      because ASM_OUTPUT_MAX_SKIP_ALIGN might not do any alignment at all.  */
-  if (align_functions_log > align
+  if (! DECL_USER_ALIGN (decl)
+      && align_functions_log > align
       && cfun->function_frequency != FUNCTION_FREQUENCY_UNLIKELY_EXECUTED)
     {
 #ifdef ASM_OUTPUT_MAX_SKIP_ALIGN
@@ -1446,6 +1450,7 @@ assemble_start_function (tree decl, const char *fnname)
       ASM_OUTPUT_ALIGN (asm_out_file, align_functions_log);
 #endif
     }
+  /* APPLE LOCAL end mainline aligned functions 5933878 */
 
 #ifdef ASM_OUTPUT_FUNCTION_PREFIX
   ASM_OUTPUT_FUNCTION_PREFIX (asm_out_file, fnname);
@@ -1785,6 +1790,11 @@ assemble_variable (tree decl, int top_level ATTRIBUTE_UNUSED,
   if (flag_syntax_only)
     return;
 
+  /* APPLE LOCAL begin duplicate decls in multiple files.  */
+  if (DECL_DUPLICATE_DECL (decl))
+    return;
+  /* APPLE LOCAL end duplicate decls in multiple files.  */
+
   app_disable ();
 
   if (! dont_output_data
@@ -1822,6 +1832,27 @@ assemble_variable (tree decl, int top_level ATTRIBUTE_UNUSED,
   /* Output any data that we will need to use the address of.  */
   if (DECL_INITIAL (decl) && DECL_INITIAL (decl) != error_mark_node)
     output_addressed_constants (DECL_INITIAL (decl));
+
+  /* APPLE LOCAL begin zerofill 20020218 --turly  */
+#ifdef ASM_OUTPUT_ZEROFILL
+  /* We need a ZEROFILL COALESCED option!  */
+  if ((sect->common.flags & SECTION_COMMON) == 0
+      && ! dont_output_data
+      && ! DECL_ONE_ONLY (decl)
+      && ! DECL_WEAK (decl)
+      && (DECL_INITIAL (decl) == 0 || DECL_INITIAL (decl) == error_mark_node))
+    {
+      ASM_OUTPUT_ZEROFILL (asm_out_file, name, sect,
+			   tree_low_cst (DECL_SIZE_UNIT (decl), 1),
+			   floor_log2 (DECL_ALIGN (decl) / BITS_PER_UNIT));
+
+      /********************************/
+      /* NOTE THE EARLY RETURN HERE!! */
+      /********************************/
+      return;
+    }
+#endif
+  /* APPLE LOCAL end zerofill 20020218 --turly  */
 
   /* dbxout.c needs to know this.  */
   if (sect && (sect->common.flags & SECTION_CODE) != 0)
@@ -2350,7 +2381,12 @@ decode_addr_const (tree exp, struct addr_const *value)
 {
   tree target = TREE_OPERAND (exp, 0);
   int offset = 0;
-  rtx x;
+  /* APPLE LOCAL begin handle CONST_DECLs 5494472 */
+  rtx x = NULL_RTX;
+
+  if (TREE_CODE (target) == CONST_DECL)
+    target = DECL_INITIAL (target);
+  /* APPLE LOCAL end handle CONST_DECLs 5494472 */
 
   while (1)
     {
@@ -2435,6 +2471,17 @@ const_desc_hash (const void *ptr)
   return ((struct constant_descriptor_tree *)ptr)->hash;
 }
 
+/* APPLE LOCAL begin fwritable strings  */
+#if defined(TARGET_MACHO)
+ #if (TARGET_MACHO == 0)
+ #define darwin_constant_cfstring_p(X) (0)
+ #endif
+#else
+ #define darwin_constant_cfstring_p(X) (0)
+#endif
+/* APPLE LOCAL end fwritable strings  */
+
+
 static hashval_t
 const_hash_1 (const tree exp)
 {
@@ -2457,8 +2504,19 @@ const_hash_1 (const tree exp)
       return real_hash (TREE_REAL_CST_PTR (exp));
 
     case STRING_CST:
-      p = TREE_STRING_POINTER (exp);
-      len = TREE_STRING_LENGTH (exp);
+      /* APPLE LOCAL begin fwritable strings  */
+      if (flag_writable_strings 
+	  && !darwin_constant_cfstring_p (exp))
+      {
+        p = (char *) &exp;
+        len = sizeof exp;
+      }
+      else
+      {
+        p = TREE_STRING_POINTER (exp);
+        len = TREE_STRING_LENGTH (exp);
+      }
+      /* APPLE LOCAL end fwritable strings  */
       break;
 
     case COMPLEX_CST:
@@ -2574,6 +2632,13 @@ compare_constant (const tree t1, const tree t2)
       return REAL_VALUES_IDENTICAL (TREE_REAL_CST (t1), TREE_REAL_CST (t2));
 
     case STRING_CST:
+      /* APPLE LOCAL begin fwritable strings  */
+      if (flag_writable_strings 
+	  && !darwin_constant_cfstring_p (t1)
+	  && !darwin_constant_cfstring_p (t2))
+	return t1 == t2;
+      /* APPLE LOCAL end fwritable strings  */
+
       if (TYPE_MODE (TREE_TYPE (t1)) != TYPE_MODE (TREE_TYPE (t2)))
 	return 0;
 
@@ -2805,7 +2870,12 @@ build_constant_desc (tree exp)
   struct constant_descriptor_tree *desc;
 
   desc = ggc_alloc (sizeof (*desc));
-  desc->value = copy_constant (exp);
+  /* APPLE LOCAL begin fwritable strings  */
+  if (flag_writable_strings && TREE_CODE (exp) == STRING_CST)
+    desc->value = exp;
+  else
+    desc->value = copy_constant (exp);
+  /* APPLE LOCAL end fwritable strings  */
 
   /* Propagate marked-ness to copied constant.  */
   if (flag_mudflap && mf_marked_p (exp))
@@ -2813,7 +2883,12 @@ build_constant_desc (tree exp)
 
   /* Create a string containing the label name, in LABEL.  */
   labelno = const_labelno++;
-  ASM_GENERATE_INTERNAL_LABEL (label, "LC", labelno);
+  /* APPLE LOCAL begin radar 6243961 */
+  if (flag_writable_strings && TREE_CODE (exp) == STRING_CST)
+    ASM_GENERATE_INTERNAL_LABEL (label, "lC", labelno);
+  else
+    ASM_GENERATE_INTERNAL_LABEL (label, "LC", labelno);
+  /* APPLE LOCAL end radar 6243961 */
 
   /* We have a symbol name; construct the SYMBOL_REF and the MEM.  */
   if (use_object_blocks_p ())
@@ -2866,6 +2941,12 @@ output_constant_def (tree exp, int defer)
   struct constant_descriptor_tree key;
   void **loc;
 
+  /* APPLE LOCAL begin radar 6243961 */
+  int save_flag_writable_strings = flag_writable_strings;
+  if (flag_writable_strings && TREE_CODE (exp) == STRING_CST 
+      && darwin_constant_cfstring_p (exp))
+    flag_writable_strings = 0;
+  /* APPLE LOCAL end radar 6243961 */
   /* Look up EXP in the table of constant descriptors.  If we didn't find
      it, create a new one.  */
   key.value = exp;
@@ -2881,6 +2962,8 @@ output_constant_def (tree exp, int defer)
     }
 
   maybe_output_constant_def_contents (desc, defer);
+  /* APPLE LOCAL radar 6243961 */
+  flag_writable_strings = save_flag_writable_strings;
   return desc->rtl;
 }
 
@@ -2900,9 +2983,11 @@ maybe_output_constant_def_contents (struct constant_descriptor_tree *desc,
     /* Already output; don't do it again.  */
     return;
 
-  /* We can always defer constants as long as the context allows
-     doing so.  */
-  if (defer)
+  /* APPLE LOCAL begin fwritable strings  */
+  /* The only constants that cannot safely be deferred, assuming the
+     context allows it, are strings under flag_writable_strings.  */
+  if (defer && (TREE_CODE (exp) != STRING_CST || !flag_writable_strings))
+  /* APPLE LOCAL end fwritable strings  */
     {
       /* Increment n_deferred_constants if it exists.  It needs to be at
 	 least as large as the number of constants actually referred to
@@ -3702,6 +3787,8 @@ constructor_static_from_elts_p (tree ctor)
 {
   return (TREE_CONSTANT (ctor)
 	  && (TREE_CODE (TREE_TYPE (ctor)) == UNION_TYPE
+	      /* APPLE LOCAL AltiVec */
+	      || TREE_CODE (TREE_TYPE (ctor)) == VECTOR_TYPE
 	      || TREE_CODE (TREE_TYPE (ctor)) == RECORD_TYPE)
 	  && !VEC_empty (constructor_elt, CONSTRUCTOR_ELTS (ctor)));
 }
@@ -4074,6 +4161,8 @@ output_constant (tree exp, unsigned HOST_WIDE_INT size, unsigned int align)
     case ENUMERAL_TYPE:
     case POINTER_TYPE:
     case REFERENCE_TYPE:
+    /* APPLE LOCAL radar 5822844 */
+    case BLOCK_POINTER_TYPE:
     case OFFSET_TYPE:
       if (! assemble_integer (expand_expr (exp, NULL_RTX, VOIDmode,
 					   EXPAND_INITIALIZER),
@@ -4214,8 +4303,55 @@ output_constructor (tree exp, unsigned HOST_WIDE_INT size,
 
   gcc_assert (HOST_BITS_PER_WIDE_INT >= BITS_PER_UNIT);
 
-  if (TREE_CODE (type) == RECORD_TYPE)
-    field = TYPE_FIELDS (type);
+  /* APPLE LOCAL begin bitfield reversal 4228294 4387676 4388773 */
+  if (TREE_CODE (type) == RECORD_TYPE && TYPE_FIELDS (type))
+    {
+      /* If bitfields were reversed they will not be in ascending
+	 address order here, which confuses the code below.   Sort
+	 the constructor.  Note that the type retains the old
+	 ordering, for debug info purposes.  (The comment below that
+	 says FIELD goes through the structure fields is misleading;
+	 FIELD is set from the constructor, not the type, so uses
+	 the constructor list's ordering.)  */
+      unsigned head = 0, last;
+      VEC(constructor_elt, gc) *elts = CONSTRUCTOR_ELTS (exp);
+      unsigned elt_count = VEC_length (constructor_elt, elts);
+      while (head < elt_count)
+	{
+	  constructor_elt *head_elt;
+	  head_elt = VEC_index (constructor_elt, elts, head);
+	  if (head_elt->index)
+	    {
+	      HOST_WIDE_INT pos = int_bit_position (head_elt->index);
+	      /* Find next field that is after "head" in memory. */
+	      unsigned afterlast;
+	      for (afterlast = head + 1;
+		   afterlast < elt_count;
+		   afterlast++)
+		{
+		  tree field_decl = VEC_index (constructor_elt,
+					       elts, afterlast)->index;
+		  if (field_decl
+		      && int_bit_position (field_decl) >= pos)
+		    break;
+		}
+	      last = afterlast - 1;
+
+	      /* Reverse fields head..last inclusive.  */
+	      while (head < last)
+		{
+		  VEC_swap (constructor_elt, elts, head, last);
+		  head++;
+		  last--;
+		}
+	      head = afterlast;
+	    }
+	  else
+	    head++;
+	}
+      field = TYPE_FIELDS (type);
+    }
+  /* APPLE LOCAL end bitfield reversal 4228294 4387676 4388773 */
 
   if (TREE_CODE (type) == ARRAY_TYPE
       && TYPE_DOMAIN (type) != 0)
@@ -5420,7 +5556,12 @@ default_select_section (tree decl, int reloc,
 	return readonly_data_section;
     }
   else if (TREE_CODE (decl) == STRING_CST)
-    return readonly_data_section;
+  /* APPLE LOCAL begin fwritable strings  */
+    {
+      if (! flag_writable_strings)
+	return readonly_data_section;
+    }
+  /* APPLE LOCAL end fwritable strings  */
   else if (! (flag_pic && reloc))
     return readonly_data_section;
 
@@ -5436,6 +5577,10 @@ categorize_decl_for_section (tree decl, int reloc)
     return SECCAT_TEXT;
   else if (TREE_CODE (decl) == STRING_CST)
     {
+      /* APPLE LOCAL begin fwritable strings  */
+      if (flag_writable_strings)
+	return SECCAT_DATA;
+      /* APPLE LOCAL end fwritable strings  */
       if (flag_mudflap) /* or !flag_merge_constants */
         return SECCAT_RODATA;
       else

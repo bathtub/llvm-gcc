@@ -679,14 +679,21 @@ digest_init (tree type, tree init)
 	  && TREE_CODE (init) == STRING_CST)
 	{
 	  tree char_type = TYPE_MAIN_VARIANT (TREE_TYPE (TREE_TYPE (init)));
+	  /* APPLE LOCAL pascal strings */
+	  bool pascal_p = (char_type == unsigned_char_type_node);
 
 	  if (char_type != char_type_node
+	      /* APPLE LOCAL pascal strings */
+	      && !pascal_p
 	      && TYPE_PRECISION (typ1) == BITS_PER_UNIT)
 	    {
 	      error ("char-array initialized from wide string");
 	      return error_mark_node;
 	    }
-	  if (char_type == char_type_node
+	  /* APPLE LOCAL begin pascal strings */
+	  if ((char_type == char_type_node
+	       || pascal_p)	       
+	      /* APPLE LOCAL end pascal strings */
 	      && TYPE_PRECISION (typ1) != BITS_PER_UNIT)
 	    {
 	      error ("int-array initialized from non-wide string");
@@ -702,7 +709,13 @@ digest_init (tree type, tree init)
 		 because it's ok to ignore the terminating null char that is
 		 counted in the length of the constant, but in C++ this would
 		 be invalid.  */
-	      if (size < TREE_STRING_LENGTH (init))
+	      /* APPLE LOCAL begin pascal strings */
+	      /* For Pascal strings, though, ignoring the terminating NUL
+		 is still cool.  */
+	      if (size < (pascal_p
+			  ? TREE_STRING_LENGTH (init) - 1
+			  : TREE_STRING_LENGTH (init)))
+	      /* APPLE LOCAL end pascal strings */
 		pedwarn ("initializer-string for array of chars is too long");
 	    }
 	  return init;
@@ -742,6 +755,34 @@ digest_init (tree type, tree init)
 		 " initializer");
 	  return error_mark_node;
 	}
+
+      /* APPLE LOCAL begin AltiVec 5527030 */
+      /* Peer through compound literals for efficiency.  */
+      if (code == VECTOR_TYPE
+	  && TREE_CODE (init) == VAR_DECL
+	  && TREE_CODE (TREE_TYPE (init)) == VECTOR_TYPE
+	  /* APPLE LOCAL 5612787 mainline sse4 */
+          && vector_types_convertible_p (TREE_TYPE (init), type, true)
+	  && TYPE_READONLY (type)
+	  && !TYPE_VOLATILE (type))
+	{
+	  tree v = DECL_INITIAL (init);
+	  if (v
+	      && v != error_mark_node
+	      && TREE_CONSTANT (v))
+	    init = v;
+	}
+      /* APPLE LOCAL end AltiVec 5527030 */
+
+      /* APPLE LOCAL begin AltiVec */
+      if (code == VECTOR_TYPE
+          && TREE_CODE (init) == CONSTRUCTOR
+          && TREE_CODE (TREE_TYPE (init)) == VECTOR_TYPE
+	  /* APPLE LOCAL 5612787 mainline sse4 */
+          && vector_types_convertible_p (TREE_TYPE (init), type, true)
+          && TREE_CONSTANT (init))
+        return build_vector_from_ctor (type, CONSTRUCTOR_ELTS (init));
+      /* APPLE LOCAL end AltiVec */
 
       return convert_for_initialization (NULL_TREE, type, init,
 					 LOOKUP_NORMAL | LOOKUP_ONLYCONVERTING,

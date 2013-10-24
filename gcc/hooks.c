@@ -265,6 +265,24 @@ hook_constcharptr_tree_null (tree t ATTRIBUTE_UNUSED)
   return NULL;
 }
 
+/* APPLE LOCAL begin constant cfstrings */
+/* Generic hook that takes a tree and returns NULL.  */
+tree
+hook_tree_tree_null (tree a ATTRIBUTE_UNUSED)
+{
+  return NULL;
+}
+
+/* Generic hook that takes three trees and returns NULL.  */
+tree
+hook_tree_tree_tree_tree_null (tree a ATTRIBUTE_UNUSED,
+			       tree b ATTRIBUTE_UNUSED,
+			       tree c ATTRIBUTE_UNUSED)
+{
+  return NULL;
+}
+/* APPLE LOCAL end constant cfstrings */
+
 tree
 hook_tree_tree_tree_bool_null (tree t0 ATTRIBUTE_UNUSED, tree t1 ATTRIBUTE_UNUSED,
 			       bool ignore ATTRIBUTE_UNUSED)

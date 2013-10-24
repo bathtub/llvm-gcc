@@ -926,6 +926,29 @@ tree_ssa_useless_type_conversion_1 (tree outer_type, tree inner_type)
   if (lang_hooks.types_compatible_p (inner_type, outer_type))
     return true;
 
+  /* APPLE LOCAL begin 5799099 */
+  /* Don't lose casts between pointers to volatile and non-volatile
+     qualified types.  Doing so would result in changing the semantics
+     of later accesses.  */
+  else if (POINTER_TYPE_P (inner_type)
+           && POINTER_TYPE_P (outer_type)
+	   && TYPE_VOLATILE (TREE_TYPE (outer_type))
+	      != TYPE_VOLATILE (TREE_TYPE (inner_type)))
+    return false;
+  /* APPLE LOCAL end 5799099 */
+
+  /* APPLE LOCAL begin mainline */
+  /* Do not lose casts from const qualified to non-const                                 
+     qualified.  */
+  else if (POINTER_TYPE_P (inner_type)
+           && POINTER_TYPE_P (outer_type)
+	   && (TYPE_READONLY (TREE_TYPE (outer_type))
+	       != TYPE_READONLY (TREE_TYPE (inner_type)))
+	   && TYPE_READONLY (TREE_TYPE (inner_type)))
+    return false;
+  /* APPLE LOCAL end mainline */
+
+  /* APPLE LOCAL begin 5799099 moved down */
   /* If both types are pointers and the outer type is a (void *), then
      the conversion is not necessary.  The opposite is not true since
      that conversion would result in a loss of information if the
@@ -938,15 +961,7 @@ tree_ssa_useless_type_conversion_1 (tree outer_type, tree inner_type)
 	      == TYPE_REF_CAN_ALIAS_ALL (outer_type)
 	   && TREE_CODE (TREE_TYPE (outer_type)) == VOID_TYPE)
     return true;
-
-  /* Don't lose casts between pointers to volatile and non-volatile
-     qualified types.  Doing so would result in changing the semantics
-     of later accesses.  */
-  else if (POINTER_TYPE_P (inner_type)
-           && POINTER_TYPE_P (outer_type)
-	   && TYPE_VOLATILE (TREE_TYPE (outer_type))
-	      != TYPE_VOLATILE (TREE_TYPE (inner_type)))
-    return false;
+  /* APPLE LOCAL end 5799099 moved down */
 
   /* Pointers/references are equivalent if their pointed to types
      are effectively the same.  This allows to strip conversions between
@@ -1177,7 +1192,8 @@ warn_uninit (tree t, const char *gmsgid, void *data)
   locus = (context != NULL && EXPR_HAS_LOCATION (context)
 	   ? EXPR_LOCUS (context)
 	   : &DECL_SOURCE_LOCATION (var));
-  warning (0, gmsgid, locus, var);
+  /* APPLE LOCAL 6218859 */
+  warning (OPT_Wuninitialized, gmsgid, locus, var);
   fun_locus = &DECL_SOURCE_LOCATION (cfun->decl);
   if (locus->file != fun_locus->file
       || locus->line < fun_locus->line

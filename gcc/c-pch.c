@@ -45,6 +45,8 @@ static const struct c_pch_matching
   const char *flag_name;
 } pch_matching[] = {
   { &flag_exceptions, "-fexceptions" },
+  /* APPLE LOCAL Altivec 3837840 */
+  { &flag_faltivec, "-faltivec" },
   { &flag_unit_at_a_time, "-funit-at-a-time" }
 };
 
@@ -374,6 +376,11 @@ c_common_read_pch (cpp_reader *pfile, const char *name,
       return;
     }
 
+  /* APPLE LOCAL begin distcc pch 7216809 */
+  if (cpp_get_callbacks (parse_in)->valid_pch == 0)
+    fatal_error ("translation unit malformed for PCH");
+  /* APPLE LOCAL end distcc pch 7216809 */
+
   cpp_get_callbacks (parse_in)->valid_pch = NULL;
 
   if (fread (&h, sizeof (h), 1, f) != 1)
@@ -434,6 +441,10 @@ c_common_no_more_pch (void)
     }
 }
 
+/* APPLE LOCAL begin distcc pch indirection --mrs */
+const char *indirect_file PARAMS ((const char *, int));
+/* APPLE LOCAL end distcc pch indirection --mrs */
+
 /* Handle #pragma GCC pch_preprocess, to load in the PCH file.  */
 
 #ifndef O_BINARY
@@ -451,6 +462,10 @@ c_common_pch_pragma (cpp_reader *pfile, const char *name)
       inform ("use #include instead");
       return;
     }
+
+  /* APPLE LOCAL begin distcc pch indirection --mrs */
+  name = indirect_file (name, 0);
+  /* APPLE LOCAL end distcc pch indirection --mrs */
 
   fd = open (name, O_RDONLY | O_BINARY, 0666);
   if (fd == -1)

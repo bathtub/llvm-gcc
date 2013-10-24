@@ -61,7 +61,27 @@ tree global_namespace;
    unit.  */
 static GTY(()) tree anonymous_namespace_name;
 
+/* APPLE LOCAL begin mainline 2006-11-01 5125268 */ \
+/* Initialise anonymous_namespace_name if necessary, and return it.  */
 
+static tree
+get_anonymous_namespace_name(void)
+{
+  if (!anonymous_namespace_name)
+    {
+      /* The anonymous namespace has to have a unique name
+	 if typeinfo objects are being compared by name.  */
+      if (! flag_weak || ! SUPPORTS_ONE_ONLY)
+	anonymous_namespace_name = get_file_function_name ("N");
+      else
+	/* The demangler expects anonymous namespaces to be called
+	   something starting with '_GLOBAL__N_'.  */
+	anonymous_namespace_name = get_identifier ("_GLOBAL__N_1");
+    }
+  return anonymous_namespace_name;
+}
+
+/* APPLE LOCAL end mainline 2006-11-01 5125268 */ \
 /* Compute the chain index of a binding_entry given the HASH value of its
    name and the total COUNT of chains.  COUNT is assumed to be a power
    of 2.  */
@@ -346,6 +366,8 @@ push_binding (tree id, tree decl, cxx_scope* level)
     {
       binding = cxx_binding_make (decl, NULL_TREE);
       binding->scope = level;
+      /* APPLE LOCAL blocks 6040305 (ch) */
+      binding->declared_in_block = cur_block != 0;
     }
   else
     binding = new_class_binding (id, decl, /*type=*/NULL_TREE, level);
@@ -791,7 +813,12 @@ pushdecl_maybe_friend (tree x, bool is_friend)
 	      if (TYPE_NAME (type) == 0)
 		TYPE_NAME (type) = x;
 	    }
-	  else if (type != error_mark_node && TYPE_NAME (type) != x
+	  /* APPLE LOCAL begin radar 6007135, typedef of anonymous struct  */
+	  /* Make sure to do the copying if the type was anonymous  */
+	  else if (type != error_mark_node 
+		   && ((TYPE_NAME (type) != x) 
+		       || (TYPE_LANG_SPECIFIC (type) && TYPE_WAS_ANONYMOUS (type)))
+	  /* APPLE LOCAL end radar 6007135, typedef of anonymous struct  */
 		   /* We don't want to copy the type when all we're
 		      doing is making a TYPE_DECL for the purposes of
 		      inlining.  */
@@ -1348,10 +1375,9 @@ leave_scope (void)
       is_class_level = 0;
     }
 
-#ifdef HANDLE_PRAGMA_VISIBILITY
-  if (scope->has_visibility)
-    pop_visibility ();
-#endif
+  /* APPLE LOCAL begin visibility 5805832 */
+  /* pop_visibility() removed */
+  /* APPLE LOCAL end visibility 5805832 */
 
   /* Move one nesting level up.  */
   current_binding_level = scope->level_chain;
@@ -1804,6 +1830,8 @@ binding_for_name (cxx_scope *scope, tree name)
   result->scope = scope;
   result->is_local = false;
   result->value_is_inherited = false;
+  /* APPLE LOCAL blocks 6040305 (ch) */
+  result->declared_in_block = 0;
   IDENTIFIER_NAMESPACE_BINDINGS (name) = result;
   return result;
 }
@@ -2994,13 +3022,16 @@ push_namespace (tree name)
 /* Same, but specify attributes to apply to the namespace.  The attributes
    only apply to the current namespace-body, not to any later extensions. */
 
-void
+/* APPLE LOCAL visibility 5805832 */
+bool
 push_namespace_with_attribs (tree name, tree attributes)
 {
   tree d = NULL_TREE;
   int need_new = 1;
   int implicit_use = 0;
   bool anon = !name;
+  /* APPLE LOCAL visibility 5805832 */
+  bool visibility_pushed = false;
 
   timevar_push (TV_NAME_LOOKUP);
 
@@ -3011,11 +3042,9 @@ push_namespace_with_attribs (tree name, tree attributes)
 
   if (anon)
     {
-      /* The name of anonymous namespace is unique for the translation
-	 unit.  */
-      if (!anonymous_namespace_name)
-	anonymous_namespace_name = get_file_function_name ('N');
-      name = anonymous_namespace_name;
+/* APPLE LOCAL begin mainline 2006-11-01 5125268 */ \
+      name = get_anonymous_namespace_name();
+/* APPLE LOCAL end mainline 2006-11-01 5125268 */ \
       d = IDENTIFIER_NAMESPACE_VALUE (name);
       if (d)
 	/* Reopening anonymous namespace.  */
@@ -3091,7 +3120,8 @@ push_namespace_with_attribs (tree name, tree attributes)
 	  continue;
 	}
 
-      current_binding_level->has_visibility = 1;
+      /* APPLE LOCAL visibility 5805832 */
+      visibility_pushed = true;
       push_visibility (TREE_STRING_POINTER (x));
       goto found;
     }
@@ -3099,6 +3129,8 @@ push_namespace_with_attribs (tree name, tree attributes)
 #endif
 
   timevar_pop (TV_NAME_LOOKUP);
+  /* APPLE LOCAL visibility 5805832 */
+  return visibility_pushed;
 }
 
 /* Pop from the scope of the current namespace.  */
@@ -3378,7 +3410,10 @@ parse_using_directive (tree namespace, tree attribs)
 	    error ("strong using only meaningful at namespace scope");
 	  else if (namespace != error_mark_node)
 	    {
-	      if (!is_ancestor (current_namespace, namespace))
+	      /* APPLE LOCAL begin 10.5 debug mode 6621704 */
+	      if (! in_system_header
+		  && !is_ancestor (current_namespace, namespace))
+	      /* APPLE LOCAL end 10.5 debug mode 6621704 */
 		error ("current namespace %qD does not enclose strongly used namespace %qD",
 		       current_namespace, namespace);
 	      DECL_NAMESPACE_ASSOCIATIONS (namespace)
@@ -3469,6 +3504,21 @@ merge_functions (tree s1, tree s2)
   return s1;
 }
 
+/* APPLE LOCAL begin C++ using lookup 4329536 */
+static bool
+same_entity (tree e1, tree e2)
+{
+  /* Should we just call decls_match instead?  */
+  if (e1 == e2)
+    return true;
+  if (TREE_CODE (e1) == TYPE_DECL
+      && decls_match (e1, e2))
+    return true;
+
+  return false;
+}
+/* APPLE LOCAL end C++ using lookup 4329536 */
+
 /* This should return an error not all definitions define functions.
    It is not an error if we find two functions with exactly the
    same signature, only if these are selected in overload resolution.
@@ -3516,7 +3566,8 @@ ambiguous_decl (tree name, struct scope_binding *old, cxx_binding *new,
 
   if (!old->value)
     old->value = val;
-  else if (val && val != old->value)
+  /* APPLE LOCAL C++ using lookup 4329536 */
+  else if (val && !same_entity (val, old->value))
     {
       if (is_overloaded_fn (old->value) && is_overloaded_fn (val))
 	old->value = merge_functions (old->value, val);
@@ -3996,8 +4047,13 @@ lookup_name_real (tree name, int prefer_type, int nonclass, bool block_p,
 
 	if (binding)
 	  {
-	    /* Only namespace-scope bindings can be hidden.  */
-	    gcc_assert (!hidden_name_p (binding));
+	    /* APPLE LOCAL begin 6322334 */
+	    /* Ick, we don't want to find a hidden friend inside a
+	       local class!  */ 
+	    if (hidden_name_p (binding))
+	      POP_TIMEVAR_AND_RETURN (TV_NAME_LOOKUP, NULL_TREE);
+	    /* APPLE LOCAL end 6322334 */
+
 	    val = binding;
 	    break;
 	  }
@@ -4526,6 +4582,8 @@ arg_assoc_type (struct arg_lookup *k, tree type)
 	return arg_assoc_type (k, TYPE_PTRMEMFUNC_FN_TYPE (type));
       return arg_assoc_class (k, type);
     case POINTER_TYPE:
+      /* APPLE LOCAL blocks 6040305 */
+    case BLOCK_POINTER_TYPE:
     case REFERENCE_TYPE:
     case ARRAY_TYPE:
       return arg_assoc_type (k, TREE_TYPE (type));

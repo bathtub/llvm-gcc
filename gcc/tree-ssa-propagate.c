@@ -176,6 +176,9 @@ cfg_blocks_empty_p (void)
 static void 
 cfg_blocks_add (basic_block bb)
 {
+  /* APPLE LOCAL begin mainline */
+  bool head = false;
+
   gcc_assert (bb != ENTRY_BLOCK_PTR && bb != EXIT_BLOCK_PTR);
   gcc_assert (!TEST_BIT (bb_in_list, bb->index));
 
@@ -198,12 +201,27 @@ cfg_blocks_add (basic_block bb)
 	  cfg_blocks_head = 0;
 	  VEC_safe_grow (basic_block, heap, cfg_blocks, 2 * cfg_blocks_tail);
 	}
-      else
+      /* Minor optimization: we prefer to see blocks with more
+	 predecessors later, because there is more of a chance that
+	 the incoming edges will be executable.  */
+      else if (EDGE_COUNT (bb->preds)
+	       >= EDGE_COUNT (VEC_index (basic_block, cfg_blocks,
+					 cfg_blocks_head)->preds))
 	cfg_blocks_tail = ((cfg_blocks_tail + 1)
 			   % VEC_length (basic_block, cfg_blocks));
+      else
+	{
+	  if (cfg_blocks_head == 0)
+	    cfg_blocks_head = VEC_length (basic_block, cfg_blocks);
+	  --cfg_blocks_head;
+	  head = true;
+	}
     }
 
-  VEC_replace (basic_block, cfg_blocks, cfg_blocks_tail, bb);
+  VEC_replace (basic_block, cfg_blocks,
+	       head ? cfg_blocks_head : cfg_blocks_tail,
+	       bb);
+  /* APPLE LOCAL end mainline */
   SET_BIT (bb_in_list, bb->index);
 }
 

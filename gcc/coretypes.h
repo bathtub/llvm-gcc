@@ -53,6 +53,8 @@ typedef union section section;
    Note that the cpp_reader typedef remains part of cpplib.h.  */
 
 struct cpp_reader;
+/* APPLE LOCAL AltiVec */
+struct cpp_token;
 
 /* The thread-local storage model associated with a given VAR_DECL
    or SYMBOL_REF.  This isn't used much, but both trees and RTL refer

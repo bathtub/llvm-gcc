@@ -68,6 +68,7 @@ function switch_flags (flags)
 		gsub ( "\\+", "\\+", regex )
 		result = result test_flag(regex, flags, " | " macros[j])
 	}
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
 	result = result \
 	  test_flag("Common", flags, " | CL_COMMON") \
 	  test_flag("Target", flags, " | CL_TARGET") \
@@ -77,7 +78,10 @@ function switch_flags (flags)
 	  test_flag("RejectNegative", flags, " | CL_REJECT_NEGATIVE") \
 	  test_flag("UInteger", flags, " | CL_UINTEGER") \
 	  test_flag("Undocumented", flags,  " | CL_UNDOCUMENTED") \
-	  test_flag("Report", flags, " | CL_REPORT")
+	  test_flag("Report", flags, " | CL_REPORT") \
+	  test_flag("VarUint", flags, " | CL_VARUINT") \
+	  test_flag("PerFunc", flags, " | CL_PERFUNC")
+# APPLE LOCAL end optimization pragmas 3124235/3420242
 	sub( "^0 \\| ", "", result )
 	return result
 }
@@ -159,6 +163,15 @@ function var_set(flags)
 function var_ref(name, flags)
 {
 	name = var_name(flags) static_var(name, flags)
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+	if (flags ~ "PerFunc") {
+	    if (flags ~ "VarUint") {
+		return "&cl_pf_opts.fld_" name
+	    } else {
+		return "0"
+	    }
+	}
+# APPLE LOCAL end optimization pragmas 3124235/3420242
 	if (name != "")
 		return "&" name
 	if (opt_args("Mask", flags) != "")
@@ -167,3 +180,21 @@ function var_ref(name, flags)
 		return "&target_flags"
 	return "0"
 }
+# APPLE LOCAL begin optimization pragmas 3124235/3420242
+# Given that an option has flags FLAGS, return an initializer for the
+# "access_flag" field of its cl_options[] entry.  This applies only to
+# PerFunc VarUint things (bitfields) at the moment.
+function access_ref(flags)
+{
+	name = var_name(flags)
+	if (flags !~ "PerFunc") {
+	    return "0"
+	}
+	if (flags ~ "VarUint") {
+	    return "0"
+	}
+	if (name != "")
+		return "cl_opt_access_func_" name
+	return "0"
+}
+# APPLE LOCAL end optimization pragmas 3124235/3420242

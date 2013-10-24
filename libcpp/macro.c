@@ -40,7 +40,10 @@ struct macro_arg
 
 /* Macro expansion.  */
 
-static int enter_macro_context (cpp_reader *, cpp_hashnode *);
+/* APPLE LOCAL begin CW asm blocks */
+extern int flag_iasm_blocks;
+static int enter_macro_context (cpp_reader *, cpp_hashnode *, int bol_p);
+/* APPLE LOCAL end CW asm blocks */
 static int builtin_macro (cpp_reader *, cpp_hashnode *);
 static void push_ptoken_context (cpp_reader *, cpp_hashnode *, _cpp_buff *,
 				 const cpp_token **, unsigned int);
@@ -731,7 +734,8 @@ funlike_invocation_p (cpp_reader *pfile, cpp_hashnode *node)
    containing its yet-to-be-rescanned replacement list and return one.
    Otherwise, we don't push a context and return zero.  */
 static int
-enter_macro_context (cpp_reader *pfile, cpp_hashnode *node)
+/* APPLE LOCAL CW asm blocks */
+enter_macro_context (cpp_reader *pfile, cpp_hashnode *node, int bol_p)
 {
   /* The presence of a macro invalidates a file's controlling macro.  */
   pfile->mi_valid = false;
@@ -777,6 +781,12 @@ enter_macro_context (cpp_reader *pfile, cpp_hashnode *node)
 
       if (macro->paramc == 0)
 	_cpp_push_token_context (pfile, node, macro->exp.tokens, macro->count);
+
+      /* APPLE LOCAL begin CW asm blocks */
+      /* Mark this context as being at the beginning of a line.  */
+      if (bol_p && pfile->context)
+	pfile->context->bol_p = true;
+      /* APPLE LOCAL end CW asm blocks */
 
       return 1;
     }
@@ -964,6 +974,8 @@ push_ptoken_context (cpp_reader *pfile, cpp_hashnode *macro, _cpp_buff *buff,
   context->direct_p = false;
   context->macro = macro;
   context->buff = buff;
+  /* APPLE LOCAL CW asm blocks */
+  context->bol_p = false;
   FIRST (context).ptoken = first;
   LAST (context).ptoken = first + count;
 }
@@ -978,6 +990,8 @@ _cpp_push_token_context (cpp_reader *pfile, cpp_hashnode *macro,
   context->direct_p = true;
   context->macro = macro;
   context->buff = NULL;
+  /* APPLE LOCAL CW asm blocks */
+  context->bol_p = false;
   FIRST (context).token = first;
   LAST (context).token = first + count;
 }
@@ -1093,6 +1107,23 @@ cpp_get_token (cpp_reader *pfile)
 	  else
 	    result = *FIRST (context).ptoken++;
 
+	  /* APPLE LOCAL begin CW asm blocks */
+	  /* Make the context's bol flag stick to the first token, and
+	     only the first.  */
+	  if (context->bol_p)
+	    {
+	      ((cpp_token *)result)->flags |= BOL;
+	      context->bol_p = false;
+	    }
+	  else
+	    {
+	      /* We can reinject macro bodies into the stream of tokens, we have to
+		 reset the BOL flag for this on the basis of the context alone to
+		 avoid previous BOL setting for prior uses of the macro.  */
+	      ((cpp_token *)result)->flags &= ~BOL;
+	    }
+	  /* APPLE LOCAL end CW asm blocks */
+
 	  if (result->flags & PASTE_LEFT)
 	    {
 	      paste_all_tokens (pfile, result);
@@ -1123,7 +1154,15 @@ cpp_get_token (cpp_reader *pfile)
       if (!(node->flags & NODE_DISABLED))
 	{
 	  if (!pfile->state.prevent_expansion
-	      && enter_macro_context (pfile, node))
+              /* APPLE LOCAL begin AltiVec */
+              /* Conditional macros require that a predicate be
+                 evaluated first.  */
+              && (!(node->flags & NODE_CONDITIONAL)
+                  || (pfile->cb.macro_to_expand
+                      && (node = pfile->cb.macro_to_expand (pfile, result))))
+              /* APPLE LOCAL end AltiVec */
+	      /* APPLE LOCAL CW asm blocks */
+	      && enter_macro_context (pfile, node, (flag_iasm_blocks && result->flags & BOL)))
 	    {
 	      if (pfile->state.in_directive)
 		continue;
@@ -1181,26 +1220,34 @@ cpp_scan_nooutput (cpp_reader *pfile)
   pfile->state.prevent_expansion--;
 }
 
+/* APPLE LOCAL begin AltiVec */
+/* Step back one or more tokens obtained from the lexer.  */
+void
+_cpp_backup_tokens_direct (cpp_reader *pfile, unsigned int count)
+{
+  pfile->lookaheads += count;
+  while (count--)
+    {
+      pfile->cur_token--;
+      if (pfile->cur_token == pfile->cur_run->base
+          /* Possible with -fpreprocessed and no leading #line.  */
+          && pfile->cur_run->prev != NULL)
+        {
+          pfile->cur_run = pfile->cur_run->prev;
+          pfile->cur_token = pfile->cur_run->limit;
+        }
+    }
+}
+/* APPLE LOCAL end AltiVec */
+
 /* Step back one (or more) tokens.  Can only step back more than 1 if
    they are from the lexer, and not from macro expansion.  */
 void
 _cpp_backup_tokens (cpp_reader *pfile, unsigned int count)
 {
   if (pfile->context->prev == NULL)
-    {
-      pfile->lookaheads += count;
-      while (count--)
-	{
-	  pfile->cur_token--;
-	  if (pfile->cur_token == pfile->cur_run->base
-	      /* Possible with -fpreprocessed and no leading #line.  */
-	      && pfile->cur_run->prev != NULL)
-	    {
-	      pfile->cur_run = pfile->cur_run->prev;
-	      pfile->cur_token = pfile->cur_run->limit;
-	    }
-	}
-    }
+    /* APPLE LOCAL AltiVec */
+    _cpp_backup_tokens_direct (pfile, count);
   else
     {
       if (count != 1)
@@ -1225,6 +1272,13 @@ warn_of_redefinition (cpp_reader *pfile, const cpp_hashnode *node,
   /* Some redefinitions need to be warned about regardless.  */
   if (node->flags & NODE_WARN)
     return true;
+
+  /* APPLE LOCAL begin AltiVec */
+  /* Redefinitions of conditional (context-sensitive) macros, on
+     the other hand, must be allowed silently.  */
+  if (node->flags & NODE_CONDITIONAL)
+    return false;
+  /* APPLE LOCAL end AltiVec */
 
   /* Redefinition of a macro is allowed if and only if the old and new
      definitions are the same.  (6.10.3 paragraph 2).  */

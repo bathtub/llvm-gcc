@@ -102,6 +102,9 @@ extern const struct processor_costs *ix86_cost;
 #endif
 
 #define TARGET_FLOAT_RETURNS_IN_80387 TARGET_FLOAT_RETURNS
+/* APPLE LOCAL begin AT&T-style stub 4164563 */
+#define MACHOPIC_NL_SYMBOL_PTR_SECTION ".section __IMPORT,__pointers,non_lazy_symbol_pointers"
+/* APPLE LOCAL end AT&T-style stub 4164563 */
 
 /* 64bit Sledgehammer mode.  For libgcc2 we make sure this is a
    compile-time constant.  */
@@ -136,6 +139,8 @@ extern const struct processor_costs *ix86_cost;
 #define TARGET_K8 (ix86_tune == PROCESSOR_K8)
 #define TARGET_ATHLON_K8 (TARGET_K8 || TARGET_ATHLON)
 #define TARGET_NOCONA (ix86_tune == PROCESSOR_NOCONA)
+/* APPLE LOCAL mainline */
+#define TARGET_CORE2 (ix86_tune == PROCESSOR_CORE2)
 #define TARGET_GENERIC32 (ix86_tune == PROCESSOR_GENERIC32)
 #define TARGET_GENERIC64 (ix86_tune == PROCESSOR_GENERIC64)
 #define TARGET_GENERIC (TARGET_GENERIC32 || TARGET_GENERIC64)
@@ -161,9 +166,12 @@ extern const int x86_sse_typeless_stores, x86_sse_load0_by_pxor;
 extern const int x86_use_ffreep;
 extern const int x86_inter_unit_moves, x86_schedule;
 extern const int x86_use_bt;
-extern const int x86_cmpxchg, x86_cmpxchg8b, x86_cmpxchg16b, x86_xadd;
+/* APPLE LOCAL override options */
+extern int x86_cmpxchg, x86_cmpxchg8b, x86_cmpxchg16b, x86_xadd;
 extern const int x86_use_incdec;
 extern const int x86_pad_returns;
+/* APPLE LOCAL mainline bswap/local override options */
+extern int x86_bswap;
 extern const int x86_partial_flag_reg_stall;
 extern int x86_prefetch_sse;
 
@@ -227,6 +235,8 @@ extern int x86_prefetch_sse;
 #define TARGET_SSE_MATH ((ix86_fpmath & FPMATH_SSE) != 0)
 #define TARGET_MIX_SSE_I387 ((ix86_fpmath & FPMATH_SSE) \
 			     && (ix86_fpmath & FPMATH_387))
+/* APPLE LOCAL mainline */
+#define TARGET_SSSE3 ((target_flags & MASK_SSSE3) != 0)
 
 #define TARGET_GNU_TLS (ix86_tls_dialect == TLS_DIALECT_GNU)
 #define TARGET_GNU2_TLS (ix86_tls_dialect == TLS_DIALECT_GNU2)
@@ -237,6 +247,8 @@ extern int x86_prefetch_sse;
 #define TARGET_CMPXCHG8B (x86_cmpxchg8b & (1 << ix86_arch))
 #define TARGET_CMPXCHG16B (x86_cmpxchg16b & (1 << ix86_arch))
 #define TARGET_XADD (x86_xadd & (1 << ix86_arch))
+/* APPLE LOCAL mainline bswap */
+#define TARGET_BSWAP (x86_bswap & (1 << ix86_arch))
 
 #ifndef TARGET_64BIT_DEFAULT
 #define TARGET_64BIT_DEFAULT 0
@@ -249,11 +261,21 @@ extern int x86_prefetch_sse;
    pointers, we can change this to allow for elimination of
    the frame pointer in leaf functions.  */
 #define TARGET_DEFAULT 0
+/* APPLE LOCAL begin mainline */
+/* Extra bits to force.  */
+#define TARGET_SUBTARGET32_DEFAULT 0
+
+#define TARGET_SUBTARGET64_DEFAULT 0
+/* APPLE LOCAL end mainline */
 
 /* This is not really a target flag, but is done this way so that
    it's analogous to similar code for Mach-O on PowerPC.  darwin.h
    redefines this to 1.  */
 #define TARGET_MACHO 0
+/* APPLE LOCAL begin mach-o cleanup */
+#define MACHOPIC_INDIRECT 0
+#define MACHOPIC_PURE 0
+/* APPLE LOCAL end mach-o cleanup */
 
 /* Subtargets may reset this to 1 in order to enable 96-bit long double
    with the rounding mode forced to 53 bits.  */
@@ -397,6 +419,10 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 	builtin_define ("__tune_pentium4__");			\
       else if (TARGET_NOCONA)					\
 	builtin_define ("__tune_nocona__");			\
+      /* APPLE LOCAL begin mainline */				\
+      else if (TARGET_CORE2)					\
+	builtin_define ("__tune_core2__");			\
+      /* APPLE LOCAL end mainline */				\
 								\
       if (TARGET_MMX)						\
 	builtin_define ("__MMX__");				\
@@ -410,6 +436,18 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 	builtin_define ("__SSE2__");				\
       if (TARGET_SSE3)						\
 	builtin_define ("__SSE3__");				\
+      /* APPLE LOCAL begin mainline */				\
+      if (TARGET_SSSE3)						\
+	builtin_define ("__SSSE3__");				\
+      /* APPLE LOCAL end mainline */				\
+      /* APPLE LOCAL begin 5612787 mainline sse4 */			\
+      if (TARGET_SSE4_1)					\
+	builtin_define ("__SSE4_1__");				\
+      if (TARGET_SSE4_2)					\
+	builtin_define ("__SSE4_2__");				\
+      if (TARGET_SSE4A)						\
+ 	builtin_define ("__SSE4A__");		                \
+      /* APPLE LOCAL end 5612787 mainline sse4 */			\
       if (TARGET_SSE_MATH && TARGET_SSE)			\
 	builtin_define ("__SSE_MATH__");			\
       if (TARGET_SSE_MATH && TARGET_SSE2)			\
@@ -470,6 +508,13 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 	  builtin_define ("__nocona");				\
 	  builtin_define ("__nocona__");			\
 	}							\
+      /* APPLE LOCAL begin mainline */				\
+      else if (ix86_arch == PROCESSOR_CORE2)			\
+	{							\
+	  builtin_define ("__core2");				\
+	  builtin_define ("__core2__");				\
+	}							\
+      /* APPLE LOCAL end mainline */				\
     }								\
   while (0)
 
@@ -491,13 +536,16 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define TARGET_CPU_DEFAULT_prescott 15
 #define TARGET_CPU_DEFAULT_nocona 16
 #define TARGET_CPU_DEFAULT_generic 17
-
+/* APPLE LOCAL mainline */
+#define TARGET_CPU_DEFAULT_core2 18
+/* APPLE LOCAL begin mainline */
 #define TARGET_CPU_DEFAULT_NAMES {"i386", "i486", "pentium", "pentium-mmx",\
 				  "pentiumpro", "pentium2", "pentium3", \
 				  "pentium4", "k6", "k6-2", "k6-3",\
 				  "athlon", "athlon-4", "k8", \
 				  "pentium-m", "prescott", "nocona", \
-				  "generic"}
+				  "generic", "core2" }
+/* APPLE LOCAL end mainline */
 
 #ifndef CC1_SPEC
 #define CC1_SPEC "%(cc1_cpu) "
@@ -572,11 +620,23 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define PARM_BOUNDARY BITS_PER_WORD
 
 /* Boundary (in *bits*) on which stack pointer should be aligned.  */
-#define STACK_BOUNDARY BITS_PER_WORD
+/* APPLE LOCAL begin compiler should obey -mpreferred-stack-boundary (radar 3232990) */
+/* prefer * #define STACK_BOUNDARY ((ix86_preferred_stack_boundary > 128) ? 128 : ix86_preferred_stack_boundary) */
+/*  We're going to extremes to yield a result of indeterminite
+    signedness here; this macro will be expanded in signed and
+    unsigned contexts, and mixed signedness induces fatal
+    warnings.  Radar 3941684.  */
+#define STACK_BOUNDARY ((ix86_preferred_stack_boundary >=  128) ? 128 : \
+			(ix86_preferred_stack_boundary == 64) ? 64 : 32)
+/* APPLE LOCAL end compiler should obey -mpreferred-stack-boundary (radar 3232990) */
 
 /* Boundary (in *bits*) on which the stack pointer prefers to be
    aligned; the compiler cannot rely on having this alignment.  */
 #define PREFERRED_STACK_BOUNDARY ix86_preferred_stack_boundary
+
+/* APPLE LOCAL begin radar 4216496, 4229407, 4120689, 4095567 */
+#define SAVE_PREFERRED_STACK_BOUNDARY ix86_save_preferred_stack_boundary
+/* APPLE LOCAL end radar 4216496, 4229407, 4120689, 4095567 */
 
 /* As of July 2001, many runtimes do not align the stack properly when
    entering main.  This causes expand_main_function to forcibly align
@@ -882,7 +942,8 @@ do {									\
 
 #define VALID_MMX_REG_MODE(MODE)					\
     ((MODE) == DImode || (MODE) == V8QImode || (MODE) == V4HImode	\
-     || (MODE) == V2SImode || (MODE) == SImode)
+/* APPLE LOCAL 4656532 use V1DImode for _m64 */				\
+     || (MODE) == V2SImode || (MODE) == SImode || (MODE) == V1DImode)
 
 /* ??? No autovectorization into MMX or 3DNOW until we can reliably
    place emms and femms instructions.  */
@@ -1004,10 +1065,12 @@ do {									\
 #define REAL_PIC_OFFSET_TABLE_REGNUM  3
 
 #define PIC_OFFSET_TABLE_REGNUM				\
+  /* APPLE LOCAL begin 5695218 */			\
   ((TARGET_64BIT && ix86_cmodel == CM_SMALL_PIC)	\
-   || !flag_pic ? INVALID_REGNUM			\
-   : reload_completed ? REGNO (pic_offset_table_rtx)	\
-   : REAL_PIC_OFFSET_TABLE_REGNUM)
+  || !flag_pic ? INVALID_REGNUM				\
+   : reload_completed && pic_offset_table_rtx ? REGNO (pic_offset_table_rtx) \
+   : REAL_PIC_OFFSET_TABLE_REGNUM)					\
+  /* APPLE LOCAL end 5695218 */
 
 #define GOT_SYMBOL_NAME "_GLOBAL_OFFSET_TABLE_"
 
@@ -1030,6 +1093,11 @@ do {									\
 
 #define RETURN_IN_MEMORY(TYPE) \
   ix86_return_in_memory (TYPE)
+
+/* APPLE LOCAL begin radar 4781080 */
+#define OBJC_FPRETURN_MSGCALL(TYPE,WHICH) \
+  ix86_objc_fpreturn_msgcall (TYPE, WHICH)
+/* APPLE LOCAL end radar 4781080 */
 
 /* This is overridden by <cygwin.h>.  */
 #define MS_AGGREGATE_RETURN 0
@@ -1075,6 +1143,8 @@ enum reg_class
   GENERAL_REGS,			/* %eax %ebx %ecx %edx %esi %edi %ebp %esp %r8 - %r15*/
   FP_TOP_REG, FP_SECOND_REG,	/* %st(0) %st(1) */
   FLOAT_REGS,
+  /* APPLE LOCAL 5612787 mainline sse4 */
+  SSE_FIRST_REG,
   SSE_REGS,
   MMX_REGS,
   FP_TOP_SSE_REGS,
@@ -1121,6 +1191,8 @@ enum reg_class
    "GENERAL_REGS",			\
    "FP_TOP_REG", "FP_SECOND_REG",	\
    "FLOAT_REGS",			\
+    /* APPLE LOCAL 5612787 mainline sse4 */	\
+   "SSE_FIRST_REG",			\
    "SSE_REGS",				\
    "MMX_REGS",				\
    "FP_TOP_SSE_REGS",			\
@@ -1148,6 +1220,8 @@ enum reg_class
   { 0x1100ff,  0x1fe0 },		/* GENERAL_REGS */		\
      { 0x100,     0x0 }, { 0x0200, 0x0 },/* FP_TOP_REG, FP_SECOND_REG */\
     { 0xff00,     0x0 },		/* FLOAT_REGS */		\
+/* APPLE LOCAL 5612787 mainline sse4 */						\
+  { 0x200000,     0x0 },		/* SSE_FIRST_REG */		\
 { 0x1fe00000,0x1fe000 },		/* SSE_REGS */			\
 { 0xe0000000,    0x1f },		/* MMX_REGS */			\
 { 0x1fe00100,0x1fe000 },		/* FP_TOP_SSE_REG */		\
@@ -1733,7 +1807,8 @@ do {							\
 
 #define REGPARM_MAX (TARGET_64BIT ? 6 : 3)
 
-#define SSE_REGPARM_MAX (TARGET_64BIT ? 8 : (TARGET_SSE ? 3 : 0))
+/* APPLE LOCAL regparmandstackparm */
+#define SSE_REGPARM_MAX (TARGET_64BIT ? 8 : (TARGET_MACHO ? 4 : (TARGET_SSE ? 3 : 0)))
 
 #define MMX_REGPARM_MAX (TARGET_64BIT ? 0 : (TARGET_MMX ? 3 : 0))
 
@@ -1853,7 +1928,8 @@ do {							\
    subsequent accesses occur to other fields in the same word of the
    structure, but to different bytes.  */
 
-#define SLOW_BYTE_ACCESS 0
+/* APPLE LOCAL 6131435 */
+#define SLOW_BYTE_ACCESS (!flag_apple_kext && !flag_mkernel && !TARGET_64BIT)
 
 /* Nonzero if access to memory by shorts is slow and undesirable.  */
 #define SLOW_SHORT_ACCESS 0
@@ -2080,6 +2156,8 @@ enum processor_type
   PROCESSOR_PENTIUM4,
   PROCESSOR_K8,
   PROCESSOR_NOCONA,
+  /* APPLE LOCAL mainline */
+  PROCESSOR_CORE2,
   PROCESSOR_GENERIC32,
   PROCESSOR_GENERIC64,
   PROCESSOR_max
@@ -2128,7 +2206,15 @@ enum asm_dialect {
 };
 
 extern enum asm_dialect ix86_asm_dialect;
+/* APPLE LOCAL begin regparmandstackparm */
+extern void ix86_darwin_handle_regparmandstackparm (tree fndecl);
+extern void ix86_darwin_redirect_calls(void);
+/* APPLE LOCAL end regparmandstackparm */
+
 extern unsigned int ix86_preferred_stack_boundary;
+/* APPLE LOCAL begin radar 4216496, 4229407, 4120689, 4095567 */
+extern unsigned int ix86_save_preferred_stack_boundary;
+/* APPLE LOCAL end radar 4216496, 4229407, 4120689, 4095567 */
 extern int ix86_branch_cost, ix86_section_threshold;
 
 /* Smallest class containing REGNO.  */
@@ -2270,6 +2356,868 @@ struct machine_function GTY(())
 /* Control behavior of x86_file_start.  */
 #define X86_FILE_START_VERSION_DIRECTIVE false
 #define X86_FILE_START_FLTUSED false
+
+/* APPLE LOCAL begin CW asm blocks */
+#undef TARGET_IASM_EXTRA_INFO
+#define TARGET_IASM_EXTRA_INFO			\
+  char mod[3];					\
+  bool as_immediate;				\
+  bool as_offset;				\
+  bool pseudo;
+
+#define TARGET_IASM_REORDER_ARG(OPCODE, NEWARGNUM, NUM_ARGS, ARGNUM)	\
+  do {									\
+    /* If we are outputting AT&T style assembly language, the argument	\
+       numbering is reversed.  */					\
+    if (iasm_x86_needs_swapping (opcode))					\
+      NEWARGNUM = NUM_ARGS - ARGNUM + 1;				\
+  } while (0)
+
+#define IASM_SYNTH_CONSTRAINTS(R, ARGNUM, NUM_ARGS, DB)					\
+  do {											\
+    /* On x86, operand 2 or 3 can be left out and the assembler will deal with it.	\
+											\
+       Take for example an opcode:							\
+											\
+	   opcode r m i									\
+											\
+       We allow:									\
+											\
+	   opcode r mi									\
+											\
+       when we have only 2 operands.  */						\
+    if (R										\
+	&& ARGNUM == 2									\
+	&& NUM_ARGS == 2								\
+	&& R < &DB[sizeof(DB) / sizeof (DB[0]) - 1]					\
+	&& strcmp (R[1].opcode, R->opcode) == 0						\
+	&& R[1].argnum == 3)								\
+      {											\
+	tree t;										\
+	size_t len = strlen (r->constraint) + strlen (r[1].constraint) + 1;		\
+	char *p = alloca (len);								\
+											\
+	sprintf(p, "%s%s", r->constraint, r[1].constraint);				\
+	t = build_string (len, p);							\
+	return TREE_STRING_POINTER (t);							\
+      }											\
+  } while (0)
+
+#define TARGET_IASM_PRINT_OP(BUF, ARG, ARGNUM, USES, MUST_BE_REG, MUST_NOT_BE_REG, E) \
+ iasm_print_op (BUF, ARG, ARGNUM, USES, MUST_BE_REG, MUST_NOT_BE_REG, E)
+
+extern tree iasm_x86_canonicalize_operands (const char **, tree, void *);
+/* On x86, we can rewrite opcodes, change argument ordering and so no... */
+#define IASM_CANONICALIZE_OPERANDS(OPCODE, NEW_OPCODE, IARGS, E)		\
+  do {								\
+    NEW_OPCODE = OPCODE;					\
+    IARGS = iasm_x86_canonicalize_operands (&NEW_OPCODE, IARGS, E);	\
+  } while (0)
+
+#define IASM_SEE_OPCODE(YYCHAR, T)					\
+    /* If we see an int, arrange to see it as an identifier (opcode),	\
+       not as a type.  */						\
+    ((YYCHAR == TYPESPEC						\
+      && C_RID_CODE (T) == RID_INT)					\
+     ? IDENTIFIER : YYCHAR)
+
+/* Return true iff the ID is a prefix for an instruction.  */
+
+#define IASM_IS_PREFIX(ID)				\
+  do {							\
+    const char *myname = IDENTIFIER_POINTER (ID);	\
+    if (strcasecmp (myname, "lock") == 0		\
+	|| strcasecmp (myname, "rep") == 0		\
+	|| strcasecmp (myname, "repe") == 0		\
+	|| strcasecmp (myname, "repz") == 0		\
+        || strcasecmp (myname, "repne") == 0		\
+	|| strcasecmp (myname, "repnz") == 0)		\
+      return true;					\
+  } while (0)
+
+#define IASM_PRINT_PREFIX(BUF, PREFIX_LIST) iasm_x86_print_prefix(BUF, PREFIX_LIST)
+
+#define IASM_IMMED_PREFIX(E, BUF)		\
+  do {						\
+    if (!E->pseudo && ! E->as_immediate)	\
+      sprintf (BUF + strlen (BUF), "$");	\
+  } while (0)
+
+#define IASM_OFFSET_PREFIX(E, BUF)		\
+  do {						\
+    if (E->as_offset)				\
+      sprintf (BUF + strlen (BUF), "$");	\
+  } while (0)
+
+/* We can't yet expose ST(x) to reg-stack.c, don't try.  */
+#define IASM_HIDE_REG(R) FP_REGNO_P (R)
+
+#define IASM_SEE_IMMEDIATE(E)			\
+  E->as_immediate = true
+
+#define IASM_SEE_NO_IMMEDIATE(E)			\
+  E->as_immediate = false
+
+/* Table of instructions that need extra constraints.  Keep this table sorted.  */
+#undef TARGET_IASM_OP_CONSTRAINT
+#define TARGET_IASM_OP_CONSTRAINT \
+  { "adc", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64 },\
+  { "adc", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64 },\
+  { "add", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64 },\
+  { "add", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "addpd", 1, "+x"},		\
+  { "addpd", 2, "xm"},		\
+  { "addps", 1, "+x"},		\
+  { "addps", 2, "xm"},		\
+  { "addsd", 1, "+x"},		\
+  { "addsd", 2, "xm"},		\
+  { "addss", 1, "+x"},		\
+  { "addss", 2, "xm"},		\
+  { "addsubpd", 1, "+x"},      	\
+  { "addsubpd", 2, "xm"},	\
+  { "addsubps", 1, "+x"},	\
+  { "addsubps", 2, "xm"},      	\
+  { "and", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "and", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "andnpd", 1, "+x"},		\
+  { "andnpd", 2, "xm"},		\
+  { "andnps", 1, "+x"},		\
+  { "andnps", 2, "xm"},		\
+  { "andpd", 1, "+x"},		\
+  { "andpd", 2, "xm"},		\
+  { "andps", 1, "+x"},		\
+  { "andps", 2, "xm"},		\
+  { NX "arpl", 1, "+" rm16},	\
+  { NX "arpl", 2, r16},		\
+  { "bound", 1, U("r")},	\
+  { "bound", 2, U("m")},	\
+  { "bsf", 1, "=r"},		\
+  { "bsf", 2, "rm"},		\
+  { "bsr", 1, "=r"},		\
+  { "bsr", 2, "rm"},		\
+  { "bt", 1, "rm"},		\
+  { "bt", 2, "ri"},		\
+  { "btc", 1, "rm"},		\
+  { "btc", 2, "ri"},		\
+  { "btr", 1, "rm"},		\
+  { "btr", 2, "ri"},		\
+  { "bts", 1, "rm"},		\
+  { "bts", 2, "ri"},		\
+  { NX "call", 1, "rsm"},	\
+  { "clflush", 1, "=m"},       	\
+  { "cmova", 1, r16 "," r32 C R64},\
+  { "cmova", 2, rm16 "," rm32 C RM64},\
+  { "cmovae", 2, "rm"},		\
+  { "cmovb", 2, "rm"},		\
+  { "cmovbe", 2, "rm"},		\
+  { "cmovc", 2, "rm"},		\
+  { "cmove", 2, "rm"},		\
+  { "cmovg", 2, "rm"},		\
+  { "cmovge", 2, "rm"},		\
+  { "cmovl", 2, "rm"},		\
+  { "cmovle", 2, "rm"},		\
+  { "cmovna", 2, "rm"},		\
+  { "cmovnae", 2, "rm"},	\
+  { "cmovnb", 2, "rm"},		\
+  { "cmovnbe", 2, "rm"},	\
+  { "cmovnc", 2, "rm"},		\
+  { "cmovne", 2, "rm"},		\
+  { "cmovng", 2, "rm"},		\
+  { "cmovnge", 2, "rm"},	\
+  { "cmovnl", 2, "rm"},		\
+  { "cmovnle", 2, "rm"},	\
+  { "cmovno", 2, "rm"},		\
+  { "cmovnp", 2, "rm"},		\
+  { "cmovns", 2, "rm"},		\
+  { "cmovnz", 2, "rm"},		\
+  { "cmovo", 2, "rm"},		\
+  { "cmovp", 2, "rm"},		\
+  { "cmovpe", 2, "rm"},		\
+  { "cmovpo", 2, "rm"},		\
+  { "cmovs", 2, "rm"},		\
+  { "cmovz", 2, "rm"},		\
+  { "cmp", 1, rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "cmp", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "cmpeqpd", 1, "=x"},	\
+  { "cmpeqpd", 2, "xm"},	\
+  { "cmpeqps", 1, "=x"},	\
+  { "cmpeqps", 2, "xm"},	\
+  { "cmpeqsd", 1, "=x"},	\
+  { "cmpeqsd", 2, "xm"},	\
+  { "cmpeqss", 1, "=x"},	\
+  { "cmpeqss", 2, "xm"},	\
+  { "cmplepd", 1, "=x"},	\
+  { "cmplepd", 2, "xm"},	\
+  { "cmpleps", 1, "=x"},	\
+  { "cmpleps", 2, "xm"},	\
+  { "cmplesd", 1, "=x"},	\
+  { "cmplesd", 2, "xm"},	\
+  { "cmpless", 1, "=x"},	\
+  { "cmpless", 2, "xm"},	\
+  { "cmpltpd", 1, "=x"},	\
+  { "cmpltpd", 2, "xm"},	\
+  { "cmpltps", 1, "=x"},	\
+  { "cmpltps", 2, "xm"},	\
+  { "cmpltsd", 1, "=x"},	\
+  { "cmpltsd", 2, "xm"},	\
+  { "cmpltss", 1, "=x"},	\
+  { "cmpltss", 2, "xm"},	\
+  { "cmpneqpd", 1, "=x"},	\
+  { "cmpneqpd", 2, "xm"},	\
+  { "cmpneqps", 1, "=x"},	\
+  { "cmpneqps", 2, "xm"},	\
+  { "cmpneqsd", 1, "=x"},	\
+  { "cmpneqsd", 2, "xm"},	\
+  { "cmpneqss", 1, "=x"},	\
+  { "cmpneqss", 2, "xm"},	\
+  { "cmpnlepd", 1, "=x"},	\
+  { "cmpnlepd", 2, "xm"},	\
+  { "cmpnleps", 1, "=x"},	\
+  { "cmpnleps", 2, "xm"},	\
+  { "cmpnlesd", 1, "=x"},	\
+  { "cmpnlesd", 2, "xm"},	\
+  { "cmpnless", 1, "=x"},	\
+  { "cmpnless", 2, "xm"},	\
+  { "cmpnltpd", 1, "=x"},	\
+  { "cmpnltpd", 2, "xm"},	\
+  { "cmpnltps", 1, "=x"},	\
+  { "cmpnltps", 2, "xm"},	\
+  { "cmpnltsd", 1, "=x"},	\
+  { "cmpnltsd", 2, "xm"},	\
+  { "cmpnltss", 1, "=x"},	\
+  { "cmpnltss", 2, "xm"},	\
+  { "cmpordpd", 1, "=x"},	\
+  { "cmpordpd", 2, "xm"},	\
+  { "cmpordps", 1, "=x"},	\
+  { "cmpordps", 2, "xm"},	\
+  { "cmpordsd", 1, "=x"},	\
+  { "cmpordsd", 2, "xm"},	\
+  { "cmpordss", 1, "=x"},	\
+  { "cmpordss", 2, "xm"},	\
+  { "cmppd", 1, "=x"},		\
+  { "cmppd", 2, "xm"},		\
+  { "cmppd", 3, "i"},		\
+  { "cmpps", 1, "=x"},		\
+  { "cmpps", 2, "xm"},		\
+  { "cmpps", 3, "i"},		\
+  { "cmpsd", 1, "=x"},		\
+  { "cmpsd", 2, "xm"},		\
+  { "cmpsd", 3, "i"},		\
+  { "cmpss", 1, "=x"},		\
+  { "cmpss", 2, "xm"},		\
+  { "cmpss", 3, "i"},		\
+  { "cmpunordpd", 1, "=x"},	\
+  { "cmpunordpd", 2, "xm"},	\
+  { "cmpunordps", 1, "=x"},	\
+  { "cmpunordps", 2, "xm"},	\
+  { "cmpunordsd", 1, "=x"},	\
+  { "cmpunordsd", 2, "xm"},	\
+  { "cmpunordss", 1, "=x"},	\
+  { "cmpunordss", 2, "xm"},	\
+  { "cmpxchg", 1, "+mr"},      	\
+  { "cmpxchg", 2, "r"},      	\
+  { "comisd", 1, "x"},		\
+  { "comisd", 2, "xm"},		\
+  { "comiss", 1, "x"},		\
+  { "comiss", 2, "xm"},		\
+  { "cvtdq2pd", 1, "=x"},	\
+  { "cvtdq2pd", 2, "xm"},	\
+  { "cvtdq2ps", 1, "=x"},	\
+  { "cvtdq2ps", 2, "xm"},	\
+  { "cvtpd2dq", 1, "=x"},	\
+  { "cvtpd2dq", 2, "xm"},	\
+  { "cvtpd2pi", 1, "=y"},	\
+  { "cvtpd2pi", 2, "xm"},	\
+  { "cvtpd2ps", 1, "=x"},	\
+  { "cvtpd2ps", 2, "xm"},	\
+  { "cvtpi2pd", 1, "=x"},	\
+  { "cvtpi2pd", 2, "ym"},	\
+  { "cvtpi2ps", 1, "=x"},	\
+  { "cvtpi2ps", 2, "ym"},	\
+  { "cvtps2dq", 1, "=x"},	\
+  { "cvtps2dq", 2, "xm"},	\
+  { "cvtps2pd", 1, "=x"},	\
+  { "cvtps2pd", 2, "xm"},	\
+  { "cvtps2pi", 1, "=y"},	\
+  { "cvtps2pi", 2, "xm"},	\
+  { "cvtsd2si", 1, "=" r32R64},	\
+  { "cvtsd2si", 2, "xm"},	\
+  { "cvtsd2ss", 1, "=x"},	\
+  { "cvtsd2ss", 2, "xm"},	\
+  { "cvtsi2sd", 1, "=x"},	\
+  { "cvtsi2sd", 2, rm32RM64},	\
+  { "cvtsi2ss", 1, "=x"},	\
+  { "cvtsi2ss", 2, rm32RM64},	\
+  { "cvtss2sd", 1, "=x"},	\
+  { "cvtss2sd", 2, "xm"},	\
+  { "cvtss2si", 1, "=r"},	\
+  { "cvtss2si", 2, "xm"},	\
+  { "cvttpd2dq", 1, "=x"},	\
+  { "cvttpd2dq", 2, "xm"},	\
+  { "cvttpd2pi", 1, "=y"},	\
+  { "cvttpd2pi", 2, "xm"},	\
+  { "cvttps2dq", 1, "=x"},	\
+  { "cvttps2dq", 2, "xm"},	\
+  { "cvttps2pi", 1, "=y"},	\
+  { "cvttps2pi", 2, "xm"},	\
+  { "cvttsd2si", 1, "=r"},	\
+  { "cvttsd2si", 2, "xm"},	\
+  { "cvttss2si", 1, "=r"},	\
+  { "cvttss2si", 2, "xm"},	\
+  { "dec", 1, "+" rm8rm16rm32RM64},\
+  { "div", 1, rm8rm16rm32},	\
+  { "divpd", 1, "+x"},		\
+  { "divpd", 2, "xm"},		\
+  { "divps", 1, "+x"},		\
+  { "divps", 2, "xm"},		\
+  { "divsd", 1, "+x"},		\
+  { "divsd", 2, "xm"},		\
+  { "divss", 1, "+x"},		\
+  { "divss", 2, "xm"},		\
+  { "enter", 1, "i"},		\
+  { "enter", 2, "i"},		\
+  { "fadd", 1, "+t,f,@"},	\
+  { "fadd", 2, "f,t," m32fpm64fp},\
+  { "faddp", 1, "+f"},		\
+  { "faddp", 2, "t"},		\
+  { "fbld", 1, "m"},		\
+  { "fbstp", 1, "m"},		\
+  { "fcmovb", 1, "=t"},		\
+  { "fcmovb", 2, "f"},		\
+  { "fcmovbe", 1, "=t"},       	\
+  { "fcmovbe", 2, "f"},		\
+  { "fcmove", 1, "=t"},		\
+  { "fcmove", 2, "f"},		\
+  { "fcmovnb", 1, "=t"},       	\
+  { "fcmovnb", 2, "f"},		\
+  { "fcmovnbe", 1, "=t"},	\
+  { "fcmovnbe", 2, "f"},	\
+  { "fcmovne", 1, "=t"},       	\
+  { "fcmovne", 2, "f"},		\
+  { "fcmovnu", 1, "=t"},       	\
+  { "fcmovnu", 2, "f"},		\
+  { "fcmovu", 1, "=t"},		\
+  { "fcmovu", 2, "f"},		\
+  { "fcom", 1, "f" m32fpm64fp},	\
+  { "fcomi", 1, "t"},		\
+  { "fcomi", 2, "f"},		\
+  { "fcomip", 1, "t"},		\
+  { "fcomip", 2, "f"},		\
+  { "fcomp", 1, "f" m32fpm64fp},\
+  { "fdiv", 1, "+t,f,@"},	\
+  { "fdiv", 2, "f,t," m32fpm64fp},\
+  { "fdivp", 1, "+f"},		\
+  { "fdivp", 2, "t"},		\
+  { "fdivr", 1, "+t,@"},	\
+  { "fdivr", 2, "f," m32fpm64fp},\
+  { "fdivrp", 1, "+f"},		\
+  { "fdivrp", 2, "t"},		\
+  { "ffree", 1, "f"},		\
+  { "fiadd", 1, m16m32},	\
+  { "ficom", 1, m16m32},	\
+  { "ficomp", 1, m16m32},	\
+  { "fidiv", 1, m16m32},	\
+  { "fidivr", 1, m16m32},	\
+  { "fild", 1, m16m32m64},	\
+  { "fimul", 1, m16m32},	\
+  { "fist", 1, "=" m16m32},	\
+  { "fistp", 1, "=" m16m32m64},	\
+  { "fisttp", 1, "=" m16m32m64},\
+  { "fisub", 1, m16m32},	\
+  { "fisubr", 1, m16m32},	\
+  { "fld", 1, "f" m32fpm64fpm80fp},\
+  { "fldcw", 1, m16},		\
+  { "fldenv", 1, "m"},		\
+  { "fldt", 1, "m"},		\
+  { "fmul", 1, "=f,t,@"},	\
+  { "fmul", 2, "t,f," m32fpm64fp},\
+  { "fmulp", 1, "=f"},		\
+  { "fmulp", 2, "t"},		\
+  { "fnsave", 1, "=m"},		\
+  { "fnstcw", 1, "m"},		\
+  { "fnstenv", 1, "m"},		\
+  { "fnstsw", 1, "ma"},		\
+  { "frstor", 1, "m"},		\
+  { "fsave", 1, "=m"},		\
+  { "fst", 1, "=f" m32fpm64fp},	\
+  { "fstcw", 1, "=m"},		\
+  { "fstenv", 1, "=m"},		\
+  { "fstp", 1, "=f" m32fpm64fpm80fp},\
+  { "fstsw", 1, "=ma"},       	\
+  { "fsub", 1, "=f,t,@"},	\
+  { "fsub", 2, "t,f," m32fpm64fp},\
+  { "fsubr", 1, "=f,t," m32fpm64fp},\
+  { "fsubr", 2, "t,f,@"},	\
+  { "fucom", 1, "f"},		\
+  { "fucomi", 1, "t"},		\
+  { "fucomi", 2, "f"},		\
+  { "fucomip", 1, "t"},		\
+  { "fucomip", 2, "f"},		\
+  { "fucomp", 1, "f"},		\
+  { "fxch", 1, "+f" },		\
+  { "fxrstor", 1, "m"},		\
+  { "fxsave", 1, "=m"},		\
+  { "haddpd", 1, "+x"},		\
+  { "haddpd", 2, "xm"},		\
+  { "haddps", 1, "+x"},		\
+  { "haddps", 2, "xm"},		\
+  { "hsubpd", 1, "+x"},		\
+  { "hsubpd", 2, "xm"},		\
+  { "hsubps", 1, "+x"},		\
+  { "hsubps", 2, "xm"},		\
+  { "idiv", 1, rm8rm16rm32RM64},\
+  { "imul", 1, "+r"},		\
+  { "imul", 2, "rm"},		\
+  { "imul", 3, "i"},		\
+  { "in", 1, "=a"},		\
+  { "in", 2, "i"},		\
+  { "inc", 1, "+" rm8rm16rm32RM64},\
+  { NX "ins", 1, "=" m8m16m32},	\
+  { NX "ins", 2, "d"},		\
+  { "int", 1, "i"},		\
+  { "invlpg", 1, "m"},		\
+  { "ja", 1, "s"},		\
+  { "jae", 1, "s"},		\
+  { "jb", 1, "s"},		\
+  { "jbe", 1, "s"},		\
+  { "jc", 1, "s"},		\
+  { NX "jcxz", 1, rel8},		\
+  { "je", 1, "s"},		\
+  { "jecxz", 1, rel8},		\
+  { "jg", 1, "s"},		\
+  { "jge", 1, "s"},		\
+  { "jl", 1, "s"},		\
+  { "jle", 1, "s"},		\
+  { NX "jmp", 1, "s" rm32},	\
+  { "jna", 1, "s"},		\
+  { "jnae", 1, "s"},		\
+  { "jnb", 1, "s"},		\
+  { "jnc", 1, "s"},		\
+  { "jne", 1, "s"},		\
+  { "jng", 1, "s"},		\
+  { "jnge", 1, "s"},		\
+  { "jnl", 1, "s"},		\
+  { "jnle", 1, "s"},		\
+  { "jno", 1, "s"},		\
+  { "jnp", 1, "s"},		\
+  { "jns", 1, "s"},		\
+  { "jnz", 1, "s"},		\
+  { "jo", 1, "s"},		\
+  { "jp", 1, "s"},		\
+  { "jpe", 1, "s"},		\
+  { "jpo", 1, "s"},		\
+  { "js", 1, "s"},		\
+  { "jz", 1, "s"},		\
+  { "lar", 1, "=r"},		\
+  { "lar", 2, "rm"},		\
+  { "lddqu", 1, "=x"},		\
+  { "lddqu", 2, "m"},		\
+  { "ldmxcsr", 1, "m"},		\
+  { NX "lds", 1, "=" r16 "," r32 C R64},\
+  { NX "lds", 2, m16 "," m32 C M64},\
+  { "lea", 1, "=r"},		\
+  { "lea", 2, "m"},		\
+  { NX "les", 1, "=" r16 "," r32 C R64},\
+  { NX "les", 2, m16 "," m32 C M64},\
+  { "lfs", 1, "=" r16 "," r32 C R64},\
+  { "lfs", 2, m16 "," m32 C M64},\
+  { "lgdt", 1, "m"},		\
+  { "lgs", 1, "=" r16 "," r32 C R64},\
+  { "lgs", 2, m16 "," m32 C M64},\
+  { "lidt", 1, "m"},		\
+  { "lldt", 1, rm16},		\
+  { "lmsw", 1, "m"},		\
+  { NX "lods", 1, m8m16m32M64},	\
+  { "loop", 1, rel8},		\
+  { "loope", 1, rel8},		\
+  { "loopne", 1, rel8},		\
+  { "loopnz", 1, rel8},		\
+  { "loopz", 1, rel8},		\
+  { "lsl", 1, "=" r16 "," r32},	\
+  { "lsl", 2, rm16 "," rm32},	\
+  { "lss", 1, "=" r16 "," r32 C R64},\
+  { "lss", 2, m16 "," m32 C M64},\
+  { "ltr", 1, rm16},		\
+  { "maskmovdqu", 1, "x"},	\
+  { "maskmovdqu", 2, "x"},	\
+  { "maskmovq", 1, "y"},	\
+  { "maskmovq", 2, "y"},	\
+  { "maxpd", 1, "+x"},		\
+  { "maxpd", 2, "xm"},		\
+  { "maxps", 1, "+x"},		\
+  { "maxps", 2, "xm"},		\
+  { "maxsd", 1, "+x"},		\
+  { "maxsd", 2, "xm"},		\
+  { "maxss", 1, "+x"},		\
+  { "maxss", 2, "xm"},		\
+  { "minpd", 1, "+x"},		\
+  { "minpd", 2, "xm"},		\
+  { "minps", 1, "+x"},		\
+  { "minps", 2, "xm"},		\
+  { "minsd", 1, "+x"},		\
+  { "minsd", 2, "xm"},		\
+  { "minss", 1, "+x"},		\
+  { "minss", 2, "xm"},		\
+  { "mov", 1, "=" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64}, \
+  { "mov", 2, ri8 "," ri16 "," ri32 C RI64 "," rmi8 "," rmi16 "," rmi32 C RMI64}, \
+  { "movapd", 1, "=x,xm"},	\
+  { "movapd", 2, "xm,x"},      	\
+  { "movaps", 1, "=x,xm"},	\
+  { "movaps", 2, "xm,x"},	\
+  { "movd", 1, "=rm,x,y,rm"},	\
+  { "movd", 2, "x,rm,rm,y"},	\
+  { "movddup", 1, "=x"},	\
+  { "movddup", 2, "xm"},	\
+  { "movdq2q", 1, "=y"},	\
+  { "movdq2q", 2, "x"},		\
+  { "movdqa", 1, "=x"},		\
+  { "movdqa", 2, "xm"},		\
+  { "movdqu", 1, "=x"},		\
+  { "movdqu", 2, "xm"},		\
+  { "movhlps", 1, "=x"},	\
+  { "movhlps", 2, "x"},		\
+  { "movhpd", 1, "=x,m"},	\
+  { "movhpd", 2, "m,x"},	\
+  { "movhps", 1, "=x,m"},	\
+  { "movhps", 2, "m,x"},	\
+  { "movlhps", 1, "=x"},	\
+  { "movlhps", 2, "x"},		\
+  { "movlpd", 1, "=x,m"},	\
+  { "movlpd", 2, "m,x"},	\
+  { "movlps", 1, "=x,m"},	\
+  { "movlps", 2, "m,x"},	\
+  { "movmskpd", 1, "=r"},	\
+  { "movmskpd", 2, "x"},	\
+  { "movmskps", 1, "=r"},	\
+  { "movmskps", 2, "x"},	\
+  { "movntdq", 1, "=m"},	\
+  { "movntdq", 2, "x"},		\
+  { "movnti", 1, "=m"},		\
+  { "movnti", 2, "r"},		\
+  { "movntpd", 1, "=m"},	\
+  { "movntpd", 2, "x"},		\
+  { "movntps", 1, "=m"},	\
+  { "movntps", 2, "x"},		\
+  { "movntq", 1, "=m"},		\
+  { "movntq", 2, "y"},		\
+  { "movq", 1, "=x,m,y,m"},	\
+  { "movq", 2, "xm,x,ym,y"},	\
+  { "movq2dq", 1, "=x"},	\
+  { "movq2dq", 2, "y"},		\
+  { "movs", 1, "=" m8 "," m16 "," m32 C M64},\
+  { "movs", 2, m8 "," m16 "," m32 C M64},\
+  { "movsd", 1, "=xm,x"},	\
+  { "movsd", 2, "x,xm"},	\
+  { "movshdup", 1, "=x"},	\
+  { "movshdup", 2, "xm"},	\
+  { "movsldup", 1, "=x"},	\
+  { "movsldup", 2, "xm"},	\
+  { "movss", 1, "=xm,x"},	\
+  { "movss", 2, "x,xm"},	\
+  { "movsx", 1, "=" r16 "," r32},\
+  { "movsx", 2, rm8 "," rm8rm16},\
+  { "movupd", 1, "=x,xm"},	\
+  { "movupd", 2, "xm,x"},	\
+  { "movups", 1, "=x,xm"},	\
+  { "movups", 2, "xm,x"},	\
+  { "movzx", 1, "=" r16 "," r32},\
+  { "movzx", 2, rm8 "," rm8rm16},\
+  { "mul", 1, rm8rm16rm32},	\
+  { "mulpd", 1, "=x"},		\
+  { "mulpd", 2, "xm"},		\
+  { "mulps", 1, "=x"},		\
+  { "mulps", 2, "xm"},		\
+  { "mulsd", 1, "=x"},		\
+  { "mulsd", 2, "xm"},		\
+  { "mulss", 1, "=x"},		\
+  { "mulss", 2, "xm"},		\
+  { "neg", 1, "+" rm8rm16rm32},	\
+  { "not", 1, "+" rm8rm16rm32},	\
+  { "or", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "or", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "orpd", 1, "+x"},		\
+  { "orpd", 2, "xm"},		\
+  { "orps", 1, "+x"},		\
+  { "orps", 2, "xm"},		\
+  { "out", 1, "id"},		\
+  { "out", 2, a8 a16 a32},	\
+  { NX "outs", 1, "d"},	\
+  { NX "outs", 2, m8m16m32},	\
+  { "packssdw", 1, "+x,y"},	\
+  { "packssdw", 2, "xm,ym"},	\
+  { "packsswb", 1, "+x,y"},	\
+  { "packsswb", 2, "xm,ym"},	\
+  { "packuswb", 1, "+x,y"},	\
+  { "packuswb", 2, "xm,ym"},	\
+  { "paddb", 1, "+x,y"},	\
+  { "paddb", 2, "xm,ym"},	\
+  { "paddd", 1, "+x,y"},	\
+  { "paddd", 2, "xm,ym"},	\
+  { "paddq", 1, "+x,y"},	\
+  { "paddq", 2, "xm,ym"},	\
+  { "paddsb", 1, "+x,y"},       \
+  { "paddsb", 2, "xm,ym"},      \
+  { "paddsw", 1, "+x,y"},       \
+  { "paddsw", 2, "xm,ym"},      \
+  { "paddusb", 1, "+x,y"},	\
+  { "paddusb", 2, "xm,ym"},	\
+  { "paddusw", 1, "+x,y"},	\
+  { "paddusw", 2, "xm,ym"},	\
+  { "paddw", 1, "+x,y"},	\
+  { "paddw", 2, "xm,ym"},	\
+  { "pand", 1, "+x,y"},		\
+  { "pand", 2, "xm,ym"},	\
+  { "pandn", 1, "+x,y"},	\
+  { "pandn", 2, "xm,ym"},	\
+  { "pavgb", 1, "+x,y"},	\
+  { "pavgb", 2, "xm,ym"},	\
+  { "pavgw", 1, "+x,y"},	\
+  { "pavgw", 2, "xm,ym"},	\
+  { "pcmpeqb", 1, "+x,y"},	\
+  { "pcmpeqb", 2, "xm,ym"},	\
+  { "pcmpeqd", 1, "+x,y"},	\
+  { "pcmpeqd", 2, "xm,ym"},	\
+  { "pcmpeqw", 1, "+x,y"},	\
+  { "pcmpeqw", 2, "xm,ym"},	\
+  { "pcmpgtb", 1, "+x,y"},	\
+  { "pcmpgtb", 2, "xm,ym"},	\
+  { "pcmpgtd", 1, "+x,y"},	\
+  { "pcmpgtd", 2, "xm,ym"},	\
+  { "pcmpgtw", 1, "+x,y"},	\
+  { "pcmpgtw", 2, "xm,ym"},	\
+  { "pextrw", 1, "=" r32R64},	\
+  { "pextrw", 2, "xy"},		\
+  { "pextrw", 3, "i"},		\
+  { "pinsrw", 1, "=xy"},	\
+  { "pinsrw", 2, r32R64 "m"},	\
+  { "pinsrw", 3, "i"},		\
+  { "pmaddwd", 1, "+x,y"},	\
+  { "pmaddwd", 2, "xm,ym"},	\
+  { "pmaxsw", 1, "+x,y"},	\
+  { "pmaxsw", 2, "xm,ym"},	\
+  { "pmaxub", 1, "+x,y"},	\
+  { "pmaxub", 2, "xm,ym"},	\
+  { "pminsw", 1, "+x,y"},	\
+  { "pminsw", 2, "xm,ym"},	\
+  { "pminub", 1, "+x,y"},	\
+  { "pminub", 2, "xm,ym"},	\
+  { "pmovmskb", 1, "+" r32R64},	\
+  { "pmovmskb", 2, "xy"},	\
+  { "pmulhuw", 1, "+x,y"},	\
+  { "pmulhuw", 2, "xm,ym"},	\
+  { "pmulhw", 1, "+x,y"},	\
+  { "pmulhw", 2, "xm,ym"},	\
+  { "pmullw", 1, "+x,y"},	\
+  { "pmullw", 2, "xm,ym"},	\
+  { "pmuludq", 1, "+x,y"},	\
+  { "pmuludq", 2, "xm,ym"},	\
+  { "pop", 1, rm16 T(rm32) RM64},\
+  { "por", 1, "+x,y"},		\
+  { "por", 2, "xm,ym"},		\
+  { "prefetchnta", 1, "m"},	\
+  { "prefetcht0", 1, "m"},	\
+  { "prefetcht1", 1, "m"},	\
+  { "prefetcht2", 1, "m"},	\
+  { "psadbw", 1, "+x,y"},	\
+  { "psadbw", 2, "xm,ym"},	\
+  { "pshufd", 1, "=x"},		\
+  { "pshufd", 2, "xm"},		\
+  { "pshufd", 3, "i"},		\
+  { "pshufhw", 1, "=x"},	\
+  { "pshufhw", 2, "xm"},	\
+  { "pshufhw", 3, "i"},		\
+  { "pshuflw", 1, "=x"},	\
+  { "pshuflw", 2, "xm"},	\
+  { "pshuflw", 3, "i"},		\
+  { "pshufw", 1, "=y"},		\
+  { "pshufw", 2, "ym"},		\
+  { "pshufw", 3, "i"},		\
+  { "pslld", 1, "+x,y"},	\
+  { "pslld", 2, "xmi,ymi"},     \
+  { "pslldq", 1, "+x"},		\
+  { "pslldq", 2, "i"},		\
+  { "psllq", 1, "+x,y"},	\
+  { "psllq", 2, "xmi,ymi"},     \
+  { "psllw", 1, "+x,y"},	\
+  { "psllw", 2, "xmi,ymi"},     \
+  { "psrad", 1, "+x,y"},	\
+  { "psrad", 2, "xmi,ymi"},     \
+  { "psraw", 1, "+x,y"},	\
+  { "psraw", 2, "xmi,ymi"},	\
+  { "psrld", 1, "+x,y"},	\
+  { "psrld", 2, "xmi,ymi"},	\
+  { "psrldq", 1, "+x"},		\
+  { "psrldq", 2, "i"},		\
+  { "psrlq", 1, "+x,y"},	\
+  { "psrlq", 2, "xmi,ymi"},	\
+  { "psrlw", 1, "+x,y"},	\
+  { "psrlw", 2, "xmi,ymi"},	\
+  { "psubb", 1, "+x,y"},	\
+  { "psubb", 2, "xm,ym"},	\
+  { "psubd", 1, "+x,y"},	\
+  { "psubd", 2, "xm,ym"},	\
+  { "psubq", 1, "+x,y"},	\
+  { "psubq", 2, "xm,ym"},	\
+  { "psubsb", 1, "+x,y"},	\
+  { "psubsb", 2, "xm,ym"},	\
+  { "psubsw", 1, "+x,y"},	\
+  { "psubsw", 2, "xm,ym"},	\
+  { "psubusb", 1, "+x,y"},	\
+  { "psubusb", 2, "xm,ym"},	\
+  { "psubusw", 1, "+x,y"},	\
+  { "psubusw", 2, "xm,ym"},	\
+  { "psubw", 1, "+x,y"},	\
+  { "psubw", 2, "xm,ym"},	\
+  { "punpckhbw", 1, "+x,y"},	\
+  { "punpckhbw", 2, "xm,ym"},	\
+  { "punpckhdq", 1, "+x,y"},	\
+  { "punpckhdq", 2, "xm,ym"},	\
+  { "punpckhqdq", 1, "+x"},	\
+  { "punpckhqdq", 2, "xm"},	\
+  { "punpckhwd", 1, "+x,y"},	\
+  { "punpckhwd", 2, "xm,ym"},	\
+  { "punpcklbw", 1, "+x,y"},	\
+  { "punpcklbw", 2, "xm,ym"},	\
+  { "punpckldq", 1, "+x,y"},	\
+  { "punpckldq", 2, "xm,ym"},	\
+  { "punpcklqdq", 1, "+x"},	\
+  { "punpcklqdq", 2, "xm"},	\
+  { "punpcklwd", 1, "+x,y"},	\
+  { "punpcklwd", 2, "xm,ym"},	\
+  { "push", 1, rm16 T(rm32) RM64 "i"},\
+  { "pxor", 1, "+x,y"},		\
+  { "pxor", 2, "xm,ym"},	\
+  { "rcl", 1, "+" rm8rm16rm32},	\
+  { "rcl", 2, "ic"},		\
+  { "rcpps", 1, "+x"},		\
+  { "rcpps", 2, "xm"},		\
+  { "rcpss", 1, "+x"},		\
+  { "rcpss", 2, "xm"},		\
+  { "rcr", 1, "+" rm8rm16rm32},	\
+  { "rcr", 2, "ic"},		\
+  { "ret", 1, "i"},		\
+  { "rol", 1, "+" rm8rm16rm32},	\
+  { "rol", 2, "ic"},		\
+  { "ror", 1, "+" rm8rm16rm32},	\
+  { "ror", 2, "ic"},		\
+  { "rsqrtps", 1, "=x"},	\
+  { "rsqrtps", 2, "xm"},	\
+  { "rsqrtss", 1, "=x"},	\
+  { "rsqrtss", 2, "xm"},	\
+  { "sal", 1, "+" rm8rm16rm32},	\
+  { "sal", 2, "ic"},		\
+  { "sar", 1, "+" rm8rm16rm32},	\
+  { "sar", 2, "ic"},		\
+  { "sbb", 1, "+" rm8 "," rm16 "," rm32 "," r8 "," r16 "," r32},\
+  { "sbb", 2, ri8 "," ri16 "," ri32 "," m8 "," m16 "," m32},\
+  { "scas", 1, m8m16m32M64},	\
+  { "seta", 1, "=qm"},		\
+  { "setae", 1, "=qm"},		\
+  { "setb", 1, "=qm"},		\
+  { "setbe", 1, "=qm"},		\
+  { "setc", 1, "=qm"},		\
+  { "sete", 1, "=qm"},		\
+  { "setg", 1, "=qm"},		\
+  { "setge", 1, "=qm"},		\
+  { "setl", 1, "=qm"},		\
+  { "setle", 1, "=qm"},		\
+  { "setna", 1, "=qm"},		\
+  { "setnae", 1, "=qm"},       	\
+  { "setnb", 1, "=qm"},		\
+  { "setnbe", 1, "=qm"},       	\
+  { "setnc", 1, "=qm"},		\
+  { "setne", 1, "=qm"},		\
+  { "setng", 1, "=qm"},		\
+  { "setnge", 1, "=qm"},       	\
+  { "setnl", 1, "=qm"},		\
+  { "setnle", 1, "=qm"},	\
+  { "setno", 1, "=qm"},		\
+  { "setnp", 1, "=qm"},		\
+  { "setns", 1, "=qm"},		\
+  { "setnz", 1, "=qm"},		\
+  { "seto", 1, "=qm"},		\
+  { "setp", 1, "=qm"},		\
+  { "setpe", 1, "=qm"},		\
+  { "setpo", 1, "=qm"},		\
+  { "sets", 1, "=qm"},		\
+  { "setz", 1, "=qm"},		\
+  { NY "sgdt", 1, "=m"},	\
+  { "shl", 1, "+" rm8rm16rm32},	\
+  { "shl", 2, "ic"},		\
+  { "shld", 1, "+" rm16 "," rm32 C RM64},\
+  { "shld", 2, r16 "," r32 C R64},\
+  { "shld", 3, "ic,ic" X(",ic")},\
+  { "shr", 1, "+" rm8rm16rm32},	\
+  { "shr", 2, "ic"},		\
+  { "shrd", 1, "+" rm16 "," rm32 C RM64},\
+  { "shrd", 2, r16 "," r32 C R64},\
+  { "shrd", 3, "ic,ic" X(",ic")}, \
+  { "shufpd", 1, "+x"},		\
+  { "shufpd", 2, "xm"},		\
+  { "shufpd", 3, "i"},		\
+  { "shufps", 1, "+x"},		\
+  { "shufps", 2, "xm"},		\
+  { "shufps", 3, "i"},		\
+  { NY "sidt", 1, "=m"},	\
+  { "sldt", 1, "=q" S("2") "m"},\
+  { "smsw", 1, "=q" S("2") "m"},\
+  { "sqrtpd", 1, "=x"},		\
+  { "sqrtpd", 2, "xm"},		\
+  { "sqrtps", 1, "=x"},		\
+  { "sqrtps", 2, "xm"},		\
+  { "sqrtsd", 1, "=x"},		\
+  { "sqrtsd", 2, "xm"},		\
+  { "sqrtss", 1, "=x"},		\
+  { "sqrtss", 2, "xm"},		\
+  { "stmxcsr", 1, "m"},		\
+  { "stos", 1, "=m"},		\
+  { "str", 1, "=q" S("2") "m"},\
+  { "sub", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "sub", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "subpd", 1, "+x"},		\
+  { "subpd", 2, "xm"},		\
+  { "subps", 1, "+x"},		\
+  { "subps", 2, "xm"},		\
+  { "subsd", 1, "+x"},		\
+  { "subsd", 2, "xm"},		\
+  { "subss", 1, "+x"},		\
+  { "subss", 2, "xm"},		\
+  { "test", 1, "+r," rm8rm16rm32},\
+  { "test", 2, "r,i"},		\
+  { "ucomisd", 1, "+x"},	\
+  { "ucomisd", 2, "xm"},	\
+  { "ucomiss", 1, "+x"},	\
+  { "ucomiss", 2, "xm"},	\
+  { "unpckhpd", 1, "+x"},	\
+  { "unpckhpd", 2, "xm"},	\
+  { "unpckhps", 1, "+x"},	\
+  { "unpckhps", 2, "xm"},	\
+  { "unpcklpd", 1, "+x"},	\
+  { "unpcklpd", 2, "xm"},	\
+  { "unpcklps", 1, "+x"},	\
+  { "unpcklps", 2, "xm"},	\
+  { "verr", 1, rm16},		\
+  { "verw", 1, rm16},		\
+  { "xadd", 1, "+" rm8 "," rm16 "," rm32},\
+  { "xadd", 2, r8 "," r16 "," r32},\
+  { "xchg", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "xchg", 2, "+" r8 "," r16 "," r32 C R64 "," m8 "," m16 "," m32 C M64},\
+  { "xlat", 1, "m"},		\
+  { "xor", 1, "+" rm8 "," rm16 "," rm32 C RM64 "," r8 "," r16 "," r32 C R64},\
+  { "xor", 2, ri8 "," ri16 "," ri32 C RI64 "," m8 "," m16 "," m32 C M64},\
+  { "xorpd", 1, "+x"},		\
+  { "xorpd", 2, "xm"},		\
+  { "xorps", 1, "+x"},		\
+  { "xorps", 2, "xm"},
+
+#define TARGET_IASM_EXTRA_CLOBBERS \
+  { "rdtsc", { "edx", "eax"} }
+
+#define IASM_FUNCTION_MODIFIER "P"
+
+#define IASM_REGISTER_NAME(STR, BUF) i386_iasm_register_name (STR, BUF)
+
+/* APPLE LOCAL end CW asm blocks */
 
 /* Flag to mark data that is in the large address area.  */
 #define SYMBOL_FLAG_FAR_ADDR		(SYMBOL_FLAG_MACH_DEP << 0)

@@ -281,7 +281,8 @@ build_call (tree function, tree parms)
 
   function = build_addr_func (function);
 
-  gcc_assert (TYPE_PTR_P (TREE_TYPE (function)));
+  /* APPLE LOCAL blocks 6040305 */
+  gcc_assert (TYPE_PTR_P (TREE_TYPE (function)) || TREE_CODE (TREE_TYPE (function)) == BLOCK_POINTER_TYPE);
   fntype = TREE_TYPE (TREE_TYPE (function));
   gcc_assert (TREE_CODE (fntype) == FUNCTION_TYPE
 	      || TREE_CODE (fntype) == METHOD_TYPE);
@@ -657,7 +658,8 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
   if (same_type_p (from, to))
     return conv;
 
-  if ((tcode == POINTER_TYPE || TYPE_PTR_TO_MEMBER_P (to))
+  /* APPLE LOCAL blocks 6040305 (ck) */
+  if ((tcode == POINTER_TYPE || tcode == BLOCK_POINTER_TYPE || TYPE_PTR_TO_MEMBER_P (to))
       && expr && null_ptr_cst_p (expr))
     conv = build_conv (ck_std, to, conv);
   else if ((tcode == INTEGER_TYPE && fcode == POINTER_TYPE)
@@ -675,6 +677,18 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
       conv = build_conv (ck_std, to, conv);
       conv->bad_p = true;
     }
+  /* APPLE LOCAL begin blocks (ck) */
+  else if (tcode == POINTER_TYPE && fcode == BLOCK_POINTER_TYPE
+	   && (objc_is_id (to)
+	       || VOID_TYPE_P (TREE_TYPE (to))))
+    {
+      conv = build_conv (ck_ptr, to, conv);
+    }
+  else if (tcode == BLOCK_POINTER_TYPE && objc_is_id (from))
+    {
+      conv = build_conv (ck_ptr, to, conv);
+    }
+  /* APPLE LOCAL end blocks (ck) */
   else if ((tcode == POINTER_TYPE && fcode == POINTER_TYPE)
 	   || (TYPE_PTRMEM_P (to) && TYPE_PTRMEM_P (from)))
     {
@@ -689,9 +703,14 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
 	       && !TYPE_PTRMEM_P (from)
 	       && TREE_CODE (TREE_TYPE (from)) != FUNCTION_TYPE)
 	{
+	  /* APPLE LOCAL begin radar 4451818 */
+	  tree nfrom = TREE_TYPE (from);
+	  if (c_dialect_objc ())
+	    nfrom = objc_non_volatilized_type (nfrom);
 	  from = build_pointer_type
 	    (cp_build_qualified_type (void_type_node,
-				      cp_type_quals (TREE_TYPE (from))));
+			              cp_type_quals (nfrom)));
+	  /* APPLE LOCAL end radar 4451818 */
 	  conv = build_conv (ck_ptr, from, conv);
 	}
       else if (TYPE_PTRMEM_P (from))
@@ -738,9 +757,14 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
 		  static_cast.  */
 	       && COMPLETE_TYPE_P (TREE_TYPE (from)))
 	{
+	  /* APPLE LOCAL begin radar 4668465 */
+	  tree fr = c_dialect_objc () ?
+		   objc_non_volatilized_type (TREE_TYPE (from))
+		   : TREE_TYPE (from);
 	  from =
 	    cp_build_qualified_type (TREE_TYPE (to),
-				     cp_type_quals (TREE_TYPE (from)));
+				     cp_type_quals (fr));
+	  /* APPLE LOCAL end radar 4668465 */
 	  from = build_pointer_type (from);
 	  conv = build_conv (ck_ptr, from, conv);
 	  conv->base_p = true;
@@ -769,6 +793,14 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
       else if (expr && string_conv_p (to, expr, 0))
 	/* converting from string constant to char *.  */
 	conv = build_conv (ck_qual, to, conv);
+      /* APPLE LOCAL begin 4154928 */
+      /* Allow conversions among compatible ObjC pointer types (base
+	 conversions have been already handled above).  */
+      else if (c_dialect_objc ()
+	       /* APPLE LOCAL radar 6231433 */
+	       && objc_compare_types (to, from, -4, NULL_TREE, NULL))
+	conv = build_conv (ck_ptr, to, conv);
+      /* APPLE LOCAL end 4154928 */
       else if (ptr_reasonably_similar (to_pointee, from_pointee))
 	{
 	  conv = build_conv (ck_ptr, to, conv);
@@ -810,6 +842,8 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
       if (ARITHMETIC_TYPE_P (from)
 	  || fcode == ENUMERAL_TYPE
 	  || fcode == POINTER_TYPE
+	  /* APPLE LOCAL blocks 6040305 (cl) */
+	  || fcode == BLOCK_POINTER_TYPE
 	  || TYPE_PTR_TO_MEMBER_P (from))
 	{
 	  conv = build_conv (ck_std, to, conv);
@@ -838,7 +872,8 @@ standard_conversion (tree to, tree from, tree expr, bool c_cast_p,
 	conv->rank = cr_promotion;
     }
   else if (fcode == VECTOR_TYPE && tcode == VECTOR_TYPE
-	   && vector_types_convertible_p (from, to))
+	   /* APPLE LOCAL 5612787 mainline sse4 */
+	   && vector_types_convertible_p (from, to, false))
     return build_conv (ck_std, to, conv);
   else if (!(flags & LOOKUP_CONSTRUCTOR_CALLABLE)
 	   && IS_AGGR_TYPE (to) && IS_AGGR_TYPE (from)
@@ -876,6 +911,15 @@ reference_related_p (tree t1, tree t2)
 	  || (CLASS_TYPE_P (t1) && CLASS_TYPE_P (t2)
 	      && DERIVED_FROM_P (t1, t2)));
 }
+
+/* APPLE LOCAL begin radar 6029624 */
+/* Used in objective-c++, same as reference_related_p */
+bool
+objcp_reference_related_p (tree t1, tree t2)
+{
+  return reference_related_p (t1, t2);
+}
+/* APPLE LOCAL end radar 6029624 */
 
 /* Returns nonzero if T1 is reference-compatible with T2.  */
 
@@ -1258,6 +1302,11 @@ implicit_conversion (tree to, tree from, tree expr, bool c_cast_p,
   if (from == error_mark_node || to == error_mark_node
       || expr == error_mark_node)
     return NULL;
+
+  /* APPLE LOCAL begin radar 4451818 */
+  if (c_dialect_objc ())
+    from = objc_non_volatilized_type (from);
+  /* APPLE LOCAL end radar 4451818 */
 
   if (TREE_CODE (to) == REFERENCE_TYPE)
     conv = reference_binding (to, from, expr, c_cast_p, flags);
@@ -3520,10 +3569,19 @@ build_conditional_expr (tree arg1, tree arg2, tree arg3)
        cv-qualification of either the second or the third operand.
        The result is of the common type.  */
   else if ((null_ptr_cst_p (arg2)
-	    && (TYPE_PTR_P (arg3_type) || TYPE_PTR_TO_MEMBER_P (arg3_type)))
+	   /* APPLE LOCAL begin blocks 6040305 (co) */
+	    && (TYPE_PTR_P (arg3_type) || TYPE_PTR_TO_MEMBER_P (arg3_type)
+		|| TREE_CODE (arg3_type) == BLOCK_POINTER_TYPE))
+	   /* APPLE LOCAL end blocks 6040305 (co) */
 	   || (null_ptr_cst_p (arg3)
-	       && (TYPE_PTR_P (arg2_type) || TYPE_PTR_TO_MEMBER_P (arg2_type)))
-	   || (TYPE_PTR_P (arg2_type) && TYPE_PTR_P (arg3_type))
+	   /* APPLE LOCAL begin blocks 6040305 (co) */
+	       && (TYPE_PTR_P (arg2_type) || TYPE_PTR_TO_MEMBER_P (arg2_type)
+		   || TREE_CODE (arg2_type) == BLOCK_POINTER_TYPE))
+	   || ((TYPE_PTR_P (arg2_type)
+		||  TREE_CODE (arg2_type) == BLOCK_POINTER_TYPE)
+	       && (TYPE_PTR_P (arg3_type)
+		   || TREE_CODE (arg3_type) == BLOCK_POINTER_TYPE))
+	   /* APPLE LOCAL end blocks 6040305 (co) */
 	   || (TYPE_PTRMEM_P (arg2_type) && TYPE_PTRMEM_P (arg3_type))
 	   || (TYPE_PTRMEMFUNC_P (arg2_type) && TYPE_PTRMEMFUNC_P (arg3_type)))
     {
@@ -4170,6 +4228,36 @@ enforce_access (tree basetype_path, tree decl, tree diag_decl)
   return true;
 }
 
+/* APPLE LOCAL begin direct-binding-refs 20020224 --turly  */
+
+/* Should we *really* call a constructor for the object whose reference type
+   we want?  If we have a user conversion function which returns the ref
+   type directly, there's no need to call the object's constructor as we
+   can bind directly (dcl.init.ref.)
+
+   These must be exactly the same types.  */
+
+static int really_call_constructor_p (tree, tree, tree);
+static int
+really_call_constructor_p (tree expr, tree convfn, tree totype)
+{
+  /* TEMPORARILY DISABLING THIS "FIX" NOW WE HAVE A SOURCE WORKAROUND.  */
+  /* However, we'll leave the code here pending input from the FSF
+     on this issue.  */
+
+  if (0 /* && ! NEED_TEMPORARY_P (convfn)  Watch out! this macro is undefined */
+      && TREE_CODE (expr) == INDIRECT_REF
+      && TREE_CODE (TREE_TYPE (convfn)) == METHOD_TYPE
+      && TREE_CODE (TREE_TYPE (TREE_TYPE (convfn))) == REFERENCE_TYPE
+      && TREE_CODE (TREE_TYPE (TREE_TYPE (TREE_TYPE (convfn)))) == RECORD_TYPE
+      && TREE_TYPE (TREE_TYPE (TREE_TYPE (convfn))) == totype
+      && TREE_TYPE (expr) == totype)
+	return 0;
+
+  return 1;
+}
+/* APPLE LOCAL end direct-binding-refs 20020224 --turly  */
+
 /* Check that a callable constructor to initialize a temporary of
    TYPE from an EXPR exists.  */
 
@@ -4322,6 +4410,8 @@ convert_like_real (conversion *convs, tree expr, tree fn, int argnum,
 
 	   If the target is a class, that means call a ctor.  */
 	if (IS_AGGR_TYPE (totype)
+	    /* APPLE LOCAL direct-binding-refs  20020224 --turly  */
+	    && really_call_constructor_p (expr, convfn, totype)
 	    && (inner >= 0 || !lvalue_p (expr)))
 	  {
 	    expr = (build_temp
@@ -5010,7 +5100,11 @@ build_over_call (struct z_candidate *cand, int flags)
 
   mark_used (fn);
 
-  if (DECL_VINDEX (fn) && (flags & LOOKUP_NONVIRTUAL) == 0)
+  /* APPLE LOCAL begin KEXT indirect-virtual-calls --sts */
+  if (DECL_VINDEX (fn)
+      && (TARGET_KEXTABI
+          || (flags & LOOKUP_NONVIRTUAL) == 0))
+    /* APPLE LOCAL end KEXT indirect-virtual-calls --sts */
     {
       tree t, *p = &TREE_VALUE (converted_args);
       tree binfo = lookup_base (TREE_TYPE (TREE_TYPE (*p)),
@@ -5024,6 +5118,35 @@ build_over_call (struct z_candidate *cand, int flags)
       t = build_pointer_type (TREE_TYPE (fn));
       if (DECL_CONTEXT (fn) && TYPE_JAVA_INTERFACE (DECL_CONTEXT (fn)))
 	fn = build_java_interface_fn_ref (fn, *p);
+      /* APPLE LOCAL begin KEXT indirect-virtual-calls --sts */
+      /* If this is not really supposed to be a virtual call, find the
+         vtable corresponding to the correct type, and use it.  */
+      else if (flags & LOOKUP_NONVIRTUAL) {
+	tree call_site_type = TREE_TYPE (cand->access_path);
+	tree fn_class_type = DECL_CLASS_CONTEXT (fn);
+
+	gcc_assert (call_site_type != NULL &&
+		    fn_class_type != NULL &&
+		    AGGREGATE_TYPE_P (call_site_type) &&
+		    AGGREGATE_TYPE_P (fn_class_type));
+	gcc_assert (lookup_base(TYPE_MAIN_VARIANT (call_site_type),
+				TYPE_MAIN_VARIANT (fn_class_type),
+				ba_any | ba_quiet,
+				NULL) != NULL);
+
+	if (BINFO_N_BASE_BINFOS (TYPE_BINFO (call_site_type)) > 1
+	    || CLASSTYPE_VBASECLASSES (call_site_type))
+	  error ("indirect virtual calls are invalid for a type that uses multiple or virtual inheritance");
+
+        fn = (build_vfn_ref_using_vtable
+              (BINFO_VTABLE (TYPE_BINFO (call_site_type)),
+               DECL_VINDEX (fn)));
+	/* We have to construct something for which we can directly
+	   alter the TREE_TYPE.  We can't allow the INDIRECT_REF built
+	   above to be so altered, as that would be invalid.  */
+	fn = build1 (NOP_EXPR, t, fn);
+      }
+      /* APPLE LOCAL end KEXT indirect-virtual-calls --sts */
       else
 	fn = build_vfn_ref (*p, DECL_VINDEX (fn));
       TREE_TYPE (fn) = t;
