@@ -1539,7 +1539,7 @@ const Type *llvm_x86_scalar_type_for_struct_return(tree type, unsigned *Offset) 
     return Type::getInt8Ty(Context);
   else if (Size == 2)
     return Type::getInt16Ty(Context);
-  else if (Size == 4)
+  else if (Size <= 4)
     return Type::getInt32Ty(Context);
 
   // Check if Ty should be returned using multiple value return instruction.
@@ -1565,8 +1565,14 @@ const Type *llvm_x86_scalar_type_for_struct_return(tree type, unsigned *Offset) 
                               (int) GET_MODE_SIZE(Mode);
         if (Bytes==8 && Class[0] == X86_64_POINTER_CLASS)
           return Type::getInt8PtrTy(Context);
-        assert (Bytes <= 8 && "Unexpected type!");
-        return Type::getIntNTy(Context, Bytes*8);
+        if (Bytes>4)
+          return Type::getInt64Ty(Context);
+        else if (Bytes>2)
+          return Type::getInt32Ty(Context);
+        else if (Bytes>1)
+          return Type::getInt16Ty(Context);
+        else
+          return Type::getInt8Ty(Context);
       }
       assert(0 && "Unexpected type!"); 
     }
